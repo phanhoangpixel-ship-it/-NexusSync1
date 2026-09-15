@@ -1,0 +1,282 @@
+import { OutboundOrderItem, OutboundOrder, WavePickingBatch, PackingCarton, WarehouseOutboundTabProps } from "./types";
+
+export const mockOutboundOrders: OutboundOrder[] = [
+      {
+        id: 'OUT-2026-001',
+        orderNo: 'WMS-OUT-9001',
+        referenceNo: 'SO-2026-9912',
+        customerName: 'Bệnh Viện Đa Khoa Quốc Tế Hoà Mỹ',
+        customerPhone: '0903 123 456',
+        warehouseCode: 'WH-HCM-01',
+        warehouseName: 'Kho Tổng Trung Tâm (TP.HCM)',
+        destination: 'Số 124 Nguyễn Văn Linh, P. Tân Thuận, Quận 7, TP. Hồ Chí Minh',
+        carrierName: 'Đội Xe Tải Nội Bộ (Nexus Fleet)',
+        trackingCode: 'NEX-FL-0891',
+        driverName: 'Trần Văn Tải',
+        licensePlate: '51C-889.21',
+        itemCount: 2,
+        totalQty: 15,
+        totalAmount: 375000000,
+        status: 'PENDING_PICK',
+        priority: 'URGENT',
+        createdDate: '09/09/2026 08:30',
+        scheduledDate: '10/09/2026 14:00',
+        operator: 'Nguyễn Văn Kho',
+        waveId: 'WAVE-2026-001',
+        notes: 'Đơn hàng thiết bị CNTT y tế khẩn cấp, yêu cầu đóng thùng xốp chống sốc.',
+        items: [
+          {
+            sku: 'PRD-001',
+            name: 'Laptop Business 14" Core i7 16GB/512GB',
+            orderedQty: 10,
+            pickedQty: 0,
+            unit: 'Cái',
+            sourceBin: 'BIN-A01-R01-S01',
+            lotNumber: 'LOT-2026-IT-01',
+            serialNumbers: ['SN-LP-99101', 'SN-LP-99102', 'SN-LP-99103'],
+            unitPrice: 25000000,
+            totalAmount: 250000000,
+            status: 'PENDING'
+          },
+          {
+            sku: 'PRD-002',
+            name: 'Màn hình Monitor 27" 4K IPS Pro',
+            orderedQty: 5,
+            pickedQty: 0,
+            unit: 'Cái',
+            sourceBin: 'BIN-A02-R01-S03',
+            lotNumber: 'LOT-2026-IT-02',
+            unitPrice: 25000000,
+            totalAmount: 125000000,
+            status: 'PENDING'
+          }
+        ]
+      },
+      {
+        id: 'OUT-2026-002',
+        orderNo: 'WMS-OUT-9002',
+        referenceNo: 'WO-2026-1182',
+        customerName: 'Xưởng Sản Xuất Thiết Bị Điện Tử Số 1 (Bình Dương)',
+        customerPhone: '0912 345 678',
+        warehouseCode: 'WH-HCM-01',
+        warehouseName: 'Kho Tổng Trung Tâm (TP.HCM)',
+        destination: 'Lô C2, Đường Số 3, KCN VSIP 1, Thuận An, Bình Dương',
+        carrierName: 'Viettel Post Logistics',
+        trackingCode: 'VT-88291039-VN',
+        driverName: 'Lê Hoàng Nam',
+        licensePlate: '61B-129.45',
+        itemCount: 3,
+        totalQty: 120,
+        totalAmount: 154000000,
+        status: 'PICKING',
+        priority: 'NORMAL',
+        createdDate: '09/09/2026 09:15',
+        scheduledDate: '10/09/2026 16:30',
+        operator: 'Trần Văn Nhặt',
+        waveId: 'WAVE-2026-001',
+        notes: 'Xuất linh kiện phục vụ lệnh sản xuất WO-1182.',
+        items: [
+          {
+            sku: 'PRD-003',
+            name: 'Bàn phím cơ chuyên dụng Mechanical Pro',
+            orderedQty: 50,
+            pickedQty: 50,
+            unit: 'Cái',
+            sourceBin: 'BIN-B01-R02-S01',
+            lotNumber: 'LOT-KB-2026-03',
+            unitPrice: 800000,
+            totalAmount: 40000000,
+            status: 'PICKED'
+          },
+          {
+            sku: 'PRD-004',
+            name: 'Chuột không dây công thái học Wireless Mouse',
+            orderedQty: 70,
+            pickedQty: 30,
+            unit: 'Cái',
+            sourceBin: 'BIN-B01-R02-S02',
+            lotNumber: 'LOT-MS-2026-01',
+            unitPrice: 400000,
+            totalAmount: 28000000,
+            status: 'PENDING'
+          }
+        ]
+      },
+      {
+        id: 'OUT-2026-003',
+        orderNo: 'WMS-OUT-9003',
+        referenceNo: 'SO-2026-9884',
+        customerName: 'Công Ty Cổ Phần Viễn Thông Miền Bắc',
+        customerPhone: '0988 776 655',
+        warehouseCode: 'WH-HN-02',
+        warehouseName: 'Kho Vận Trung Chuyển (Hà Nội)',
+        destination: 'Tòa nhà HITC, Số 239 Xuân Thủy, Cầu Giấy, Hà Nội',
+        carrierName: 'Giao Hàng Nhanh (GHN Express)',
+        trackingCode: 'GHN-HN-881920',
+        itemCount: 1,
+        totalQty: 25,
+        totalAmount: 89000000,
+        status: 'PACKED',
+        priority: 'VIP',
+        createdDate: '08/09/2026 16:45',
+        scheduledDate: '09/09/2026 18:00',
+        operator: 'Phạm Thị Đóng Gói',
+        notes: 'Khách hàng VIP, yêu cầu bàn giao trước 18h.',
+        items: [
+          {
+            sku: 'PRD-005',
+            name: 'Tai nghe chống ồn khử tạp âm Audio ANC',
+            orderedQty: 25,
+            pickedQty: 25,
+            unit: 'Cái',
+            sourceBin: 'BIN-HN-A1-04',
+            lotNumber: 'LOT-HP-2026-09',
+            unitPrice: 3560000,
+            totalAmount: 89000000,
+            status: 'PACKED'
+          }
+        ]
+      },
+      {
+        id: 'OUT-2026-004',
+        orderNo: 'WMS-OUT-9004',
+        referenceNo: 'SO-2026-9750',
+        customerName: 'Hệ Thống Phân Phối Thiết Bị Y Tế An Khang',
+        customerPhone: '0933 998 877',
+        warehouseCode: 'WH-COLD-03',
+        warehouseName: 'Kho Lạnh & Phòng Sạch (Bình Dương)',
+        destination: 'Số 45 Đại Lộ Bình Dương, Thuận An, Bình Dương',
+        carrierName: 'Đội Xe Lạnh Chuyên Dụng (ColdChain Express)',
+        trackingCode: 'CC-EXPRESS-9901',
+        driverName: 'Nguyễn Thành Lạnh',
+        licensePlate: '60C-991.02',
+        itemCount: 4,
+        totalQty: 2100,
+        totalAmount: 920000000,
+        status: 'SHIPPED',
+        priority: 'URGENT',
+        createdDate: '08/09/2026 11:20',
+        scheduledDate: '09/09/2026 09:00',
+        shippedDate: '09/09/2026 08:45',
+        operator: 'Lê Văn Xuất Bến',
+        notes: 'Kiểm soát nhiệt độ thùng xe từ 2°C - 8°C suốt hành trình.',
+        items: [
+          {
+            sku: 'SKU-MED-MON',
+            name: 'Màn hình theo dõi bệnh nhân 7 thông số MedTech',
+            orderedQty: 10,
+            pickedQty: 10,
+            unit: 'Bộ',
+            sourceBin: 'BIN-COLD-01',
+            lotNumber: 'LOT-MED-2026-01',
+            unitPrice: 50000000,
+            totalAmount: 500000000,
+            status: 'PACKED'
+          }
+        ]
+      },
+      {
+        id: 'OUT-2026-005',
+        orderNo: 'WMS-OUT-9005',
+        referenceNo: 'WO-2026-1205',
+        customerName: 'Xưởng Lắp Ráp Thiết Bị Cơ Khí Chính Xác',
+        customerPhone: '0944 112 233',
+        warehouseCode: 'WH-HCM-01',
+        warehouseName: 'Kho Tổng Trung Tâm (TP.HCM)',
+        destination: 'Lô B1, KCN Tân Tạo, Bình Tân, TP.HCM',
+        carrierName: 'Đội Xe Tải Nội Bộ (Nexus Fleet)',
+        itemCount: 2,
+        totalQty: 50,
+        totalAmount: 34000000,
+        status: 'PENDING_PICK',
+        priority: 'NORMAL',
+        createdDate: '09/09/2026 10:00',
+        scheduledDate: '11/09/2026 10:00',
+        operator: 'Nguyễn Văn Kho',
+        items: [
+          {
+            sku: 'PRD-003',
+            name: 'Bàn phím cơ chuyên dụng Mechanical Pro',
+            orderedQty: 20,
+            pickedQty: 0,
+            unit: 'Cái',
+            sourceBin: 'BIN-B01-R02-S01',
+            lotNumber: 'LOT-KB-2026-03',
+            unitPrice: 800000,
+            totalAmount: 16000000,
+            status: 'PENDING'
+          },
+          {
+            sku: 'PRD-006',
+            name: 'Cáp kết nối Type-C chuẩn quân đội Thunderbolt 4',
+            orderedQty: 30,
+            pickedQty: 0,
+            unit: 'Sợi',
+            sourceBin: 'BIN-B02-R01-S01',
+            lotNumber: 'LOT-CB-2026-02',
+            unitPrice: 600000,
+            totalAmount: 18000000,
+            status: 'PENDING'
+          }
+        ]
+      }
+    ];
+export const mockWaveBatches: WavePickingBatch[] = [
+      {
+        id: 'WAVE-2026-001',
+        waveNo: 'WAVE-HCM-0909-01',
+        warehouseCode: 'WH-HCM-01',
+        zone: 'Zone A & Zone B (Khu CNTT & Phụ Kiện)',
+        assignedTo: 'Trần Văn Nhặt (Picker Lead)',
+        orderCount: 2,
+        totalSkus: 4,
+        totalUnits: 135,
+        status: 'IN_PROGRESS',
+        startTime: '09/09/2026 09:30',
+        orderIds: ['OUT-2026-001', 'OUT-2026-002']
+      },
+      {
+        id: 'WAVE-2026-002',
+        waveNo: 'WAVE-COLD-0809-01',
+        warehouseCode: 'WH-COLD-03',
+        zone: 'Zone Cold (Kho Lạnh Y Tế)',
+        assignedTo: 'Lê Văn Xuất Bến',
+        orderCount: 1,
+        totalSkus: 4,
+        totalUnits: 2100,
+        status: 'COMPLETED',
+        startTime: '08/09/2026 13:00',
+        completedTime: '08/09/2026 15:30',
+        orderIds: ['OUT-2026-004']
+      }
+    ];
+export const mockPackingCartons: PackingCarton[] = [
+      {
+        id: 'CARTON-001',
+        cartonNo: 'CTN-2026-8901',
+        orderNo: 'WMS-OUT-9003',
+        customerName: 'Công Ty Cổ Phần Viễn Thông Miền Bắc',
+        weightKg: 8.5,
+        dimensionsCm: '40x30x25',
+        trackingCode: 'GHN-HN-881920',
+        carrier: 'GHN Express',
+        sealNumber: 'SEAL-NEXUS-991',
+        status: 'SEALED',
+        packedBy: 'Phạm Thị Đóng Gói',
+        packedDate: '09/09/2026 10:15'
+      },
+      {
+        id: 'CARTON-002',
+        cartonNo: 'CTN-2026-8902',
+        orderNo: 'WMS-OUT-9004',
+        customerName: 'Hệ Thống Phân Phối Thiết Bị Y Tế An Khang',
+        weightKg: 45.0,
+        dimensionsCm: '120x80x100',
+        trackingCode: 'CC-EXPRESS-9901',
+        carrier: 'ColdChain Express',
+        sealNumber: 'SEAL-NEXUS-992',
+        status: 'DISPATCHED',
+        packedBy: 'Lê Văn Xuất Bến',
+        packedDate: '08/09/2026 15:45'
+      }
+    ];
