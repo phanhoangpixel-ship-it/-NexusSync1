@@ -1,0 +1,35 @@
+781:{!isFullscreen && (
+858:        {currentModule.moduleId === 'M01' && (
+874:        {currentModule.moduleId === 'M17' && (
+883:  {currentModule.moduleId === 'M18' && (
+890:        {currentModule.moduleId === 'M20' && (
+897:  {currentModule.moduleId === 'M21' && (
+903:        {currentModule.moduleId === 'M22' && (
+915:  {currentModule.moduleId === 'M24' && (
+927:  {currentModule.moduleId === 'M26' && (
+955:  {currentModule.moduleId === 'M41' && (
+969:  {currentModule.moduleId === 'M02' && (
+976:  {currentModule.moduleId === 'M03' && (
+984:  {currentModule.moduleId === 'M04' && (
+992:  {currentModule.moduleId === 'M05' && (
+999:  {currentModule.moduleId === 'M06' && (
+1006:  {currentModule.moduleId === 'M07' && (
+1013:  {currentModule.moduleId === 'M08' && (
+1021:  {currentModule.moduleId === 'M09' && (
+1030:  {currentModule.moduleId === 'M10' && (
+1038:  {currentModule.moduleId === 'M11' && (
+1045:  {currentModule.moduleId === 'M12' && (
+1052:  {currentModule.moduleId === 'M13' && (
+1059:  {currentModule.moduleId === 'M14' && (
+1066:  {currentModule.moduleId === 'M15' && (
+1074:  {currentModule.moduleId === 'M16' && (
+1080:  {currentModule.moduleId === 'M19' && (
+1087:  {currentModule.moduleId === 'M30' && (
+1094:  {currentModule.moduleId === 'M31' && (
+1101:  {currentModule.moduleId === 'M32' && (
+1108:  {currentModule.moduleId === 'M33' && (
+1115:  {currentModule.moduleId === 'M34' && (
+1122:  {currentModule.moduleId === 'M35' && (
+1129:  {currentModule.moduleId === 'M36' && (
+1136:  {currentModule.moduleId === 'M37' && (
+1143:  {!DEDICATED_WORKSPACE_MODULE_IDS.has(currentModule.moduleId) && (

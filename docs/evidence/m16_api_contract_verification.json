@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-09-09T04:23:42.570Z",
+  "endpointsTested": [
+    {
+      "endpoint": "/api/shift/2/summary",
+      "method": "GET",
+      "statusCode": 200,
+      "responseBody": {
+        "shiftId": 2,
+        "shiftNo": "SHIFT-API-TEST-1788927822570",
+        "openingFloat": 200000,
+        "expectedCash": 650000,
+        "movementsCount": 1,
+        "status": "ACTIVE"
+      }
+    }
+  ]
+}

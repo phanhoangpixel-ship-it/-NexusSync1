@@ -1,0 +1,54 @@
+{
+  "timestamp": "2026-09-09T04:26:14.322Z",
+  "module": "M16_POS_RETAIL_COUNTER",
+  "tests": [
+    {
+      "id": "T1",
+      "name": "ShiftRequiredError enforcement",
+      "passed": true,
+      "details": "Successfully caught expected error: shiftId là bắt buộc cho movement_type=\"SALE_CASH\". Không được ghi cash_movements với shift_id=null cho loại giao dịch này."
+    },
+    {
+      "id": "T2",
+      "name": "Idempotency enforcement",
+      "passed": true,
+      "details": "Same record returned, database record count is exactly 1."
+    },
+    {
+      "id": "T3",
+      "name": "Multi-shift isolation",
+      "passed": true,
+      "details": "Shift B expected cash is 500k, no carryover from Shift A."
+    },
+    {
+      "id": "T4",
+      "name": "Derived Expected Cash calculation",
+      "passed": true,
+      "details": "Expected cash correctly calculated: 900000"
+    },
+    {
+      "id": "T5",
+      "name": "Closed shift immutability",
+      "passed": true,
+      "details": "Successfully rejected movement on closed shift."
+    },
+    {
+      "id": "T6",
+      "name": "Concurrent closeShift atomic lock",
+      "passed": true,
+      "details": "Exactly 1 fulfilled, 1 rejected, DB closed rows = 1."
+    },
+    {
+      "id": "T7",
+      "name": "Separation of Duties (SoD) check",
+      "passed": true,
+      "details": "Cashier (CASHIER_04) cannot approve own shift variance. Blocked: true"
+    },
+    {
+      "id": "T10",
+      "name": "Static vs Dynamic Expected Cash immunity",
+      "passed": true,
+      "details": "reconstructedExpectedCash is derived exclusively from SUM(cash_movements) + opening_float, completely immune to stale static column values."
+    }
+  ]
+}

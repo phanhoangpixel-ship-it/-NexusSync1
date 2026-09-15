@@ -1,0 +1,59 @@
+{
+  "testResults": {
+    "timestamp": "2026-09-07T08:59:15.218Z",
+    "tests": [
+      {
+        "name": "T1",
+        "passed": true,
+        "details": "Successfully caught expected error: shiftId là bắt buộc cho movement_type=\"SALE_CASH\". Không được ghi cash_movements với shift_id=null cho loại giao dịch này."
+      },
+      {
+        "name": "T2",
+        "passed": true,
+        "details": "Idempotency successfully verified (same record returned, count = 1)."
+      },
+      {
+        "name": "T4",
+        "passed": true,
+        "details": "Expected cash calculated correctly: 700000"
+      },
+      {
+        "name": "T5",
+        "passed": true,
+        "details": "Successfully caught expected error on closed shift: Shift #1 đang ở trạng thái \"CLOSED\", không phải ACTIVE. Không thể ghi cash movement mới vào ca đã đóng (immutability)."
+      },
+      {
+        "name": "T3",
+        "passed": true,
+        "details": "Shift B is fully isolated from Shift A (expected cash = 500000)."
+      },
+      {
+        "name": "T6",
+        "passed": true,
+        "details": "Concurrent closeShift verified via Promise.allSettled: exactly 1 fulfilled, 1 rejected (SQLITE_BUSY: database is locked), DB closed rows = 1."
+      }
+    ]
+  },
+  "recentMovementsSample": [
+    {
+      "id": 2,
+      "movementNo": "CM-1788771555236-778acc47",
+      "idempotencyKey": "5c28605e-05c1-4913-8040-6d32f876206e",
+      "shiftId": 1,
+      "movementType": "REFUND_CASH",
+      "direction": "OUT",
+      "amount": 100000,
+      "createdAt": "2026-09-07T08:59:15.000Z"
+    },
+    {
+      "id": 1,
+      "movementNo": "CM-1788771555228-9d160aa1",
+      "idempotencyKey": "IDEMP-TEST-1788771555225",
+      "shiftId": 1,
+      "movementType": "SALE_CASH",
+      "direction": "IN",
+      "amount": 500000,
+      "createdAt": "2026-09-07T08:59:15.000Z"
+    }
+  ]
+}

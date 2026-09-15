@@ -1,0 +1,27 @@
+=== 1. CASH MOVEMENTS FOR SHIFT ID 104 (Chronological Order) ===
+Rows found for shift_id = 104: 0
+[]
+
+=== 2. ALL CASH MOVEMENTS ACROSS ALL SHIFTS (Chronological Order) ===
+[]
+
+=== 3. SHIFTS DATA & EXPECTED CASH CALCULATION ===
+[
+  {
+    "id": 1,
+    "shift_no": "SHIFT-TEST-1788770541215",
+    "status": "ACTIVE",
+    "opening_float": 300000,
+    "expected_cash": 300000,
+    "opened_at": 1788770541,
+    "closed_at": null
+  }
+]
+
+=== 4. EXPECTED CASH COMPUTED PER SHIFT (Opening Float + SUM(IN) - SUM(OUT)) ===
+Shift ID 1: Opening Float = 300000, Total IN = 0, Total OUT = 0, Computed Expected = 300000
+
+=== 5. MULTI-SHIFT ISOLATION CHECK (Checking unassigned or misallocated movements) ===
+Unassigned cash movements (shift_id IS NULL): 0
+[]
+

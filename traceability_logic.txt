@@ -1,0 +1,159 @@
+      {activeTab === 'traceability' && (
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-200 pb-4 gap-4">
+            <div>
+              <span className="text-xs font-mono bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-md font-semibold">{activeLot.batchNumber}</span>
+              <h2 className="text-xl font-bold text-slate-900 mt-1">Truy xuất Nguồn gốc Lô: {activeLot.productName}</h2>
+              <p className="text-sm text-slate-600">Xem toàn bộ lịch sử từ nhà cung cấp, ngày sản xuất đến các đơn hàng xuất tiêu thụ.</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setDrilldownLot(activeLot)}
+                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors"
+                title="Mở drilldown lịch sử tồn kho & theo dõi hạn sử dụng"
+              >
+                <Clock className="w-4 h-4" />
+                <span>Mở Sổ Cái & Hạn Dùng (Drilldown)</span>
+              </button>
+              <div className="text-right">
+                <span className="text-xs text-slate-500">Tồn kho lô hiện tại:</span>
+                <div className="text-xl font-extrabold text-emerald-700 font-mono">{activeLot.currentQty} {activeLot.uom}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <h3 className="font-bold text-slate-900 text-sm">1. Nguồn gốc & Nhà cung cấp</h3>
+              <p className="text-xs text-slate-600">Mã lô nhà cung cấp: <strong className="font-mono text-slate-900">{activeLot.supplierLot}</strong></p>
+              <p className="text-xs text-slate-600">Kho tiếp nhận: <strong className="text-slate-900">{activeLot.warehouse}</strong></p>
+              <p className="text-xs text-slate-600">Ngày sản xuất: <strong className="font-mono text-slate-900">{activeLot.mfgDate}</strong></p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <h3 className="font-bold text-slate-900 text-sm">2. Hạn sử dụng & Cảnh báo</h3>
+              <p className="text-xs text-slate-600">Hạn sử dụng (Exp): <strong className="font-mono text-rose-700">{activeLot.expDate}</strong></p>
+              <p className="text-xs text-slate-600">Trạng thái kiểm định: <strong className="text-emerald-700">{activeLot.status}</strong></p>
+              <p className="text-xs text-slate-600">Quy tắc xuất kho: <strong className="text-indigo-700">FEFO (Hết hạn trước xuất trước)</strong></p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <h3 className="font-bold text-slate-900 text-sm">3. Lịch sử Tiêu thụ</h3>
+              <p className="text-xs text-slate-600">Tổng lượng nhập ban đầu: <strong className="font-mono text-slate-900">{activeLot.initialQty} {activeLot.uom}</strong></p>
+              <p className="text-xs text-slate-600">Đã xuất bán / Sản xuất: <strong className="font-mono text-indigo-700">{activeLot.initialQty - activeLot.currentQty} {activeLot.uom}</strong></p>
+              <p className="text-xs text-slate-600">Tỷ lệ tiêu thụ: <strong className="text-emerald-700">{Math.round(((activeLot.initialQty - activeLot.currentQty) / activeLot.initialQty) * 100)}%</strong></p>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+
+      {/* Modal: Create Lot */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900">Đăng Ký Lô Sản Xuất & Hạn Sử Dụng Mới</h3>
+              <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600">
+                <Trash2 className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateLot} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Mã Số Lô (Batch Number)</label>
+                <input
+                  type="text"
+                  value={newBatchNo}
+                  onChange={(e) => setNewBatchNo(e.target.value)}
+                  required
+                  className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Mã SKU (Sản phẩm M07)</label>
+                  <select
+                    value={newSku}
+                    onChange={(e) => handleSkuChange(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                  >
+                    {productsCatalog.map(p => (
+                      <option key={p.sku} value={p.sku}>
+                        {p.sku} - {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Số lượng nhập ban đầu</label>
+                  <input
+                    type="number"
+                    value={newQty}
+                    onChange={(e) => setNewQty(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Tên Sản Phẩm</label>
+                <input
+                  type="text"
+                  value={newProductName}
+                  onChange={(e) => setNewProductName(e.target.value)}
+                  required
+                  className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Kho Nhận</label>
+                  <select
+                    value={newWarehouse}
+                    onChange={(e) => setNewWarehouse(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="WH-01 (Kho Tổng Hà Nội)">WH-01 (Kho Tổng Hà Nội)</option>
+                    <option value="WH-02 (Kho Chi nhánh Nam)">WH-02 (Kho Chi nhánh Nam)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Hạn Sử Dụng (Exp Date)</label>
+                  <input
+                    type="date"
+                    value={newExpDate}
+                    onChange={(e) => setNewExpDate(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition-colors"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-sm transition-colors"
+                >
+                  Đăng Ký Lô Hàng
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Lot Inventory History & Expiration Tracking Drilldown Modal */}
+      {drilldownLot && (
+        <LotInventoryHistoryDrilldown
+          lot={drilldownLot}

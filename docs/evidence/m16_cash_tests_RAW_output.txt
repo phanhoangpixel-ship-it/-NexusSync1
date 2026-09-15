@@ -1,0 +1,23 @@
+=== M16 CASH MOVEMENT SERVICE & CHECKLIST T1-T6 VERIFICATION ===
+
+[Test T1] Testing shiftId: null with SALE_CASH...
+[PASS T1] Successfully caught expected error: shiftId là bắt buộc cho movement_type="SALE_CASH". Không được ghi cash_movements với shift_id=null cho loại giao dịch này.
+
+Created test shift ID #1 with opening float 300,000
+
+[Test T2] Idempotency Key test:
+- First call record ID: 1
+- Second call record ID: 1
+- DB record count for key: 1
+[PASS T2] Idempotency successfully verified (same record returned, count = 1).
+
+[Test T4] Expected cash calculation:
+- Computed Expected Cash: 700000 (Expected: 700000)
+[PASS T4] Expected cash calculated correctly.
+
+[Test T5] Testing postMovement to CLOSED shift #1...
+[PASS T5] Successfully caught expected error: Shift #1 đang ở trạng thái "CLOSED", không phải ACTIVE. Không thể ghi cash movement mới vào ca đã đóng (immutability).
+
+[Test T3] Multi-shift isolation test: Opening new shift B with 500,000 float.
+- Shift B Expected Cash: 500000 (Expected: 500000)
+[PASS T3] Shift B is fully isolated from Shift A (no carryover).

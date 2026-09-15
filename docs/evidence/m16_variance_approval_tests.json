@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-09-09T04:23:46.516Z",
+  "tests": [
+    {
+      "name": "T7",
+      "passed": true,
+      "details": "Successfully caught expected SoD error: Vi phạm phân nhiệm (SoD): Thu ngân không được phép tự phê duyệt chênh lệch ca do chính mình phụ trách!"
+    },
+    {
+      "name": "T8",
+      "passed": true,
+      "details": "Successfully caught expected permission error: Vai trò 'WAREHOUSE_STAFF' không có quyền phê duyệt chênh lệch ca."
+    },
+    {
+      "name": "T9",
+      "passed": true,
+      "details": "Concurrent approval verified: exactly 1 fulfilled, 1 rejected (SQLITE_BUSY: database is locked)."
+    }
+  ]
+}
