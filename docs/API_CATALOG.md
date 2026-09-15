@@ -1,6 +1,11 @@
 # Master API Catalog
 
-This catalog maps all application endpoints to their respective domains, permissions, and database tables. When asked to modify a feature, locate its API group here to understand its dependencies.
+This catalog maps application endpoints to their respective domains, permissions, and database tables across all 42 ERP modules (M01 – M42). When asked to modify a feature, locate its API group here and consult the corresponding module specification in `/docs/modules/`.
+
+> **Reference Documentation:**
+> - Master Architecture Map: `/docs/MODULE_MAP.md`
+> - Individual Module Specs & Upgrade Checklists: `/docs/modules/README.md`
+> - Core Business Rules & Invariants: `/docs/BUSINESS_RULES.md`
 
 ## CORE & IAM
 

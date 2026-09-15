@@ -1,6 +1,13 @@
 # ERP Business Rules & Domain Logic
 
-This document defines the strict business rules, workflows, and constraints of the ERP system. **AI MUST NOT guess or alter these rules**; they must be strictly followed when implementing or fixing features.
+This document defines the strict business rules, workflows, and constraints of the ERP system across all 42 modules (M01 – M42). **AI MUST NOT guess or alter these rules**; they must be strictly followed when implementing or fixing features.
+
+> **Master Architecture Reference:** See `/docs/MODULE_MAP.md` and individual module specifications in `/docs/modules/README.md`.
+> **Core Single-Writer Invariants (Non-Negotiable):**
+> 1. **Inventory Authority:** `InventoryService.postTransaction()` (M17) is the ONLY single-writer for inventory balances.
+> 2. **Accounting Authority:** `AccountingService` (M30) is the ONLY single-writer for double-entry General Ledger vouchers.
+> 3. **Pricing Authority:** `PricingEngine` (M41) is the ONLY single-writer for product selling prices.
+> 4. **Costing Authority:** `CostingService` / Landed Cost Engine (M42) is the ONLY single-writer for inventory valuation and COGS calculations.
 
 ## 1. Procurement & Inventory (P2P Flow)
 
