@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Search, Plus, UserCheck, ShieldCheck, CheckCircle2, DollarSign, Tag, FileText } from 'lucide-react';
-import { CustomerPricing } from './types';
+import { CustomerPricing } from '../../../../types/pricingManagement';
 import { formatVND } from '../../../../lib/currency';
 import { CurrencyInputField } from '../../../../components/common/CurrencyInputField';
 

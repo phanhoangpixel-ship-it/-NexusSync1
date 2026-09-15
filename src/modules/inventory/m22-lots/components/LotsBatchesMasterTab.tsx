@@ -10,7 +10,7 @@ import { PaginationControl } from '../../../../components/common/PaginationContr
 import { usePagination } from '../../../../hooks/usePagination';
 import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import { ConfirmDialogState } from '../../../../types';
-import { LotInventoryHistoryDrilldown, LotItem } from '../LotInventoryHistoryDrilldown';
+import { LotInventoryHistoryDrilldown, LotItem } from './LotInventoryHistoryDrilldown';
 import { ENTERPRISE_MASTER_PRODUCTS } from '../../../../data/enterpriseMaster';
 
 interface LotsBatchesMasterTabProps {

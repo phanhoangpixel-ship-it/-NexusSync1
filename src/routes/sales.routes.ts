@@ -19,7 +19,7 @@ import { costingEngine } from "../../engines/costingEngine";
 import { UnifiedPipelineEngine } from "../../engines/unifiedPipelineEngine";
 import { BankReconciliationEngine } from "../../engines/bankReconciliationEngine";
 import { PricingService } from "../../engines/pricingService";
-import { CashMovementService } from "../../engines/shiftEngine";
+import { CashMovementService } from "../../engines/CashMovementService";
 import { SalesEngine } from "../services/SalesEngine";
 import { eq, desc, sql } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
@@ -876,7 +876,7 @@ router.post(["/api/sales/payment/process", "/api/sales/payment/collect-cod"], as
 
       if (paymentMethod === "CASH") {
         if (activeShifts.length > 0) {
-          await CashMovementService.postMovement({
+          await new CashMovementService().postMovement({
             shiftId: activeShifts[0].id,
             cashDrawerId: activeShifts[0].cashDrawerId,
             movementType: "SALE_CASH",
@@ -1332,7 +1332,7 @@ router.post("/api/sales/rma/process", async (req, res) => {
             throw new Error("Không tìm thấy ca làm việc (Active Shift) hợp lệ để thực hiện hoàn tiền mặt (CASH). Vui lòng mở ca.");
           }
           
-          await CashMovementService.postMovement({
+          await new CashMovementService().postMovement({
             shiftId: activeShifts[0].id,
             cashDrawerId: activeShifts[0].cashDrawerId,
             movementType: "REFUND_CASH",

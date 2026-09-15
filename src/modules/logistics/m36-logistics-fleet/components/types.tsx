@@ -182,13 +182,6 @@ export const formatVND = (amount?: number): string => {
 /**
  * Định dạng số học thẳng cột tabular-nums
  */
-export const formatNumber = (num?: number, decimals: number = 0): string => {
-  if (num === undefined || num === null || isNaN(num)) return '0';
-  return new Intl.NumberFormat('vi-VN', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(num);
-};
 
 /**
  * Render Badge trạng thái Lệnh Vận Chuyển Transport Order với WCAG AA Dark Mode

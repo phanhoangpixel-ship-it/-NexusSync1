@@ -38,7 +38,7 @@ import {
   Info,
   ShoppingBag
 } from 'lucide-react';
-import "./types";
+import { M09SuppliersSRMWorkspaceProps } from './types';
 
 export const M09SuppliersSRMWorkspace: React.FC<M09SuppliersSRMWorkspaceProps> = ({
   onSelectEntity,

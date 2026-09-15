@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PricingService } from './utils';
+
 import {
   Percent,
   Calculator,
@@ -80,16 +80,26 @@ export const M13DynamicDiscountsTab: React.FC<M13DynamicDiscountsTabProps> = ({ 
       return;
     }
     try {
-      const res = PricingService.calculateDynamicDiscount({
-        unitPrice,
-        quantity,
-        costBasis,
-        customerTier,
-        paymentTerm,
-        promoCode,
-        minMarginPercent
+      fetch("/api/pricing/dynamic-discount", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          unitPrice,
+          quantity,
+          costBasis,
+          customerTier,
+          paymentTerm,
+          promoCode,
+          minMarginPercent
+        })
+      }).then(res => res.json()).then(res => {
+        setResult(res.data);
+      }).catch(err => {
+        console.warn("PricingService.calculateDynamicDiscount warning:", err);
+        setResult(null);
       });
-      setResult(res);
+
+
     } catch (err) {
       console.warn('PricingService.calculateDynamicDiscount warning:', err);
       setResult(null);

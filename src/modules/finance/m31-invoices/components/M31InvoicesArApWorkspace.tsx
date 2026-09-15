@@ -50,7 +50,7 @@ import { downloadInvoiceArApReportPdf, downloadVatElectronicInvoicePdf } from '.
 import { useWorkspaceSessionTab } from '../../../../hooks/useWorkspaceSessionTab';
 import { RedirectPanel } from '../../../../components/common/RedirectPanel';
 import { DeepLinkBanner } from '../../../../components/common/DeepLinkBanner';
-import "./types";
+import { M31InvoicesArApWorkspaceProps } from './types';
 
 export const M31InvoicesArApWorkspace: React.FC<M31InvoicesArApWorkspaceProps> = ({
   onSelectEntity,

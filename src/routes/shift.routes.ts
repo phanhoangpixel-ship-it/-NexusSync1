@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { ShiftEngine, CashMovementService, DenominationLine } from "../../engines/shiftEngine";
+import { ShiftEngine, DenominationLine } from "../../engines/shiftEngine";
+import { CashMovementService } from "../../engines/CashMovementService";
 import { requireAuth, requireRole } from "../middleware/auth.middleware";
 import { db } from "../../db/index";
 import { cashShifts, cashVariances, cashMovements } from "../../db/schema";
@@ -121,10 +122,10 @@ router.post("/cash-movement", requireAuth, async (req, res) => {
   try {
     const { shiftId, cashDrawerId, movementType, amount, direction, custodianId, orderId, notes, idempotencyKey } = req.body;
     
-    const mov = await CashMovementService.postMovement({
-      shiftId: shiftId ? Number(shiftId) : undefined,
+    const mov = await new CashMovementService().postMovement({
+      shiftId: shiftId ? Number(shiftId) : null,
       cashDrawerId: cashDrawerId ? Number(cashDrawerId) : 1,
-      movementType: movementType || 'MANUAL_ADJUSTMENT',
+      movementType: (movementType || 'CASH_IN') as any,
       amount: Number(amount) || 0,
       direction: direction || 'IN',
       custodianId: custodianId || '1',

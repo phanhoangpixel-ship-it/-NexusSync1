@@ -54,7 +54,7 @@ export class SalesOrderSyncService {
   }
 
   /**
-   * Validate Email address format
+   * Validate Email billingAddress format
    */
   static validateEmail(email?: string | null): { isValid: boolean; message?: string } {
     if (!email || typeof email !== 'string' || email.trim() === '') {
@@ -78,7 +78,7 @@ export class SalesOrderSyncService {
 
     // 1. Match by ID
     if (query.id !== undefined && query.id !== null) {
-      const found = customerList.find(c => c.customerId === query.id);
+      const found = customerList.find(c => c.id === query.id);
       if (found) return found;
     }
 
@@ -109,8 +109,8 @@ export class SalesOrderSyncService {
     if (query.name) {
       const qName = query.name.trim().toLowerCase();
       const found = customerList.find(c => 
-        c.customerName.trim().toLowerCase() === qName || 
-        (c.companyName ?? '').trim().toLowerCase() === qName
+        c.name.trim().toLowerCase() === qName || 
+        (c.tradeName ?? '').trim().toLowerCase() === qName
       );
       if (found) return found;
     }
@@ -129,15 +129,15 @@ export class SalesOrderSyncService {
 
     if (customer.isCreditBlocked) {
       return {
-        approved: false,
-        customerId: customer.customerId,
-        customerName: customer.customerName,
+        isApproved: false,
+        customerId: customer.customerCode,
+        name: customer.name,
         creditLimit: customer.creditLimit,
         currentOutstanding: customer.outstandingBalance,
         newOrderAmount: cleanAmount,
         availableCreditAfterOrder: customer.availableCredit - cleanAmount,
         exceededAmount: cleanAmount,
-        reason: `Khách hàng [${customer.customerCode}] ${customer.customerName} đang bị KHÓA CÔNG NỢ (Credit Blocked) theo chính sách M07.`
+        rejectionReason: `Khách hàng [${customer.customerCode}] ${customer.name} đang bị KHÓA CÔNG NỢ (Credit Blocked) theo chính sách M07.`
       };
     }
 
@@ -147,23 +147,23 @@ export class SalesOrderSyncService {
       if (cleanAmount > availableCredit) {
         const exceeded = cleanAmount - availableCredit;
         return {
-          approved: false,
-          customerId: customer.customerId,
-          customerName: customer.customerName,
+          isApproved: false,
+          customerId: customer.customerCode,
+          name: customer.name,
           creditLimit: customer.creditLimit,
           currentOutstanding: customer.outstandingBalance,
           newOrderAmount: cleanAmount,
           availableCreditAfterOrder: availableCredit - cleanAmount,
           exceededAmount: exceeded,
-          reason: `Đơn hàng (${cleanAmount.toLocaleString('vi-VN')} đ) vượt hạn mức tín dụng còn lại (${availableCredit.toLocaleString('vi-VN')} đ) của khách hàng [${customer.customerCode}]. Vượt quá: ${exceeded.toLocaleString('vi-VN')} đ.`
+          rejectionReason: `Đơn hàng (${cleanAmount.toLocaleString('vi-VN')} đ) vượt hạn mức tín dụng còn lại (${availableCredit.toLocaleString('vi-VN')} đ) của khách hàng [${customer.customerCode}]. Vượt quá: ${exceeded.toLocaleString('vi-VN')} đ.`
         };
       }
     }
 
     return {
-      approved: true,
-      customerId: customer.customerId,
-      customerName: customer.customerName,
+      isApproved: true,
+      customerId: customer.customerCode,
+      name: customer.name,
       creditLimit: customer.creditLimit,
       currentOutstanding: customer.outstandingBalance,
       newOrderAmount: cleanAmount,
@@ -185,17 +185,17 @@ export class SalesOrderSyncService {
     // 1. Identify matched Customer from M07
     const matchedCustomer = this.matchCustomer(
       {
-        id: order.customerId,
+        id: order.customerCode,
         code: order.customerCode,
         taxCode: order.taxCode,
-        name: order.customerName,
-        email: order.billingEmail
+        name: order.name,
+        email: order.email
       },
       customers
     );
 
     // 2. Customer Name Validation
-    if (!order.customerName || order.customerName.trim() === '') {
+    if (!order.name || order.name.trim() === '') {
       errors.push('Tên khách hàng là bắt buộc trong Sales Order.');
     }
 
@@ -210,16 +210,16 @@ export class SalesOrderSyncService {
         }
       }
 
-      if (!order.billingEmail || order.billingEmail.trim() === '') {
+      if (!order.email || order.email.trim() === '') {
         warnings.push('Chưa có email nhận hóa đơn điện tử VAT (hệ thống sẽ dùng email mặc định của doanh nghiệp).');
       } else {
-        const emailVal = this.validateEmail(order.billingEmail);
+        const emailVal = this.validateEmail(order.email);
         if (!emailVal.isValid && emailVal.message) {
           errors.push(emailVal.message);
         }
       }
 
-      if (!order.address || order.address.trim() === '') {
+      if (!order.billingAddress || order.billingAddress.trim() === '') {
         warnings.push('Địa chỉ xuất hóa đơn VAT chưa có đầy đủ.');
       }
     }
@@ -233,8 +233,8 @@ export class SalesOrderSyncService {
       let needsPatch = false;
 
       // Link Customer ID and Code if missing
-      if (!order.customerId && matchedCustomer.customerId) {
-        patch.customerId = matchedCustomer.customerId;
+      if (!order.customerCode && matchedCustomer.customerCode) {
+        patch.customerCode = matchedCustomer.customerCode;
         needsPatch = true;
       }
       if (!order.customerCode && matchedCustomer.customerCode) {
@@ -249,12 +249,12 @@ export class SalesOrderSyncService {
         patch.taxCode = matchedCustomer.taxCode;
         needsPatch = true;
       }
-      if (!order.billingEmail && (matchedCustomer.billingEmail ?? matchedCustomer.email)) {
-        patch.billingEmail = matchedCustomer.billingEmail ?? matchedCustomer.email;
+      if (!order.email && (matchedCustomer.email ?? matchedCustomer.email)) {
+        patch.email = matchedCustomer.email ?? matchedCustomer.email;
         needsPatch = true;
       }
-      if (!order.address && (matchedCustomer.billingAddress ?? matchedCustomer.address)) {
-        patch.address = matchedCustomer.billingAddress ?? matchedCustomer.address;
+      if (!order.billingAddress && (matchedCustomer.billingAddress ?? matchedCustomer.billingAddress)) {
+        patch.billingAddress = matchedCustomer.billingAddress ?? matchedCustomer.billingAddress;
         needsPatch = true;
       }
 
@@ -269,20 +269,20 @@ export class SalesOrderSyncService {
         : safeNumber(order.totalAmount, 0);
 
       creditCheck = this.checkCustomerCredit(matchedCustomer, orderAmount);
-      if (!creditCheck.approved && creditCheck.reason) {
+      if (!creditCheck.isApproved && creditCheck.rejectionReason) {
         // High severity warning / validation error if credit blocked
         if (matchedCustomer.isCreditBlocked) {
-          errors.push(creditCheck.reason);
+          errors.push(creditCheck.rejectionReason);
         } else {
-          warnings.push(creditCheck.reason);
+          warnings.push(creditCheck.rejectionReason);
         }
       }
 
       if (needsPatch) {
         suggestedPatch = patch;
       }
-    } else if (order.customerId) {
-      warnings.push(`Khách hàng với mã ID #${order.customerId} không tìm thấy trong danh mục Master Data M07.`);
+    } else if (order.customerCode) {
+      warnings.push(`Khách hàng với mã ID #${order.customerCode} không tìm thấy trong danh mục Master Data M07.`);
     }
 
     // 5. Line items validation
@@ -318,19 +318,19 @@ export class SalesOrderSyncService {
     validation: SalesOrderCustomerValidationResult;
   } {
     // 1. Normalize POS order to M13 structure
-    const customerName = posOrder.customerName ?? (posOrder.vatDetails?.buyerLegalName || 'Khách lẻ POS');
+    const name = posOrder.name ?? (posOrder.vatDetails?.buyerLegalName || 'Khách lẻ POS');
     const taxCode = posOrder.vatDetails?.vatTaxId ?? '';
-    const billingEmail = posOrder.vatDetails?.vatEmail ?? '';
-    const address = posOrder.deliveryAddress ?? posOrder.vatDetails?.vatAddress ?? 'Cửa hàng Bán lẻ POS';
+    const email = posOrder.vatDetails?.vatEmail ?? '';
+    const billingAddress = posOrder.shippingAddress ?? posOrder.vatDetails?.vatAddress ?? 'Cửa hàng Bán lẻ POS';
 
     const rawOrder: Partial<M13IntegratedSalesOrder> = {
-      id: posOrder.posOrderCode ?? `POS-${Date.now()}`,
-      orderCode: posOrder.posOrderCode,
-      customerName,
+      id: posOrder.orderNumber ?? `POS-${Date.now()}`,
+      orderCode: posOrder.orderNumber,
+      name,
       taxCode,
-      billingEmail,
-      address,
-      deliveryAddress: address,
+      email,
+      billingAddress,
+      shippingAddress: billingAddress,
       orderDate: posOrder.createdAt ? posOrder.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
       createdAt: posOrder.createdAt ?? new Date().toISOString(),
       sourceModule: 'M16_POS',
@@ -344,7 +344,7 @@ export class SalesOrderSyncService {
       vatStatus: posOrder.vatDetails?.vatTaxId ? 'PENDING_ISSUE' : 'NOT_ISSUED',
       items: (posOrder.items ?? []).map((it, idx) => ({
         sku: it.sku,
-        name: it.productName,
+        name: it.name,
         qty: it.quantity,
         uop: it.uop ?? 'Cái',
         price: it.unitPrice,
@@ -357,7 +357,7 @@ export class SalesOrderSyncService {
 
     // Calculate financials
     const financials = calculateOrderFinancials(rawOrder.items ?? [], 10, 0);
-    rawOrder.subtotalAmount = financials.subtotal;
+    rawOrder.subtotalAmount = financials.subtotalAmount ?? (financials as any).subtotal ?? 0;
     rawOrder.discountAmount = financials.discountAmount;
     rawOrder.taxAmount = financials.taxAmount;
     rawOrder.totalAmountNumeric = financials.grandTotal;

@@ -1,6 +1,6 @@
 {
   "name": "NexusSync ERP",
-  "description": "Enterprise Resource Planning system with L0-L4 shell, 41 business modules, 30 workspaces, Business Guidance Layer (Next Best Action & Business GPS), inventory core, COGS costing engine, general ledger, and Product Pricing Authority (M41).",
+  "description": "Enterprise Resource Planning system with L0-L4 shell, 41 business modules, 30 workspaces, Service Worker offline synchronization & request replay queue, Business Guidance Layer, and authoritative inventory & costing cores.",
   "requestFramePermissions": [
     "camera"
   ],

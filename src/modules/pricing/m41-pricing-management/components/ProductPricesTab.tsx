@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Search, Filter, Plus, Edit3, ShieldAlert, CheckCircle2, TrendingUp, AlertTriangle, ArrowRight, Tag, RefreshCw } from 'lucide-react';
-import { ProductPriceItem, PriceList } from './types';
+import { ProductPriceItem, PriceList } from '../../../../types/pricingManagement';
 import { Pagination } from '../../../../components/common/Pagination';
 
 interface ProductPricesTabProps {

@@ -36,6 +36,7 @@ import { UnifiedDataPipelineModal } from './components/common/UnifiedDataPipelin
 import { ToastContainer } from './components/common/ToastContainer';
 import { ConfirmDialog } from './components/common/ConfirmDialog';
 import { WorkspaceLoadingFallback } from './components/common/WorkspaceLoadingFallback';
+import { WorkspaceErrorBoundary } from './components/common/WorkspaceErrorBoundary';
 import { PdfPrintModal } from './components/modals/PdfPrintModal';
 import { TableExportModal } from './components/modals/TableExportModal';
 import { GuidanceModal } from './components/guidance/GuidanceModal';
@@ -48,29 +49,52 @@ import {
   ModuleGuidedDrawer,
 } from './components/knowledge';
 
-// Lazy-loaded Workspaces
-const WorkspaceHub = lazy(() => import('./modules/inventory/m17-master-wms/components/MasterWmsWorkspace').then(m => ({ default: m.MasterWmsWorkspace })));
-const WarehouseManagementWorkspace = lazy(() => import('./modules/inventory/m20-adjustment/components/StockAdjustmentWorkspace').then(m => ({ default: m.StockAdjustmentWorkspace })));
-const M21InternalTransfersWorkspace = lazy(() => import('./modules/inventory/m22-lots/components/M22LotsBatchesWorkspace').then(m => ({ default: m.M22LotsBatchesWorkspace })));
-const M23SerialsWorkspace = lazy(() => import('./modules/inventory/m24-wms-extended/components/M24WMSExtendedWorkspace').then(m => ({ default: m.M24WMSExtendedWorkspace })));
-const ManufacturingWorkspace = lazy(() => import('./modules/manufacturing/m26-scp/components/SupplyChainWorkspace').then(m => ({ default: m.SupplyChainWorkspace })));
-const AssetMaintenanceWorkspace = lazy(() => import('./modules/hr/m28-hr-payroll/components/HRWorkspace').then(m => ({ default: m.HRWorkspace })));
-const DMSWorkspace = lazy(() => import('./modules/governance/m40-ehs/components/EHSWorkspace').then(m => ({ default: m.EHSWorkspace })));
-const M41PricingManagementWorkspace = lazy(() => import('./modules/governance/m38-service-desk/components/ServiceDeskWorkspace').then(m => ({ default: m.ServiceDeskWorkspace })));
-const M39QualityControlWorkspace = lazy(() => import('./modules/governance/m02-audit/components/AuditComplianceWorkspace').then(m => ({ default: m.AuditComplianceWorkspace })));
-const SystemSettingsWorkspace = lazy(() => import('./modules/admin/m04-super-admin/components/SuperAdminRBACWorkspace').then(m => ({ default: m.SuperAdminRBACWorkspace })));
-const M05EventBusWorkspace = lazy(() => import('./modules/master-data/m06-innovation-rd/components/M06InnovationRDWorkspace').then(m => ({ default: m.M06InnovationRDWorkspace })));
-const M07CustomersItemMasterWorkspace = lazy(() => import('./modules/purchase/m08-purchase-orders/components/M08PurchaseOrdersWorkspace').then(m => ({ default: m.M08PurchaseOrdersWorkspace })));
-const M09SuppliersSRMWorkspace = lazy(() => import('./modules/purchase/m10-strategic-sourcing/components/M10StrategicSourcingWorkspace').then(m => ({ default: m.M10StrategicSourcingWorkspace })));
-const M11SrmSupplierMgmtWorkspace = lazy(() => import('./modules/sales/m12-crm/components/M12CrmLeadsWorkspace').then(m => ({ default: m.M12CrmLeadsWorkspace })));
-const M13SalesOrdersWorkspace = lazy(() => import('./modules/sales/m14-sales-commission/components/M14SalesCommissionWorkspace').then(m => ({ default: m.M14SalesCommissionWorkspace })));
-const M15ReturnsRMAWorkspace = lazy(() => import('./modules/sales/m16-pos/components/M16POSRetailWorkspace').then(m => ({ default: m.M16POSRetailWorkspace })));
-const M19StocktakeWorkspace = lazy(() => import('./modules/finance/m30-gl/components/M30GeneralLedgerWorkspace').then(m => ({ default: m.M30GeneralLedgerWorkspace })));
-const M31InvoicesArApWorkspace = lazy(() => import('./modules/finance/m32-payments/components/M32PaymentsTreasuryWorkspace').then(m => ({ default: m.M32PaymentsTreasuryWorkspace })));
-const M33BankReconciliationWorkspace = lazy(() => import('./modules/finance/m34-consolidation/components/M34FinancialConsolidationWorkspace').then(m => ({ default: m.M34FinancialConsolidationWorkspace })));
-const M35ProjectsWBSWorkspace = lazy(() => import('./modules/logistics/m36-logistics-fleet/components/M36LogisticsWorkspace').then(m => ({ default: m.M36LogisticsWorkspace })));
-const M37BiAnalyticsWorkspace = lazy(() => import('./modules/finance/m42-cost-allocation/components/M42CostAllocationWorkspace').then(m => ({ default: m.M42CostAllocationWorkspace })));
-const GenericModuleWorkspace = lazy(() => import('./modules/admin/m01-workspace-hub/components/GenericModuleWorkspace').then(m => ({ default: m.GenericModuleWorkspace })));
+import { lazyWithRetry } from './utils/lazyWithRetry';
+
+// Lazy-loaded Workspaces with resilient retry mechanism
+const WorkspaceHub = lazyWithRetry(() => import('./modules/admin/m01-workspace-hub/components/WorkspaceHub'), 'WorkspaceHub');
+const WarehouseManagementWorkspace = lazyWithRetry(() => import('./modules/inventory/m18-warehouse/components/WarehouseManagementWorkspace'), 'WarehouseManagementWorkspace');
+const M21InternalTransfersWorkspace = lazyWithRetry(() => import('./modules/inventory/m21-transfers/components/M21InternalTransfersWorkspace'), 'M21InternalTransfersWorkspace');
+const M23SerialsWorkspace = lazyWithRetry(() => import('./modules/inventory/m23-serials/components/M23SerialsWorkspace'), 'M23SerialsWorkspace');
+const ManufacturingWorkspace = lazyWithRetry(() => import('./modules/manufacturing/m25-mes/components/ManufacturingWorkspace'), 'ManufacturingWorkspace');
+const AssetMaintenanceWorkspace = lazyWithRetry(() => import('./modules/assets/m27-eam/components/AssetMaintenanceWorkspace'), 'AssetMaintenanceWorkspace');
+const DMSWorkspace = lazyWithRetry(() => import('./modules/governance/m29-dms/components/DMSWorkspace'), 'DMSWorkspace');
+const M41PricingManagementWorkspace = lazyWithRetry(() => import('./modules/pricing/m41-pricing-management/components/M41PricingManagementWorkspace'), 'M41PricingManagementWorkspace');
+const M39QualityControlWorkspace = lazyWithRetry(() => import('./modules/governance/m39-quality/components/M39QualityControlWorkspace'), 'M39QualityControlWorkspace');
+const SystemSettingsWorkspace = lazyWithRetry(() => import('./modules/admin/m03-system-settings/components/SystemSettingsWorkspace'), 'SystemSettingsWorkspace');
+const M05EventBusWorkspace = lazyWithRetry(() => import('./modules/governance/m05-eventbus/components/M05EventBusWorkspace'), 'M05EventBusWorkspace');
+const M07CustomersItemMasterWorkspace = lazyWithRetry(() => import('./modules/master-data/m07-customers-item-master/components/M07CustomersItemMasterWorkspace'), 'M07CustomersItemMasterWorkspace');
+const M09SuppliersSRMWorkspace = lazyWithRetry(() => import('./modules/purchase/m09-suppliers/components/M09SuppliersSRMWorkspace'), 'M09SuppliersSRMWorkspace');
+const M11SrmSupplierMgmtWorkspace = lazyWithRetry(() => import('./modules/purchase/m11-srm/components/M11SrmSupplierMgmtWorkspace'), 'M11SrmSupplierMgmtWorkspace');
+const M13SalesOrdersWorkspace = lazyWithRetry(() => import('./modules/sales/m13-sales-orders/components/M13SalesOrdersWorkspace'), 'M13SalesOrdersWorkspace');
+const M15ReturnsRMAWorkspace = lazyWithRetry(() => import('./modules/sales/m15-returns/components/M15ReturnsRMAWorkspace'), 'M15ReturnsRMAWorkspace');
+const M19StocktakeWorkspace = lazyWithRetry(() => import('./modules/inventory/m19-stocktake/components/M19StocktakeWorkspace'), 'M19StocktakeWorkspace');
+const M31InvoicesArApWorkspace = lazyWithRetry(() => import('./modules/finance/m31-invoices/components/M31InvoicesArApWorkspace'), 'M31InvoicesArApWorkspace');
+const M33BankReconciliationWorkspace = lazyWithRetry(() => import('./modules/finance/m33-bank-reconciliation/components/M33BankReconciliationWorkspace'), 'M33BankReconciliationWorkspace');
+const M35ProjectsWBSWorkspace = lazyWithRetry(() => import('./modules/projects/m35-projects-wbs/components/M35ProjectsWBSWorkspace'), 'M35ProjectsWBSWorkspace');
+const M37BiAnalyticsWorkspace = lazyWithRetry(() => import('./modules/governance/m37-analytics/components/M37BiAnalyticsWorkspace'), 'M37BiAnalyticsWorkspace');
+const SuperAdminRBACWorkspace = lazyWithRetry(() => import('./modules/admin/m04-super-admin/components/SuperAdminRBACWorkspace'), 'SuperAdminRBACWorkspace');
+const SupplyChainWorkspace = lazyWithRetry(() => import('./modules/manufacturing/m26-scp/components/SupplyChainWorkspace'), 'SupplyChainWorkspace');
+const M42CostAllocationWorkspace = lazyWithRetry(() => import('./modules/finance/m42-cost-allocation/components/M42CostAllocationWorkspace'), 'M42CostAllocationWorkspace');
+const M34FinancialConsolidationWorkspace = lazyWithRetry(() => import('./modules/finance/m34-consolidation/components/M34FinancialConsolidationWorkspace'), 'M34FinancialConsolidationWorkspace');
+const M32PaymentsTreasuryWorkspace = lazyWithRetry(() => import('./modules/finance/m32-payments/components/M32PaymentsTreasuryWorkspace'), 'M32PaymentsTreasuryWorkspace');
+const M30GeneralLedgerWorkspace = lazyWithRetry(() => import('./modules/finance/m30-gl/components/M30GeneralLedgerWorkspace'), 'M30GeneralLedgerWorkspace');
+const M16POSRetailWorkspace = lazyWithRetry(() => import('./modules/sales/m16-pos/components/M16POSRetailWorkspace'), 'M16POSRetailWorkspace');
+const M14SalesCommissionWorkspace = lazyWithRetry(() => import('./modules/sales/m14-sales-commission/components/M14SalesCommissionWorkspace'), 'M14SalesCommissionWorkspace');
+const M12CrmLeadsWorkspace = lazyWithRetry(() => import('./modules/sales/m12-crm/components/M12CrmLeadsWorkspace'), 'M12CrmLeadsWorkspace');
+const M10StrategicSourcingWorkspace = lazyWithRetry(() => import('./modules/purchase/m10-strategic-sourcing/components/M10StrategicSourcingWorkspace'), 'M10StrategicSourcingWorkspace');
+const M08PurchaseOrdersWorkspace = lazyWithRetry(() => import('./modules/purchase/m08-purchase-orders/components/M08PurchaseOrdersWorkspace'), 'M08PurchaseOrdersWorkspace');
+const M24WMSExtendedWorkspace = lazyWithRetry(() => import('./modules/inventory/m24-wms-extended/components/M24WMSExtendedWorkspace'), 'M24WMSExtendedWorkspace');
+const M22LotsBatchesWorkspace = lazyWithRetry(() => import('./modules/inventory/m22-lots/components/M22LotsBatchesWorkspace'), 'M22LotsBatchesWorkspace');
+const StockAdjustmentWorkspace = lazyWithRetry(() => import('./modules/inventory/m20-adjustment/components/StockAdjustmentWorkspace'), 'StockAdjustmentWorkspace');
+const MasterWmsWorkspace = lazyWithRetry(() => import('./modules/inventory/m17-master-wms/components/MasterWmsWorkspace'), 'MasterWmsWorkspace');
+const M06InnovationRDWorkspace = lazyWithRetry(() => import('./modules/master-data/m06-innovation-rd/components/M06InnovationRDWorkspace'), 'M06InnovationRDWorkspace');
+const HRWorkspace = lazyWithRetry(() => import('./modules/hr/m28-hr-payroll/components/HRWorkspace'), 'HRWorkspace');
+const M36LogisticsWorkspace = lazyWithRetry(() => import('./modules/logistics/m36-logistics-fleet/components/M36LogisticsWorkspace'), 'M36LogisticsWorkspace');
+const AuditComplianceWorkspace = lazyWithRetry(() => import('./modules/governance/m02-audit/components/AuditComplianceWorkspace'), 'AuditComplianceWorkspace');
+const ServiceDeskWorkspace = lazyWithRetry(() => import('./modules/governance/m38-service-desk/components/ServiceDeskWorkspace'), 'ServiceDeskWorkspace');
+const EHSWorkspace = lazyWithRetry(() => import('./modules/governance/m40-ehs/components/EHSWorkspace'), 'EHSWorkspace');
+const GenericModuleWorkspace = lazyWithRetry(() => import('./modules/admin/m01-workspace-hub/components/GenericModuleWorkspace'), 'GenericModuleWorkspace');
 
 const DEDICATED_WORKSPACE_MODULE_IDS = new Set([
   'M01', 'M02', 'M03', 'M04', 'M05', 'M06', 'M07', 'M08', 'M09', 'M10',
@@ -1326,8 +1350,22 @@ activeWorkspaceName={
 
 
 >
-  {/* Workspaces Switcher with Lazy Loading & Suspense Fallback */}
-  <Suspense fallback={<div>Đang tải phân hệ...</div>}>
+  {/* Workspaces Switcher with Workspace Isolation & Lazy Loading */}
+  <WorkspaceErrorBoundary
+    key={currentModule.moduleId}
+    moduleId={currentModule.moduleId}
+    moduleName={currentModule.moduleName}
+    onNavigateHome={() => {
+      const m01 = MODULE_REGISTRY.find((m) => m.moduleId === 'M01');
+      if (m01) handleSelectModuleWithHistory(m01);
+    }}
+  >
+    <Suspense fallback={
+      <WorkspaceLoadingFallback
+        moduleName={currentModule.moduleName}
+        moduleCode={currentModule.code || currentModule.moduleId}
+      />
+    }>
         {currentModule.moduleId === 'M01' && (
   <WorkspaceHub
 onSelectModule={handleSelectModuleWithHistory}
@@ -1654,7 +1692,8 @@ density={systemPreferences.density}
 />
         )}
       </Suspense>
-    </DomainWorkspaceShell>
+    </WorkspaceErrorBoundary>
+  </DomainWorkspaceShell>
   </div>
 
   {/* Omnibar Modal (Ctrl+K) */}

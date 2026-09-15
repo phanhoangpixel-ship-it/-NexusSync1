@@ -22,8 +22,8 @@ import {
   Plus,
   HelpCircle
 } from 'lucide-react';
-import { PriceList, CategoryPricingRule, ProductPriceItem, PriceApprovalRequest } from './types';
-import { PricingService } from './utils';
+import { PriceList, CategoryPricingRule, ProductPriceItem, PriceApprovalRequest } from '../../../../types/pricingManagement';
+import { calculateMarkupPrice, calculateMarginPrice, calculateActualMargin, calculateActualMarkup, checkMinimumMargin } from '../utils/pricingMath';
 import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import { ConfirmDialogState } from '../../../../types';
 
@@ -100,8 +100,8 @@ export const BulkPricingTab: React.FC<BulkPricingTabProps> = ({
     return SAMPLE_DATASETS.pc_components.map((p, idx) => {
       const defaultRule = categoryRules.find(r => r.category.toLowerCase() === p.category.toLowerCase());
       const markupVal = defaultRule ? defaultRule.ruleValue : 40;
-      const calcPrice = PricingService.calculateMarkupPrice(p.costBasis, markupVal, 'NEAREST_1000');
-      const margin = PricingService.calculateActualMargin(p.costBasis, calcPrice);
+      const calcPrice = calculateMarkupPrice(p.costBasis, markupVal, 'NEAREST_1000');
+      const margin = calculateActualMargin(p.costBasis, calcPrice);
       return {
         id: `BULK-${idx + 1}`,
         sku: p.sku,
@@ -162,27 +162,27 @@ export const BulkPricingTab: React.FC<BulkPricingTabProps> = ({
         ruleVal = catRule.ruleValue;
         if (catRule.ruleType === 'MARKUP') {
           ruleType = 'MARKUP';
-          price = PricingService.calculateMarkupPrice(cost, ruleVal, rounding);
+          price = calculateMarkupPrice(cost, ruleVal, rounding);
         } else {
           ruleType = 'TARGET_MARGIN';
-          price = PricingService.calculateMarginPrice(cost, ruleVal, rounding);
+          price = calculateMarginPrice(cost, ruleVal, rounding);
         }
       } else {
         ruleType = 'MARKUP';
         ruleVal = 40;
-        price = PricingService.calculateMarkupPrice(cost, 40, rounding);
+        price = calculateMarkupPrice(cost, 40, rounding);
       }
     } else if (mode === 'UNIFORM_MARKUP') {
       ruleType = 'MARKUP';
       ruleVal = uMarkup;
-      price = PricingService.calculateMarkupPrice(cost, uMarkup, rounding);
+      price = calculateMarkupPrice(cost, uMarkup, rounding);
     } else {
       ruleType = 'TARGET_MARGIN';
       ruleVal = uMargin;
-      price = PricingService.calculateMarginPrice(cost, uMargin, rounding);
+      price = calculateMarginPrice(cost, uMargin, rounding);
     }
 
-    const margin = (cost > 0 && price > 0) ? PricingService.calculateActualMargin(cost, price) : 0;
+    const margin = (cost > 0 && price > 0) ? calculateActualMargin(cost, price) : 0;
     const isBelow = margin < minMarginThreshold;
 
     return {
@@ -222,7 +222,7 @@ export const BulkPricingTab: React.FC<BulkPricingTabProps> = ({
   const handleAdjustPrice = (id: string, newPriceNum: number) => {
     setItems(prev => prev.map(item => {
       if (item.id !== id) return item;
-      const newMargin = (item.costBasis > 0 && newPriceNum > 0) ? PricingService.calculateActualMargin(item.costBasis, newPriceNum) : 0;
+      const newMargin = (item.costBasis > 0 && newPriceNum > 0) ? calculateActualMargin(item.costBasis, newPriceNum) : 0;
       const isBelow = newMargin < minMarginThreshold;
       return {
         ...item,
@@ -237,7 +237,7 @@ export const BulkPricingTab: React.FC<BulkPricingTabProps> = ({
     setItems(prev => prev.map(item => {
       if (!item.selected) return item;
       const newPrice = Math.round((item.adjustedPrice * (1 + percentDelta / 100)) / 1000) * 1000;
-      const newMargin = (item.costBasis > 0 && newPrice > 0) ? PricingService.calculateActualMargin(item.costBasis, newPrice) : 0;
+      const newMargin = (item.costBasis > 0 && newPrice > 0) ? calculateActualMargin(item.costBasis, newPrice) : 0;
       return {
         ...item,
         adjustedPrice: newPrice,

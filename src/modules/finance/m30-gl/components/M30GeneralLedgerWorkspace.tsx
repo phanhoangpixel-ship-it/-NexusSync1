@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import { downloadFinancialReportPdf } from '../../../../utils/pdfExporter';
 import { useWorkspaceSessionTab } from '../../../../hooks/useWorkspaceSessionTab';
-import "./types";
+import { M30GeneralLedgerWorkspaceProps } from './types';
 
 export const M30GeneralLedgerWorkspace: React.FC<M30GeneralLedgerWorkspaceProps> = ({
   onSelectEntity,

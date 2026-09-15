@@ -1,53 +1,7 @@
+import { CashMovementService } from "./CashMovementService";
 import { db } from '../db/index';
 import { cashShifts, cashMovements, cashCounts, cashVariances, salesOrders, cashDrawers, outboxEvents } from '../db/schema';
 import { eq, and, desc, sql, inArray, or } from 'drizzle-orm';
-
-export class CashMovementService {
-  static async postMovement(params: {
-    shiftId?: number;
-    cashDrawerId: number;
-    movementType: string;
-    amount: number;
-    direction: 'IN' | 'OUT';
-    custodianId: string;
-    fromLocation: string;
-    toLocation: string;
-    referenceNo?: string;
-    idempotencyKey: string;
-    notes?: string;
-  }, txObj: any = db) {
-    const existing = await txObj.select().from(cashMovements).where(eq(cashMovements.idempotencyKey, params.idempotencyKey)).limit(1);
-    if (existing.length > 0) return existing[0];
-
-    const movementNo = `CM-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-
-    const result = await txObj.insert(cashMovements).values({
-      movementNo,
-      shiftId: params.shiftId,
-      cashDrawerId: params.cashDrawerId,
-      movementType: params.movementType,
-      amount: params.amount,
-      direction: params.direction,
-      custodianId: params.custodianId,
-      fromLocation: params.fromLocation,
-      toLocation: params.toLocation,
-      referenceNo: params.referenceNo,
-      idempotencyKey: params.idempotencyKey,
-      notes: params.notes,
-    }).returning();
-
-    await txObj.insert(outboxEvents).values({
-      eventId: `EVT-CM-${params.idempotencyKey}`,
-      eventType: 'CASH_MOVEMENT_POSTED',
-      aggregateType: 'CASH_MOVEMENT',
-      aggregateId: String(result[0].id),
-      source: 'CASH_ENGINE',
-      payload: JSON.stringify({ movement: result[0] }),
-    } as any);
-
-    return result[0];
-  }
-}
 
 export type DenominationLine = { denomination: number; quantity: number };
 
@@ -86,7 +40,7 @@ export class ShiftEngine {
         notes: params.notes,
       } as any).returning();
 
-      await CashMovementService.postMovement({
+      await new CashMovementService().postMovement({
         shiftId: newShift[0].id,
         cashDrawerId: params.cashDrawerId,
         movementType: 'OPENING_FLOAT',

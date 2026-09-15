@@ -53,7 +53,7 @@ import { SplitPaymentModal, PaymentSplitRow } from './SplitPaymentModal';
 import { ThermalReceiptModal } from './ThermalReceiptModal';
 import { CashInOutModal } from './CashInOutModal';
 import { ParkedOrdersManager, ParkedOrder } from './ParkedOrdersManager';
-import "./types";
+import { M16POSWorkspaceProps } from "./types";
 
 export const M16POSWorkspace: React.FC<M16POSWorkspaceProps> = ({ onNotify, onSelectEntity, guidedTask }) => {
   // Navigation tabs managed via shared persistence hook

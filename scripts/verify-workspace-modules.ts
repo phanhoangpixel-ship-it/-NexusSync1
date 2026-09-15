@@ -52,7 +52,7 @@ export function runModuleParityAudit(): AuditResult {
 
   // 2. Extract active lazy-loaded imports in App.tsx
   const lazyImports: { name: string; path: string }[] = [];
-  const lazyRegex = /const\s+(\w+)\s*=\s*lazy\(\(\)\s*=>\s*import\(['"]([^'"]+)['"]\)/g;
+  const lazyRegex = /const\s+(\w+)\s*=\s*(?:lazy|lazyWithRetry)\(\(\)\s*=>\s*import\(['"]([^'"]+)['"]\)/g;
   let match: RegExpExecArray | null;
   while ((match = lazyRegex.exec(appCode)) !== null) {
     lazyImports.push({ name: match[1], path: match[2] });

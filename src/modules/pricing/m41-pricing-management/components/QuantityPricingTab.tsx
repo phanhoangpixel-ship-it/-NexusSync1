@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Layers, Plus, TrendingDown, Percent, CheckCircle2, DollarSign, Package } from 'lucide-react';
-import { QuantityPricingTier } from './types';
+import { QuantityPricingTier } from '../../../../types/pricingManagement';
 import { formatVND } from '../../../../lib/currency';
 import { CurrencyInputField } from '../../../../components/common/CurrencyInputField';
 

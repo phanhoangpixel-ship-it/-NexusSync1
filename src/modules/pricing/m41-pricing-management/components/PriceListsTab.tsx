@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Layers, Plus, CheckCircle, ShieldAlert, Calendar, DollarSign, Search, Filter } from 'lucide-react';
-import { PriceList } from './types';
+import { PriceList } from '../../../../types/pricingManagement';
 
 interface PriceListsTabProps {
   priceLists: PriceList[];

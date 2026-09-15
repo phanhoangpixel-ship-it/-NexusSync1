@@ -48,7 +48,7 @@ export function getSystemPreferences(): SystemPreferences {
     defaultLandingModule: 'M01',
     sessionTimeoutMinutes: 30,
     offlineCachingEnabled: true,
-    alertSoundEnabled: true,
+    alertSoundEnabled: true,    
     keyboardShortcutsEnabled: true,
     autoCacheCleaningEnabled: true,
     cacheRetentionMinutes: 3,
@@ -75,6 +75,7 @@ export function parseNumber(value: string | number | null | undefined): number {
   if (str.includes('.') && str.includes(',')) {
     const lastDot = str.lastIndexOf('.');
     const lastComma = str.lastIndexOf(',');
+
     if (lastComma > lastDot) {
       // Comma is decimal, dot is thousand (1.500.000,50)
       str = str.replace(/\./g, '').replace(',', '.');
@@ -105,54 +106,4 @@ export function parseNumber(value: string | number | null | undefined): number {
   return isNaN(parsed) ? 0 : parsed;
 }
 
-/**
- * Formats a number or numeric string into a clean numeric string with 
- * thousands and decimal separators dictated by system preferences.
- */
-export function formatNumber(
-  amount: number | string | null | undefined, 
-  forcedThousandSeparator?: '.' | ',',
-  forcedDecimalSeparator?: ',' | '.'
-): string {
-  if (amount === null || amount === undefined || amount === '') return '0';
-  
-  const num = parseNumber(amount);
-  if (isNaN(num)) return '0';
-
-  const prefs = getSystemPreferences();
-  const thousand = forcedThousandSeparator || prefs.thousandSeparator || '.';
-  const decimal = forcedDecimalSeparator || prefs.decimalSeparator || ',';
-
-  const parts = num.toString().split('.');
-  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, thousand);
-
-  if (parts.length > 1) {
-    return `${parts[0]}${decimal}${parts[1]}`;
-  }
-  return parts[0];
-}
-
-/**
- * Formats a number or numeric string as currency, applying system preference 
- * for thousand/decimal separators, currency symbol, and position (prefix/suffix).
- */
-export function formatCurrency(
-  amount: number | string | null | undefined, 
-  customCurrencySymbol?: string,
-  customPosition?: 'prefix' | 'suffix'
-): string {
-  const prefs = getSystemPreferences();
-  const num = parseNumber(amount);
-  const formattedNum = formatNumber(num);
-
-  const symbol = customCurrencySymbol !== undefined ? customCurrencySymbol : (prefs.currencySymbol || '₫');
-  const position = customPosition || prefs.currencyPosition || 'suffix';
-
-  if (!symbol) return formattedNum;
-
-  if (position === 'prefix') {
-    return `${symbol} ${formattedNum}`;
-  } else {
-    return `${formattedNum} ${symbol}`;
-  }
-}
+export { formatNumber, formatCurrency } from './currencyFormatter';

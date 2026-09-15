@@ -334,11 +334,13 @@ settingsRouter.post("/api/settings/branches/:id/activate", async (req, res) => {
 
     // Audit log
     await db.insert(schema.auditLogs).values({
+      auditCode: `AUD-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      userId: 1,
+      username: user,
+      module: 'SYSTEM',
       action: 'SWITCH_OPERATING_BRANCH',
       entityType: 'BRANCH',
       entityId: branchId,
-      performedBy: user,
-      timestamp: new Date().toISOString(),
       metadata: JSON.stringify({ activeBranch: branchId }),
     }).run();
 
@@ -392,11 +394,13 @@ settingsRouter.post("/api/settings/profiles/:id/activate", async (req, res) => {
     }
 
     await db.insert(schema.auditLogs).values({
+      auditCode: `AUD-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      userId: 1,
+      username: user,
+      module: 'SYSTEM',
       action: 'SWITCH_ENVIRONMENT_PROFILE',
       entityType: 'ENVIRONMENT_PROFILE',
       entityId: profileId,
-      performedBy: user,
-      timestamp: new Date().toISOString(),
       metadata: JSON.stringify({ activeProfile: profileId }),
     }).run();
 
@@ -430,11 +434,13 @@ settingsRouter.post("/api/settings/sessions/:id/force-logout", async (req, res) 
 
     // Audit log
     await db.insert(schema.auditLogs).values({
+      auditCode: `AUD-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      userId: 1,
+      username: user,
+      module: 'AUTH',
       action: 'FORCE_LOGOUT_SESSION',
       entityType: 'AUTH_SESSION',
       entityId: sessionId,
-      performedBy: user,
-      timestamp: new Date().toISOString(),
       metadata: JSON.stringify({ terminatedUser: targetSession?.user, ip: targetSession?.ip }),
     }).run();
 
@@ -622,7 +628,7 @@ settingsRouter.put("/api/rbac/matrix", async (req, res) => {
     const existing = await db.select().from(schema.systemConfigs).where(eq(schema.systemConfigs.configKey, 'rbac_matrix')).all();
     if (existing.length > 0) {
       await db.update(schema.systemConfigs)
-        .set({ configValue: JSON.stringify(matrix), updatedBy: user, updatedAt: new Date() })
+        .set({ configValue: JSON.stringify(matrix) })
         .where(eq(schema.systemConfigs.configKey, 'rbac_matrix'))
         .run();
     } else {
@@ -630,7 +636,6 @@ settingsRouter.put("/api/rbac/matrix", async (req, res) => {
         moduleKey: 'M04_RBAC',
         configKey: 'rbac_matrix',
         configValue: JSON.stringify(matrix),
-        updatedBy: user,
       }).run();
     }
 
@@ -787,11 +792,13 @@ settingsRouter.post("/api/settings/integrity/fix/:ruleId", async (req, res) => {
     const user = (req as any).user?.username || 'admin';
 
     await db.insert(schema.auditLogs).values({
+      auditCode: `AUD-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      userId: 1,
+      username: user,
+      module: 'SYSTEM',
       action: 'SYSTEM_INTEGRITY_AUTO_FIX',
       entityType: 'INTEGRITY_RULE',
       entityId: ruleId,
-      performedBy: user,
-      timestamp: new Date().toISOString(),
       metadata: JSON.stringify({ fixedRule: ruleId }),
     }).run();
 
@@ -813,11 +820,13 @@ settingsRouter.post("/api/settings/integrity/purge", async (req, res) => {
     const user = (req as any).user?.username || 'admin';
 
     await db.insert(schema.auditLogs).values({
+      auditCode: `AUD-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      userId: 1,
+      username: user,
+      module: 'SYSTEM',
       action: 'SYSTEM_INTEGRITY_GARBAGE_PURGE',
       entityType: 'INTEGRITY_GARBAGE',
       entityId: ruleId || 'ALL_GARBAGE',
-      performedBy: user,
-      timestamp: new Date().toISOString(),
       metadata: JSON.stringify({ purgedRule: ruleId, timestamp: new Date().toISOString() }),
     }).run();
 

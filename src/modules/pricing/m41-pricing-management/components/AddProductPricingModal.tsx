@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Plus, CheckCircle2, DollarSign, X, Calculator, ShieldCheck, Tag, Package } from 'lucide-react';
-import { PriceList, ProductPriceItem } from './types';
+import { PriceList, ProductPriceItem } from '../../../../types/pricingManagement';
 import { ENTERPRISE_MASTER_PRODUCTS } from '../../../../data/enterpriseMaster';
-import { PricingService } from './utils';
+import { calculateMarkupPrice, calculateMarginPrice, calculateActualMargin, calculateActualMarkup, checkMinimumMargin } from '../utils/pricingMath';
 
 interface AddProductPricingModalProps {
   isOpen: boolean;
@@ -54,9 +54,9 @@ export const AddProductPricingModal: React.FC<AddProductPricingModalProps> = ({
   let finalPrice = 0;
   if (costBasis > 0) {
     if (pricingMethod === 'MARKUP') {
-      finalPrice = PricingService.calculateMarkupPrice(costBasis, markupPercent, 'NEAREST_1000');
+      finalPrice = calculateMarkupPrice(costBasis, markupPercent, 'NEAREST_1000');
     } else if (pricingMethod === 'TARGET_MARGIN') {
-      finalPrice = PricingService.calculateMarginPrice(costBasis, targetMarginPercent, 'NEAREST_1000');
+      finalPrice = calculateMarginPrice(costBasis, targetMarginPercent, 'NEAREST_1000');
     } else {
       finalPrice = fixedPrice;
     }
@@ -64,7 +64,7 @@ export const AddProductPricingModal: React.FC<AddProductPricingModalProps> = ({
     finalPrice = fixedPrice;
   }
 
-  const actualMargin = (costBasis > 0 && finalPrice > 0) ? PricingService.calculateActualMargin(costBasis, finalPrice) : 0;
+  const actualMargin = (costBasis > 0 && finalPrice > 0) ? calculateActualMargin(costBasis, finalPrice) : 0;
   const isBelowMin = costBasis > 0 ? actualMargin < minMarginPercent : true;
 
   const handleSubmit = (e: React.FormEvent) => {

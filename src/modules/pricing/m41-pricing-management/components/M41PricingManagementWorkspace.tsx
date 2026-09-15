@@ -35,8 +35,8 @@ import {
   PriceAuditLog,
   PriceResolutionQuery,
   PriceResolutionResult
-} from './types';
-import { PricingService } from './utils';
+} from '../../../../types/pricingManagement';
+import { calculateMarkupPrice, calculateMarginPrice, calculateActualMargin, calculateActualMarkup, checkMinimumMargin } from '../utils/pricingMath';
 
 // Subcomponents
 import { PriceListsTab } from './PriceListsTab';
@@ -458,9 +458,9 @@ export const M41PricingManagementWorkspace: React.FC = () => {
     setProductPrices(prev => prev.map(item => {
       if (item.category.toLowerCase() === updatedRule.category.toLowerCase() && !item.isOverride) {
         const newPrice = updatedRule.ruleType === 'MARKUP'
-          ? PricingService.calculateMarkupPrice(item.costBasis, updatedRule.ruleValue, updatedRule.roundingMode)
-          : PricingService.calculateMarginPrice(item.costBasis, updatedRule.ruleValue, updatedRule.roundingMode);
-        const newMargin = (item.costBasis > 0 && newPrice > 0) ? PricingService.calculateActualMargin(item.costBasis, newPrice) : 0;
+          ? calculateMarkupPrice(item.costBasis, updatedRule.ruleValue, updatedRule.roundingMode)
+          : calculateMarginPrice(item.costBasis, updatedRule.ruleValue, updatedRule.roundingMode);
+        const newMargin = (item.costBasis > 0 && newPrice > 0) ? calculateActualMargin(item.costBasis, newPrice) : 0;
         return {
           ...item,
           ruleApplied: updatedRule.ruleType === 'MARKUP' ? 'MARKUP' : 'MARGIN',
@@ -512,7 +512,7 @@ export const M41PricingManagementWorkspace: React.FC = () => {
     if (!target) return;
 
     const oldPrice = target.finalPrice;
-    const newMargin = (target.costBasis > 0 && params.newPrice > 0) ? PricingService.calculateActualMargin(target.costBasis, params.newPrice) : 0;
+    const newMargin = (target.costBasis > 0 && params.newPrice > 0) ? calculateActualMargin(target.costBasis, params.newPrice) : 0;
 
     setProductPrices(prev => prev.map(p => {
       if (p.productId === params.productId && p.priceListId === params.priceListId) {
@@ -563,8 +563,8 @@ export const M41PricingManagementWorkspace: React.FC = () => {
     // Update cost basis across all price lists for this product
     setProductPrices(prev => prev.map(item => {
       if (item.productId === params.productId) {
-        const newCalculated = params.newCost > 0 ? PricingService.calculateMarkupPrice(params.newCost, item.markupPercent || 50) : item.finalPrice;
-        const newMargin = (params.newCost > 0 && newCalculated > 0) ? PricingService.calculateActualMargin(params.newCost, newCalculated) : 0;
+        const newCalculated = params.newCost > 0 ? calculateMarkupPrice(params.newCost, item.markupPercent || 50) : item.finalPrice;
+        const newMargin = (params.newCost > 0 && newCalculated > 0) ? calculateActualMargin(params.newCost, newCalculated) : 0;
         return {
           ...item,
           costBasis: params.newCost,
@@ -588,7 +588,7 @@ export const M41PricingManagementWorkspace: React.FC = () => {
         priceListName: 'Bảng giá Bán lẻ Tiêu chuẩn',
         uom: sample.uom,
         oldPrice: sample.finalPrice,
-        newPrice: PricingService.calculateMarkupPrice(params.newCost, sample.markupPercent || 50),
+        newPrice: calculateMarkupPrice(params.newCost, sample.markupPercent || 50),
         ruleApplied: `Inbound Cost Sync [${params.receiptCode}]`,
         reason: `Cập nhật giá vốn từ nhà cung cấp ${params.supplier}`,
         isOverride: false,
@@ -730,7 +730,7 @@ export const M41PricingManagementWorkspace: React.FC = () => {
     const finalUnitPriceInclVat = resolvedPrice + vatAmount;
     const lineTotalExclVat = resolvedPrice * query.quantity;
     const lineTotalInclVat = finalUnitPriceInclVat * query.quantity;
-    const actualMarginPercent = (cost > 0 && resolvedPrice > 0) ? PricingService.calculateActualMargin(cost, resolvedPrice) : 0;
+    const actualMarginPercent = (cost > 0 && resolvedPrice > 0) ? calculateActualMargin(cost, resolvedPrice) : 0;
 
     return {
       productId: query.productId,
@@ -1060,3 +1060,5 @@ export const M41PricingManagementWorkspace: React.FC = () => {
     </div>
   );
 };
+
+export default M41PricingManagementWorkspace;

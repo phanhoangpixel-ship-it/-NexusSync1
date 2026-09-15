@@ -2628,7 +2628,7 @@ export const srmBidItems = sqliteTable("srm_bid_items", {
 // ORCHESTRATION LAYER TABLES
 // -------------------------------------------------------------
 
-import { sql, relations } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 
 export const functionalGroups = sqliteTable("functional_groups", {
   id: integer("id").primaryKey({ autoIncrement: true }),

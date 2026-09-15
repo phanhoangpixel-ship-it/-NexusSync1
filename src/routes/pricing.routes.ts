@@ -573,96 +573,25 @@ router.get("/api/pricing/audit-logs", (req, res) => {
 });
 
 // 9. Price Resolution Engine Endpoint (Authoritative 6-Step Waterfall)
-router.post("/api/pricing/resolve", (req, res) => {
-  const query: PriceResolutionQuery = req.body;
-  const { customerId, customerGroup, productId, quantity, uom, transactionDate } = query;
-
-  const tDate = transactionDate || new Date().toISOString().split('T')[0];
-
-  // Base fallback standard price
-  const stdItem = productPrices.find(p => p.productId === productId && p.priceListCode === 'RETAIL-STD') || productPrices[0];
-  const cost = stdItem ? stdItem.costBasis : 444444;
-  let resolvedPrice = stdItem ? stdItem.finalPrice : 666666;
-  let resolutionStep = '6. Default Base Product Price (Giá niêm yết bán lẻ)';
-  let discountPercent = 0;
-
-  // 1. Check Customer-specific Contract
-  if (customerId) {
-    const custContract = customerPricingList.find(c => c.customerId === customerId && c.productId === productId && c.status === 'ACTIVE');
-    if (custContract) {
-      resolvedPrice = custContract.customPrice;
-      resolutionStep = `1. Customer Contract [${custContract.contractCode || 'Riêng'}]`;
-      discountPercent = custContract.discountPercent;
-    }
+router.post("/api/pricing/resolve", async (req, res) => {
+  try {
+    const query: PriceResolutionQuery = req.body;
+    const { customerId, customerGroup, productId, quantity, uom, transactionDate, priceListId } = query;
+    
+    // Use the true authoritative engine
+    const resolved = await PricingService.resolveUnitPrice({
+      productId: Number(productId || 0),
+      customerId: customerId ? Number(customerId) : undefined,
+      priceListId: priceListId ? Number(priceListId) : undefined,
+      quantity: Number(quantity || 1)
+    });
+    
+    res.json({ success: true, data: resolved });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
   }
-
-  // 2. Check Customer Group Price
-  if (resolutionStep.startsWith('6') && customerGroup) {
-    const grpPrice = productPrices.find(p => p.productId === productId && p.priceListName.toLowerCase().includes(customerGroup.toLowerCase()));
-    if (grpPrice) {
-      resolvedPrice = grpPrice.finalPrice;
-      resolutionStep = `2. Customer Group Price [Nhóm ${customerGroup}]`;
-    }
-  }
-
-  // 3. Check Quantity Break Tiers
-  if (resolutionStep.startsWith('6') || resolutionStep.startsWith('2')) {
-    const tier = quantityTiers.find(t => t.productId === productId && quantity >= t.minQty && (t.maxQty === null || quantity <= t.maxQty));
-    if (tier && tier.unitPrice < resolvedPrice) {
-      resolvedPrice = tier.unitPrice;
-      resolutionStep = `3. Quantity Break Tier [SL: ${tier.minQty} - ${tier.maxQty || 'Trở lên'}]`;
-      discountPercent = tier.discountPercent;
-    }
-  }
-
-  // 4. Check Active Promotion
-  if (resolutionStep.startsWith('6')) {
-    const promo = promotions.find(p => p.productId === productId && p.isActive && tDate >= p.startDate && tDate <= p.endDate);
-    if (promo && promo.promoPrice < resolvedPrice) {
-      resolvedPrice = promo.promoPrice;
-      resolutionStep = `4. Active Promotion [${promo.name}]`;
-      discountPercent = promo.discountPercent;
-    }
-  }
-
-  // Calculate taxes (10% VAT standard) and margins
-  const vatRate = 0.10;
-  const vatAmount = Math.round(resolvedPrice * vatRate);
-  const finalUnitPriceInclVat = resolvedPrice + vatAmount;
-  const lineTotalExclVat = resolvedPrice * quantity;
-  const lineTotalInclVat = finalUnitPriceInclVat * quantity;
-  const actualMarginPercent = PricingService.calculateActualMargin(cost, resolvedPrice);
-
-  let marginStatus: 'PASS' | 'WARNING' | 'CRITICAL_BELOW_MIN' = 'PASS';
-  if (actualMarginPercent < 15) {
-    marginStatus = actualMarginPercent < 5 ? 'CRITICAL_BELOW_MIN' : 'WARNING';
-  }
-
-  const result: PriceResolutionResult = {
-    productId,
-    productName: stdItem ? stdItem.productName : 'Sản phẩm',
-    sku: stdItem ? stdItem.sku : 'SKU-001',
-    uom: uom || 'Cây (PCS)',
-    quantity: quantity || 1,
-    baseStandardPrice: stdItem ? stdItem.finalPrice : 666666,
-    resolutionStep,
-    resolvedUnitPrice: resolvedPrice,
-    discountPercent,
-    discountAmount: Math.round((stdItem.finalPrice - resolvedPrice)),
-    finalUnitPriceExclVat: resolvedPrice,
-    vatRate,
-    vatAmount,
-    finalUnitPriceInclVat,
-    lineTotalExclVat,
-    lineTotalInclVat,
-    costBasis: cost,
-    actualMarginPercent,
-    marginStatus,
-    governanceNote: 'Resolved by Authoritative Pricing Engine (M41). Cost basis supplied by Costing Engine.'
-  };
-
-  res.json({ success: true, data: result });
 });
+
 
 // 10. Bulk Calculate Pricing
 router.post("/api/pricing/bulk-calculate", (req, res) => {
@@ -769,6 +698,30 @@ router.post("/api/pricing/override", (req, res) => {
   auditLogs.unshift(log);
 
   res.json({ success: true, data: prodItem, auditLog: log });
+});
+
+// --- Frontend Math & Discount Proxy ---
+router.post("/api/pricing/math", (req, res) => {
+  const { action, cost, value, rounding } = req.body;
+  try {
+    let result = 0;
+    if (action === "markup") result = PricingService.calculateMarkupPrice(cost, value, rounding);
+    else if (action === "marginPrice") result = PricingService.calculateMarginPrice(cost, value, rounding);
+    else if (action === "actualMargin") result = PricingService.calculateActualMargin(cost, value);
+    else if (action === "actualMarkup") result = PricingService.calculateActualMarkup(cost, value);
+    res.json({ success: true, data: result });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+router.post("/api/pricing/dynamic-discount", (req, res) => {
+  try {
+    const result = PricingService.calculateDynamicDiscount(req.body);
+    res.json({ success: true, data: result });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
 });
 
 export default router;

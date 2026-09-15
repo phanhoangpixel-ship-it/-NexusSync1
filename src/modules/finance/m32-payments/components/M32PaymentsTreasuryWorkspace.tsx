@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import { downloadTreasuryReportPdf } from '../../../../utils/pdfExporter';
 import { useWorkspaceSessionTab } from '../../../../hooks/useWorkspaceSessionTab';
-import "./types";
+import { M32PaymentsTreasuryWorkspaceProps } from './types';
 
 export const M32PaymentsTreasuryWorkspace: React.FC<M32PaymentsTreasuryWorkspaceProps> = ({
   onSelectEntity,

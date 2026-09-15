@@ -3,6 +3,22 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 import { SystemClockProvider } from './components/common/SystemClockProvider';
+import { registerServiceWorker } from './serviceWorkerRegistration';
+import { offlineSyncService } from './services/offlineSyncService';
+
+// Register Service Worker for PWA and offline sync capabilities
+registerServiceWorker();
+
+// Suppress benign Vite HMR WebSocket connection messages in sandbox preview (HMR disabled by container platform)
+if (typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', (event) => {
+    const reasonStr = event.reason?.message || event.reason?.toString() || '';
+    if (reasonStr.includes('WebSocket') || reasonStr.includes('ws://') || reasonStr.includes('wss://')) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
+}
 
 // Global override to make default toLocaleString use vi-VN (dot separator)
 const originalToLocaleString = Number.prototype.toLocaleString;
@@ -45,13 +61,28 @@ Object.defineProperty(window, 'fetch', {
   enumerable: true,
   writable: true,
   value: async (...args: any[]) => {
-    let [resource, config] = args;
-    config = config || {};
-    config.headers = config.headers || {};
-    let token = localStorage.getItem('nexus_jwt');
-    
+    const [resource, config = {}] = args;
+    const url = typeof resource === 'string' ? resource : (resource && typeof resource === 'object' && 'url' in resource ? (resource as any).url : '');
+    const isInternalApi = typeof url === 'string' && (url.startsWith('/api') || (typeof window !== 'undefined' && url.startsWith(window.location.origin + '/api')));
+
+    // Only intercept internal /api calls
+    if (!isInternalApi) {
+      return originalFetch(resource, config);
+    }
+
+    const method = ((config.method || 'GET') as string).toUpperCase();
+    const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+    const isLogin = url.includes('/auth/login');
+
+    let token: string | null = null;
+    try {
+      token = localStorage.getItem('nexus_jwt');
+    } catch {
+      // ignore localStorage restriction
+    }
+
     // If token is missing and calling API, try fetching default login token
-    if (!token && typeof resource === 'string' && resource.startsWith('/api') && !resource.includes('/auth/login')) {
+    if (!token && !isLogin && navigator.onLine) {
       try {
         const loginRes = await originalFetch('/api/auth/login', {
           method: 'POST',
@@ -62,22 +93,132 @@ Object.defineProperty(window, 'fetch', {
           const loginData = await loginRes.json();
           if (loginData.token) {
             token = loginData.token;
-            localStorage.setItem('nexus_jwt', token);
+            try {
+              localStorage.setItem('nexus_jwt', token);
+            } catch {}
           }
         }
-      } catch {}
-    }
-
-    if (token) {
-      if (config.headers instanceof Headers) {
-        config.headers.set('Authorization', `Bearer ${token}`);
-      } else {
-        (config.headers as any)['Authorization'] = `Bearer ${token}`;
+      } catch {
+        // ignore login error fallback
       }
     }
-    return originalFetch(resource, config);
+
+    const modifiedConfig = { ...config, method };
+    if (token) {
+      if (modifiedConfig.headers instanceof Headers) {
+        modifiedConfig.headers.set('Authorization', `Bearer ${token}`);
+      } else {
+        modifiedConfig.headers = {
+          ...(modifiedConfig.headers || {}),
+          Authorization: `Bearer ${token}`,
+        };
+      }
+    }
+
+    // Convert headers to flat record for IndexedDB storage
+    const getHeadersRecord = () => {
+      const headersObj: Record<string, string> = {};
+      if (modifiedConfig.headers instanceof Headers) {
+        modifiedConfig.headers.forEach((v: string, k: string) => {
+          headersObj[k] = v;
+        });
+      } else if (modifiedConfig.headers && typeof modifiedConfig.headers === 'object') {
+        Object.assign(headersObj, modifiedConfig.headers);
+      }
+      return headersObj;
+    };
+
+    // Helper to produce synthetic 202 Accepted Response
+    const createSyntheticOfflineResponse = (queueItem: any, reason: string) => {
+      let parsedBody: any = null;
+      try {
+        if (typeof modifiedConfig.body === 'string') {
+          parsedBody = JSON.parse(modifiedConfig.body);
+        } else if (modifiedConfig.body) {
+          parsedBody = modifiedConfig.body;
+        }
+      } catch {}
+
+      const syntheticBody = {
+        success: true,
+        offline: true,
+        queued: true,
+        syncId: queueItem.id,
+        message: `${reason} Thao tác đã được bảo toàn an toàn trong hàng đợi ngoại tuyến và sẽ tự động đồng bộ khi có kết nối mạng.`,
+        data: parsedBody ? { ...parsedBody, id: parsedBody.id || `OFFLINE-${Date.now()}` } : { id: `OFFLINE-${Date.now()}` },
+        timestamp: new Date().toISOString()
+      };
+
+      return new Response(JSON.stringify(syntheticBody), {
+        status: 202,
+        statusText: 'Accepted (Queued Offline)',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Nexus-Offline-Queued': 'true',
+          'X-Nexus-Sync-Id': queueItem.id
+        }
+      });
+    };
+
+    // 1. IF NETWORK IS DETECTED OFFLINE:
+    if (!navigator.onLine && isMutation && !isLogin) {
+      try {
+        const queuedItem = await offlineSyncService.enqueueRequest(
+          url,
+          method as any,
+          getHeadersRecord(),
+          modifiedConfig.body
+        );
+        return createSyntheticOfflineResponse(queuedItem, 'Hệ thống đang hoạt động ở chế độ ngoại tuyến (Offline).');
+      } catch (queueErr) {
+        console.error('[Offline Queue] Failed to buffer offline mutation:', queueErr);
+      }
+    }
+
+    // 2. ATTEMPT NETWORK FETCH
+    try {
+      const response = await originalFetch(resource, modifiedConfig);
+      return response;
+    } catch (networkError: any) {
+      // 3. IF NETWORK FAILS (Connection dropped, DNS failure, or server unreachable):
+      if (isMutation && !isLogin) {
+        try {
+          const queuedItem = await offlineSyncService.enqueueRequest(
+            url,
+            method as any,
+            getHeadersRecord(),
+            modifiedConfig.body
+          );
+          return createSyntheticOfflineResponse(queuedItem, 'Mất kết nối tới máy chủ ERP.');
+        } catch (queueErr) {
+          console.error('[Offline Queue] Error saving offline request:', queueErr);
+        }
+      }
+
+      // If GET request fails while offline, return empty list or friendly structure instead of crashing
+      if (!isMutation) {
+        console.warn(`[NexusSync] Offline GET fallback for ${url}:`, networkError?.message);
+        return new Response(
+          JSON.stringify([]),
+          {
+            status: 200,
+            statusText: 'OK (Offline Cache Fallback)',
+            headers: { 'Content-Type': 'application/json', 'X-Nexus-Offline-Fallback': 'true' }
+          }
+        );
+      }
+
+      throw networkError;
+    }
   }
 });
+
+// Automatic recovery on Vite dynamic preload error (e.g. transient network or container reload)
+window.addEventListener('vite:preloadError', (event) => {
+  console.warn('[NexusSync] Vite dynamic chunk preload error detected. Auto-refreshing module runtime...', event);
+  window.location.reload();
+});
+
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <SystemClockProvider>

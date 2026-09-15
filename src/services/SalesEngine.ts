@@ -3,7 +3,8 @@ import * as schema from "../../db/schema";
 import { eq, sql, desc } from "drizzle-orm";
 import { PricingService } from "../../engines/pricingService";
 import { InventoryService } from "../../engines/inventoryService";
-import { CashMovementService, ShiftEngine } from "../../engines/shiftEngine";
+import { ShiftEngine } from "../../engines/shiftEngine";
+import { CashMovementService } from "../../engines/CashMovementService";
 import { accountingEngine } from "../../engines/accountingEngine";
 import { costingEngine } from "../../engines/costingEngine";
 import { CostingShadowRunner } from "../../engines/costingShadowRunner";
@@ -316,8 +317,8 @@ export class SalesEngine {
               .limit(1);
             const activeShift = activeShifts.length > 0 ? activeShifts[0] : null;
             
-            await CashMovementService.postMovement({
-              shiftId: activeShift ? activeShift.id : undefined,
+            await new CashMovementService().postMovement({
+              shiftId: activeShift ? activeShift.id : null,
               cashDrawerId: activeShift ? activeShift.cashDrawerId : 1,
               movementType: 'SALE_CASH',
               amount: req.paymentIntent.amount || grandTotal,

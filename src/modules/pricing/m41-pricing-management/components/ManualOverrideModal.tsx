@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, ShieldCheck, CheckCircle2, DollarSign, X } from 'lucide-react';
-import { ProductPriceItem } from './types';
-import { PricingService } from './utils';
+import { ProductPriceItem } from '../../../../types/pricingManagement';
+import { calculateMarkupPrice, calculateMarginPrice, calculateActualMargin, calculateActualMarkup, checkMinimumMargin } from '../utils/pricingMath';
 import { formatVND } from '../../../../lib/currency';
 import { CurrencyInputField } from '../../../../components/common/CurrencyInputField';
 
@@ -41,8 +41,8 @@ export const ManualOverrideModal: React.FC<ManualOverrideModalProps> = ({
 
   if (hasValidCost && newPrice > 0) {
     try {
-      newMargin = PricingService.calculateActualMargin(item.costBasis, newPrice);
-      marginCheck = PricingService.checkMinimumMargin(item.costBasis, newPrice, item.minMarginPercent || 15);
+      newMargin = calculateActualMargin(item.costBasis, newPrice);
+      marginCheck = checkMinimumMargin(item.costBasis, newPrice, item.minMarginPercent || 15);
     } catch {
       newMargin = 0;
     }

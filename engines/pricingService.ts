@@ -23,9 +23,8 @@
  * 6. calculateDynamicDiscount(params)
  * 7. calculateLinePricing(context)
  */
-
 import { db } from '../db';
-import { customerContractPrices, priceListItems, priceLists, discountRules, promotionCampaigns } from '../db/schema';
+import { products, customerContractPrices, priceListItems, priceLists, discountRules, promotionCampaigns } from '../db/schema';
 import { eq, and, lte, gte, sql } from 'drizzle-orm';
 import {
   PricingCalculator,
@@ -134,10 +133,23 @@ export class PricingService extends PricingCalculator {
       console.warn("PricingService standard list fallback warning:", err);
     }
 
-    return {
-      unitPrice: 0,
-      source: 'BASE_PRICE'
-    };
+    // Bước 4: Fallback về Giá cơ sở sản phẩm (Product base price)
+    try {
+      const prod = await dbClient.select({ retailPrice: products.retailPrice })
+        .from(products)
+        .where(eq(products.id, String(params.productId)))
+        .limit(1);
+      if (prod.length > 0) {
+        return {
+          unitPrice: prod[0].retailPrice,
+          source: 'BASE_PRICE' as const
+        };
+      }
+    } catch (err) {
+      console.warn("PricingService product base price resolution warning:", err);
+    }
+
+    throw new Error(`Không tìm thấy giá cơ sở cho sản phẩm ID ${params.productId}`);
   }
 
   /**
@@ -164,7 +176,7 @@ export class PricingService extends PricingCalculator {
       daysElapsed,
       discountRate,
       discountAmount,
-      term: "2/10 Net 30"
+      term: '2/10 Net 30'
     };
   }
 }

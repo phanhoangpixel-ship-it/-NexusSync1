@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Search, Calculator, CheckCircle2, ArrowRight, ShieldAlert, Sparkles, Tag, DollarSign, RefreshCw, FileText } from 'lucide-react';
-import { PriceResolutionQuery, PriceResolutionResult } from './types';
+import { PriceResolutionQuery, PriceResolutionResult } from '../../../../types/pricingManagement';
 
 interface PricingAuditAndSimulatorTabProps {
   onExecuteResolution: (query: PriceResolutionQuery) => Promise<PriceResolutionResult>;

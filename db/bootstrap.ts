@@ -19,7 +19,7 @@ export async function ensureSchemaSynchronized() {
         const colDefs = config.columns.map(c => {
           let def = `"${c.name}" ${c.getSQLType()}`;
           if (c.primary) def += " PRIMARY KEY";
-          if (c.autoIncrement) def += " AUTOINCREMENT";
+          if (c.hasAutoIncrement) def += " AUTOINCREMENT";
           if (c.notNull && !c.primary && !c.hasDefault) def += " NOT NULL";
           return def;
         });
@@ -128,7 +128,7 @@ export async function bootstrapDatabase() {
             const colDefs = config.columns.map(c => {
               let def = `"${c.name}" ${c.getSQLType()}`;
               if (c.primary) def += " PRIMARY KEY";
-              if (c.autoIncrement) def += " AUTOINCREMENT";
+              if (c.hasAutoIncrement) def += " AUTOINCREMENT";
               if (c.notNull && !c.primary && !c.hasDefault) def += " NOT NULL";
               return def;
             });

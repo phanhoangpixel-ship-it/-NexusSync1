@@ -4,6 +4,9 @@ import { UserSession } from '../../types';
 import { FavoriteItem } from '../../types/recentFavorites';
 import { RoleSwitcher } from './RoleSwitcher';
 import { DisplayScaleSelector } from '../common/DisplayScaleSelector';
+import { OfflineSyncStatusWidget } from '../offline/OfflineSyncStatusWidget';
+import { OfflineSyncCenterModal } from '../offline/OfflineSyncCenterModal';
+import { PWAInstallPrompt } from '../offline/PWAInstallPrompt';
 import {
   Layers,
   Search,
@@ -96,6 +99,7 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({
   const activeBranchObj = BRANCHES.find((b) => b.id === currentBranch) || BRANCHES[0];
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
+  const [isSyncCenterOpen, setIsSyncCenterOpen] = useState(false);
 
   // Online / Offline State with navigator.onLine API
   const [isOnline, setIsOnline] = useState<boolean>(() =>
@@ -164,30 +168,12 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({
             </button>
           )}
 
-          {/* Real-time Connection Indicator */}
-          <div className="hidden md:flex items-center pl-2 border-l border-slate-800 shrink-0">
-            {isOnline ? (
-              <div
-                id="header-online-status"
-                className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-800 text-emerald-400 text-[11px] font-medium"
-                title="Đang kết nối máy chủ ERP ổn định"
-              >
-                <span className="relative flex h-2 w-2 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span className="text-[11px] font-semibold whitespace-nowrap">Online</span>
-              </div>
-            ) : (
-              <div
-                id="header-offline-status"
-                className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-950/80 border border-rose-800 text-rose-300 text-[11px] font-bold animate-pulse"
-                title="Mất kết nối máy chủ! Dữ liệu đang đệm cục bộ"
-              >
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shrink-0"></span>
-                <span className="text-[11px] whitespace-nowrap">Offline</span>
-              </div>
-            )}
+          {/* Real-time Connection & Offline Sync Indicator */}
+          <div className="flex items-center pl-2 border-l border-slate-800 shrink-0 gap-2">
+            <OfflineSyncStatusWidget onOpenSyncCenter={() => setIsSyncCenterOpen(true)} />
+            <div className="hidden xl:block">
+              <PWAInstallPrompt />
+            </div>
           </div>
         </div>
 
@@ -402,18 +388,34 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({
               <strong>Cảnh báo mất kết nối:</strong> Hệ thống ERP hiện đang ngoại tuyến (Offline). Các thay đổi sẽ được đệm cục bộ và tự động đồng bộ khi kết nối lại.
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              if (navigator.onLine) setIsOnline(true);
-            }}
-            className="flex items-center gap-1 px-2.5 py-0.5 rounded bg-white/20 hover:bg-white/30 text-white text-[11px] font-bold transition-all cursor-pointer"
-          >
-            <RefreshCw className="w-3 h-3" />
-            <span>Thử lại</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsSyncCenterOpen(true)}
+              className="flex items-center gap-1 px-2.5 py-0.5 rounded bg-white/20 hover:bg-white/30 text-white text-[11px] font-bold transition-all cursor-pointer"
+              title="Xem danh sách yêu cầu chờ đồng bộ"
+            >
+              <span>Xem hàng đợi</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (navigator.onLine) setIsOnline(true);
+              }}
+              className="flex items-center gap-1 px-2.5 py-0.5 rounded bg-white/20 hover:bg-white/30 text-white text-[11px] font-bold transition-all cursor-pointer"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Thử lại</span>
+            </button>
+          </div>
         </div>
       )}
+
+      {/* Enterprise Offline Sync Center Modal */}
+      <OfflineSyncCenterModal
+        isOpen={isSyncCenterOpen}
+        onClose={() => setIsSyncCenterOpen(false)}
+      />
     </>
   );
 };

@@ -91,6 +91,7 @@ export const DEFAULT_M07_CUSTOMERS: M07CustomerMasterProfile[] = [
 export interface UseSalesOrderSyncOptions {
   autoSync?: boolean;
   syncIntervalMs?: number;
+  onSyncSuccess?: () => void;
 }
 
 export function useSalesOrderSync(options: UseSalesOrderSyncOptions = {}) {

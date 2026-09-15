@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Tag, Plus, Calendar, Clock, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
-import { PromotionCampaign } from './types';
+import { PromotionCampaign } from '../../../../types/pricingManagement';
 import { formatVND } from '../../../../lib/currency';
 import { CurrencyInputField } from '../../../../components/common/CurrencyInputField';
 

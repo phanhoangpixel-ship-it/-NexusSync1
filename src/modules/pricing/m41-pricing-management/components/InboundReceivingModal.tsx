@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Package, ArrowRight, CheckCircle2, DollarSign, X, TrendingUp, RefreshCw } from 'lucide-react';
-import { PricingService } from './utils';
+import { calculateMarkupPrice, calculateMarginPrice, calculateActualMargin, calculateActualMarkup, checkMinimumMargin } from '../utils/pricingMath';
 
 interface InboundReceivingModalProps {
   isOpen: boolean;
@@ -31,8 +31,8 @@ export const InboundReceivingModal: React.FC<InboundReceivingModalProps> = ({
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num);
   };
 
-  const oldSellingPrice = PricingService.calculateMarkupPrice(currentCost, markupPercent);
-  const newCalculatedSellingPrice = PricingService.calculateMarkupPrice(newCost, markupPercent);
+  const oldSellingPrice = calculateMarkupPrice(currentCost, markupPercent);
+  const newCalculatedSellingPrice = calculateMarkupPrice(newCost, markupPercent);
   const costDelta = newCost - currentCost;
 
   const handleSubmit = (e: React.FormEvent) => {

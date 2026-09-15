@@ -17,8 +17,8 @@ import {
   HelpCircle,
   Layers
 } from 'lucide-react';
-import { CategoryPricingRule } from './types';
-import { PricingService } from './utils';
+import { CategoryPricingRule } from '../../../../types/pricingManagement';
+import { calculateMarkupPrice, calculateMarginPrice, calculateActualMargin, calculateActualMarkup, checkMinimumMargin } from '../utils/pricingMath';
 import { CurrencyInputField } from '../../../../components/common/CurrencyInputField';
 import { formatVND } from '../../../../lib/currency';
 
@@ -59,11 +59,11 @@ export const PricingRulesTab: React.FC<PricingRulesTabProps> = ({
 
   // Calculations for Sandbox
   const validTestCost = testCost > 0;
-  const calculatedMarkupPrice = validTestCost ? PricingService.calculateMarkupPrice(testCost, testMarkup) : 0;
-  const actualMarginFromMarkup = validTestCost && calculatedMarkupPrice > 0 ? PricingService.calculateActualMargin(testCost, calculatedMarkupPrice) : 0;
+  const calculatedMarkupPrice = validTestCost ? calculateMarkupPrice(testCost, testMarkup) : 0;
+  const actualMarginFromMarkup = validTestCost && calculatedMarkupPrice > 0 ? calculateActualMargin(testCost, calculatedMarkupPrice) : 0;
 
-  const calculatedMarginPrice = validTestCost ? PricingService.calculateMarginPrice(testCost, testMargin) : 0;
-  const actualMarkupFromMargin = validTestCost && calculatedMarginPrice > 0 ? PricingService.calculateActualMarkup(testCost, calculatedMarginPrice) : 0;
+  const calculatedMarginPrice = validTestCost ? calculateMarginPrice(testCost, testMargin) : 0;
+  const actualMarkupFromMargin = validTestCost && calculatedMarginPrice > 0 ? calculateActualMarkup(testCost, calculatedMarginPrice) : 0;
 
   // Open Edit Modal
   const handleOpenEdit = (rule: CategoryPricingRule) => {
@@ -130,9 +130,9 @@ export const PricingRulesTab: React.FC<PricingRulesTabProps> = ({
   // Modal live calculations
   const validModalCost = previewSampleCost > 0;
   const modalCalcPrice = !validModalCost ? 0 : (formRuleType === 'MARKUP'
-    ? PricingService.calculateMarkupPrice(previewSampleCost, formRuleValue, formRoundingMode)
-    : PricingService.calculateMarginPrice(previewSampleCost, formRuleValue, formRoundingMode));
-  const modalMargin = validModalCost && modalCalcPrice > 0 ? PricingService.calculateActualMargin(previewSampleCost, modalCalcPrice) : 0;
+    ? calculateMarkupPrice(previewSampleCost, formRuleValue, formRoundingMode)
+    : calculateMarginPrice(previewSampleCost, formRuleValue, formRoundingMode));
+  const modalMargin = validModalCost && modalCalcPrice > 0 ? calculateActualMargin(previewSampleCost, modalCalcPrice) : 0;
   const isBelowSafeMargin = modalMargin < formMinMargin;
 
   return (

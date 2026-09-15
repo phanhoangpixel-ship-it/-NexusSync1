@@ -9,7 +9,7 @@
  * - M30: GL Accounting (TK 131, 511, 33311)
  */
 
-export type SalesOrderChannel = 'B2B_ENTERPRISE' | 'POS_RETAIL' | 'OMNICHANNEL' | 'CRM_QUOTATION';
+export type SalesOrderChannel = 'B2B_ENTERPRISE' | 'POS_RETAIL' | 'POS' | 'OMNICHANNEL' | 'CRM_QUOTATION';
 
 export type SalesOrderStatus = 'DRAFT' | 'CONFIRMED' | 'INVOICED' | 'FULFILLED' | 'PAID' | 'CANCELLED';
 
@@ -17,7 +17,7 @@ export type InventoryReservationStatus = 'PENDING' | 'RESERVED' | 'PARTIAL' | 'R
 
 export type FulfillmentStatus = 'PENDING_PICKING' | 'PACKING' | 'STAGING' | 'SHIPPED' | 'DELIVERED';
 
-export type VatInvoiceStatus = 'NOT_ISSUED' | 'PENDING_SIGN' | 'ISSUED' | 'REPLACED' | 'CANCELLED';
+export type VatInvoiceStatus = 'NOT_ISSUED' | 'PENDING_SIGN' | 'PENDING_ISSUE' | 'ISSUED' | 'REPLACED' | 'CANCELLED';
 
 export type PaymentMethodType = 'BANK_TRANSFER' | 'CASH' | 'CREDIT_CARD' | 'QR_PAY' | 'DEPOSIT_OFFSET' | 'DEFERRED_NET30';
 
@@ -33,6 +33,8 @@ export interface M07CustomerMasterProfile {
   id: number;
   customerCode: string;
   name: string;
+  customerName?: string;
+  customerId?: number;
   tradeName?: string;
   taxCode?: string;
   tier: CustomerTierLevel;
@@ -43,8 +45,10 @@ export interface M07CustomerMasterProfile {
   paymentTermsDays: number; // e.g., 0 (Immediate), 15, 30, 60
   defaultDiscountPercent: number; // e.g., 0%, 5%, 10%
   billingAddress: string;
+  address?: string;
   shippingAddress?: string;
   email: string;
+  billingEmail?: string;
   phone: string;
   contactPerson?: string;
   isCreditBlocked: boolean;
@@ -53,14 +57,22 @@ export interface M07CustomerMasterProfile {
 
 export interface M07CustomerCreditCheckResult {
   isApproved: boolean;
-  customerId: number;
+  approved?: boolean;
+  customerId: number | string;
+  name?: string;
   customerName: string;
   creditLimit: number;
-  currentBalance: number;
-  orderAmount: number;
-  remainingAvailableCredit: number;
+  currentBalance?: number;
+  currentOutstanding?: number;
+  orderAmount?: number;
+  newOrderAmount?: number;
+  remainingAvailableCredit?: number;
+  availableCreditAfterOrder?: number;
   warningMessage?: string;
   blockReason?: string;
+  rejectionReason?: string;
+  reason?: string;
+  exceededAmount?: number;
 }
 
 // ==========================================
@@ -80,6 +92,7 @@ export interface M16PosOrderItem {
   taxRate?: number; // 0, 5, 8, 10
   taxAmount?: number;
   lineTotal: number;
+  totalPrice?: number;
 }
 
 export interface M16PosVatInvoiceDetails {
@@ -88,10 +101,14 @@ export interface M16PosVatInvoiceDetails {
   vatAddress: string;
   vatEmail: string;
   note?: string;
+  address?: string;
+  taxCode?: string;
+  email?: string;
 }
 
 export interface M16PosOrderPayload {
   orderId: string;
+  orderNumber?: string;
   posTerminalId: string;
   storeId: string;
   storeName?: string;
@@ -100,6 +117,8 @@ export interface M16PosOrderPayload {
   shiftId?: string;
   customerCode?: string;
   customerName?: string;
+  name?: string;
+  shippingAddress?: string;
   items: M16PosOrderItem[];
   subtotal: number;
   totalDiscount: number;
@@ -116,6 +135,11 @@ export interface M16PosOrderPayload {
   invoiceRef?: string;
   createdAt: string;
   source: 'POS_TERMINAL' | 'ONLINE_STORE' | 'KIOSK';
+  address?: string;
+  taxCode?: string;
+  email?: string;
+  buyerLegalName?: string;
+  billingEmail?: string;
 }
 
 // ==========================================
@@ -127,14 +151,15 @@ export interface M13SalesOrderItem {
   sku: string;
   name: string;
   qty: number;
-  uop: string;
-  price: number | string;
+  uop?: string;
+  price?: number | string;
   unitPriceNumeric?: number;
   discountPercent?: number;
   discountAmount?: number;
   taxRate?: number;
   taxAmount?: number;
-  amount: number;
+  amount?: number;
+  totalPrice?: number;
   notes?: string;
 }
 
@@ -145,14 +170,17 @@ export interface M13IntegratedSalesOrder {
   sourceModule: 'M13_SALES' | 'M16_POS' | 'M12_CRM' | 'OMNICHANNEL';
   
   // Customer Data (M07 linkage)
-  customerId?: number;
+  customerId?: number | string;
   customerCode?: string;
   customerName: string;
+  name?: string;
   customerTier?: CustomerTierLevel;
   taxCode?: string;
   address: string;
+  billingAddress?: string;
   deliveryAddress?: string;
   billingEmail: string;
+  email?: string;
   phone?: string;
   contactPerson?: string;
 

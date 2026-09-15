@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ShieldCheck, CheckCircle2, XCircle, Clock, AlertTriangle, User, ArrowRight, FileCheck } from 'lucide-react';
-import { PriceApprovalRequest } from './types';
+import { PriceApprovalRequest } from '../../../../types/pricingManagement';
 import { formatVND } from '../../../../lib/currency';
 
 interface PriceApprovalTabProps {

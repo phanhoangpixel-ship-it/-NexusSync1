@@ -13,7 +13,7 @@ import {
   ProjectStatus,
   ProjectCategory,
   DependencyType,
-} from './types';
+} from '../../../../types/m35Types';
 import {
   INITIAL_M35_PROJECTS,
   INITIAL_M35_WBS,

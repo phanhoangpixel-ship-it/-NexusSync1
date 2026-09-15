@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { SelectedEntityContext, ConfirmDialogState } from '../../../../types';
 import { useWorkspaceSessionTab } from '../../../../hooks/useWorkspaceSessionTab';
 import { useDynamicContainerHeight } from '../../../../hooks/useDynamicContainerHeight';
-import { ENTERPRISE_MASTER_PRODUCTS, EnterpriseProduct } from '../../../../data/enterpriseMaster';
+import { ENTERPRISE_MASTER_PRODUCTS, ENTERPRISE_MASTER_CUSTOMERS, EnterpriseProduct, EnterpriseCustomer } from '../../../../data/enterpriseMaster';
 import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import { usePagination } from '../../../../hooks/usePagination';
 import { PaginationControl } from '../../../../components/common/PaginationControl';
@@ -35,7 +35,7 @@ import {
   Camera
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import "./types";
+import { M07CustomersItemMasterWorkspaceProps } from './types';
 
 export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWorkspaceProps> = ({
   onSelectEntity,

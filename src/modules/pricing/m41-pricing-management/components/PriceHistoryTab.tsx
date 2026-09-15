@@ -1,6 +1,6 @@
 import React from 'react';
 import { History, Calendar, CheckCircle2, User, ArrowRight, RotateCcw, ShieldCheck, Tag } from 'lucide-react';
-import { PriceAuditLog } from './types';
+import { PriceAuditLog } from '../../../../types/pricingManagement';
 import { formatVND } from '../../../../lib/currency';
 
 interface PriceHistoryTabProps {

@@ -25,6 +25,7 @@ export interface ConfirmDialogState {
   title: string;
   message: string;
   confirmText?: string;
+  confirmLabel?: string;
   cancelText?: string;
   variant?: 'danger' | 'primary' | 'warning' | 'info';
   type?: string;

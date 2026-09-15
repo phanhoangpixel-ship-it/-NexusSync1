@@ -4,7 +4,7 @@ import {
   Table, Layers, Factory, CheckCircle2, Package, ShoppingCart, 
   ExternalLink, Download, Filter, Sparkles, RefreshCw
 } from 'lucide-react';
-import { LotItem } from '../LotInventoryHistoryDrilldown';
+import { LotItem } from './LotInventoryHistoryDrilldown';
 import { LotDependencyGraphD3, generateTraceDataForLot } from './LotDependencyGraphD3';
 import { WorkOrderInspectionModal } from '../../../manufacturing/m25-mes/components/WorkOrderInspectionModal';
 

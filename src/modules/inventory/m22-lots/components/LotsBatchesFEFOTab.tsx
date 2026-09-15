@@ -3,7 +3,7 @@ import { Clock, ShieldAlert, ArrowUpRight, Calculator, CheckCircle2, AlertCircle
 import { L3ContentState } from '../../../../components/common/L3ContentState';
 import { PaginationControl } from '../../../../components/common/PaginationControl';
 import { usePagination } from '../../../../hooks/usePagination';
-import { LotItem } from '../LotInventoryHistoryDrilldown';
+import { LotItem } from './LotInventoryHistoryDrilldown';
 
 interface LotsBatchesFEFOTabProps {
   lots: LotItem[];

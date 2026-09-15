@@ -84,6 +84,11 @@ export class CashMovementService {
     if (SHIFT_REQUIRED_TYPES.has(params.movementType) && params.shiftId == null) {
       throw new ShiftRequiredError(params.movementType);
     }
+    const idempotencyKey = params.idempotencyKey ?? randomUUID();
+    const existing = await txObj.select().from(cashMovements).where(eq(cashMovements.idempotencyKey, idempotencyKey)).limit(1);
+    if (existing.length > 0) {
+      return existing[0] as unknown as CashMovementRecord;
+    }
 
     if (params.shiftId != null) {
       const shifts = await txObj.select().from(cashShifts).where(eq(cashShifts.id, params.shiftId)).limit(1);
@@ -96,16 +101,11 @@ export class CashMovementService {
       }
     }
 
+
     if (!(params.amount > 0)) {
       throw new Error(`amount phải là số dương. Nhận được: ${params.amount}`);
     }
 
-    const idempotencyKey = params.idempotencyKey ?? randomUUID();
-
-    const existing = await txObj.select().from(cashMovements).where(eq(cashMovements.idempotencyKey, idempotencyKey)).limit(1);
-    if (existing.length > 0) {
-      return existing[0] as unknown as CashMovementRecord;
-    }
 
     const movementNo = `CM-${Date.now()}-${randomUUID().slice(0, 8)}`;
     const now = new Date();
@@ -151,7 +151,7 @@ export class CashMovementService {
       if (m.direction === 'OUT') totalOut += m.amount;
     }
 
-    return openingFloat + totalIn - totalOut;
+    return totalIn - totalOut; // openingFloat is already recorded as an IN movement
   }
 
   async getShiftSummary(shiftId: number) {

@@ -58,7 +58,7 @@ export function calculateLineItemFinancials(
       ? safeNumber(rawItem.taxAmount, 0)
       : Math.round((lineSubtotalAfterDiscount * taxRate) / 100);
 
-  const lineTotal = lineSubtotalAfterDiscount + taxAmount;
+  const totalPrice = lineSubtotalAfterDiscount + taxAmount;
 
   return {
     id: rawItem.id ?? `ITM-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -72,8 +72,8 @@ export function calculateLineItemFinancials(
     discountAmount,
     taxRate,
     taxAmount,
-    amount: lineTotal,
-    lineTotal,
+    amount: totalPrice,
+    totalPrice,
     notes: rawItem.notes ?? '',
   };
 }
@@ -231,7 +231,7 @@ export function convertPosOrderToM13(posOrder: M16PosOrderPayload): M13Integrate
     discountAmount: safeNumber(it.discountAmount, 0),
     taxRate: safeNumber(it.taxRate, posOrder.taxRate ?? 10),
     taxAmount: safeNumber(it.taxAmount, 0),
-    amount: safeNumber(it.lineTotal, safeNumber(it.unitPrice, 0) * safeNumber(it.quantity, 1)),
+    amount: safeNumber(it.totalPrice, safeNumber(it.unitPrice, 0) * safeNumber(it.quantity, 1)),
   }));
 
   const subtotalAmount = safeNumber(posOrder.subtotal, 0);
@@ -240,11 +240,14 @@ export function convertPosOrderToM13(posOrder: M16PosOrderPayload): M13Integrate
   const totalAmountNumeric = safeNumber(posOrder.totalAmount, subtotalAmount + taxAmount);
   const amountPaid = safeNumber(posOrder.amountPaid, totalAmountNumeric);
 
-  const vatDetails = posOrder.vatDetails ?? (posOrder.requiresVatInvoice || posOrder.vatBuyerLegalName ? {
-    buyerLegalName: posOrder.vatBuyerLegalName ?? posOrder.customerName ?? 'Khách hàng POS',
-    vatTaxId: posOrder.vatTaxId ?? posOrder.taxCode ?? '',
-    vatAddress: posOrder.vatAddress ?? posOrder.address ?? 'Cửa hàng POS NexusSync',
-    vatEmail: posOrder.vatEmail ?? posOrder.billingEmail ?? 'invoicing@nexussync.vn',
+  const vatDetails: M16PosVatInvoiceDetails | null = posOrder.vatDetails ?? (posOrder.requiresVatInvoice || posOrder.buyerLegalName ? {
+    buyerLegalName: posOrder.buyerLegalName ?? posOrder.customerName ?? 'Khách hàng POS',
+    taxCode: posOrder.taxCode ?? '',
+    vatTaxId: posOrder.taxCode ?? '',
+    address: posOrder.address ?? 'Cửa hàng POS NexusSync',
+    vatAddress: posOrder.address ?? 'Cửa hàng POS NexusSync',
+    email: posOrder.email ?? posOrder.billingEmail ?? 'invoicing@nexussync.vn',
+    vatEmail: posOrder.email ?? posOrder.billingEmail ?? 'invoicing@nexussync.vn',
   } : null);
 
   return {
@@ -255,10 +258,10 @@ export function convertPosOrderToM13(posOrder: M16PosOrderPayload): M13Integrate
 
     customerCode: posOrder.customerCode ?? 'CUST-RETAIL',
     customerName: posOrder.customerName ?? (vatDetails?.buyerLegalName || 'Khách lẻ vãng lai POS'),
-    taxCode: vatDetails?.vatTaxId ?? posOrder.vatDetails?.vatTaxId ?? '',
-    address: vatDetails?.vatAddress ?? 'Cửa hàng POS NexusSync',
-    deliveryAddress: vatDetails?.vatAddress ?? 'Cửa hàng POS NexusSync',
-    billingEmail: vatDetails?.vatEmail ?? 'invoicing@nexussync.vn',
+    taxCode: vatDetails?.taxCode ?? posOrder.vatDetails?.taxCode ?? '',
+    address: vatDetails?.address ?? 'Cửa hàng POS NexusSync',
+    deliveryAddress: vatDetails?.address ?? 'Cửa hàng POS NexusSync',
+    billingEmail: vatDetails?.email ?? 'invoicing@nexussync.vn',
 
     orderDate: posOrder.createdAt ? posOrder.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
     createdAt: posOrder.createdAt ?? new Date().toISOString(),

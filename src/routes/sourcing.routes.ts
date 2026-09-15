@@ -186,7 +186,7 @@ router.get('/api/sourcing/rfqs/:id/suppliers', requireRole('SUPER_ADMIN', 'MANAG
         supplierId: inv.supplierId,
         supplierCode: sup?.code || '',
         supplierName: sup?.name || 'Unknown',
-        taxId: sup?.taxId || '',
+        taxId: (sup as any)?.taxCode || (sup as any)?.taxId || '',
         status: sup?.status || 'ACTIVE',
         invitedAt: inv.invitedAt
       };

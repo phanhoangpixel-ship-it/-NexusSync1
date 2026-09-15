@@ -12,7 +12,7 @@ import { SelectedEntityContext, ConfirmDialogState } from '../../../../types';
 import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import { PaginationControl } from '../../../../components/common/PaginationControl';
 import { WarehouseProductsTab } from '../../m18-warehouse/components/WarehouseProductsTab';
-import "./types";
+import { MasterWmsWorkspaceProps } from './types';
 
 export const MasterWmsWorkspace: React.FC<MasterWmsWorkspaceProps> = ({
   onSelectEntity,

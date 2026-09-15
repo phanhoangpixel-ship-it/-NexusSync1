@@ -57,7 +57,7 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import "./types";
+import { M08PurchaseOrdersWorkspaceProps } from './types';
 
 export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProps> = ({
   onSelectEntity,

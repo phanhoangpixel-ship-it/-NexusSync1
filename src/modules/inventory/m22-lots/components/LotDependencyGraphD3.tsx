@@ -5,7 +5,7 @@ import {
   RotateCcw, Maximize2, Search, Filter, ShieldCheck, ArrowRight,
   Info, ExternalLink, Activity, CheckCircle2, ChevronRight, Download
 } from 'lucide-react';
-import { LotItem } from '../LotInventoryHistoryDrilldown';
+import { LotItem } from './LotInventoryHistoryDrilldown';
 
 export type TraceNodeType = 'SUPPLIER' | 'LOT' | 'WORK_ORDER' | 'FINISHED_GOOD' | 'SALES_ORDER';
 
