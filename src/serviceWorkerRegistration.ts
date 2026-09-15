@@ -3,7 +3,35 @@
  */
 
 export function registerServiceWorker() {
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+  if (typeof window === 'undefined') return;
+
+  // Immediately purge any legacy static caches that may interfere with module bundling
+  if ('caches' in window) {
+    caches.keys().then((keys) => {
+      keys.forEach((key) => {
+        if (key.includes('static') || key.includes('v1') || key.includes('nexus-static')) {
+          caches.delete(key).catch(() => {});
+        }
+      });
+    }).catch(() => {});
+  }
+
+  // In Vite development mode (local & container preview), Service Workers can intercept
+  // or delay dynamic ESM module compilation, causing "Failed to fetch dynamically imported module".
+  // We automatically unregister all active Service Workers in development to ensure 100% Vite dev performance.
+  if (import.meta.env.DEV) {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const registration of registrations) {
+          console.info('[SW] Dev mode: Unregistered active service worker for pristine Vite ESM loading:', registration.scope);
+          registration.unregister().catch(() => {});
+        }
+      }).catch(() => {});
+    }
+    return;
+  }
+
+  if (!('serviceWorker' in navigator)) {
     console.info('[SW] Service workers not supported or running in server context.');
     return;
   }
@@ -15,6 +43,9 @@ export function registerServiceWorker() {
       });
 
       console.log('[SW] Service Worker registered successfully with scope:', registration.scope);
+
+      // Force check for newest version
+      registration.update().catch(() => {});
 
       // Check for updates
       registration.addEventListener('updatefound', () => {

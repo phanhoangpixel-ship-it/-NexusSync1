@@ -3,13 +3,11 @@
  * Complies with PWA standards, IndexedDB persistence, and Background Sync API
  */
 
-const CACHE_VERSION = 'nexus-erp-v1.2.0';
-const STATIC_CACHE_NAME = `nexus-static-${CACHE_VERSION}`;
+const CACHE_VERSION = 'nexus-erp-v2.0.0';
 const API_CACHE_NAME = `nexus-api-${CACHE_VERSION}`;
 
+// Only precache static branding icons, NEVER application HTML or Vite dev bundles
 const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
   '/icon.svg',
   '/manifest.webmanifest',
   '/pwa-192x192.png',
@@ -203,13 +201,6 @@ async function replayQueuedRequests() {
 // 1. INSTALL LIFECYCLE
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(STATIC_CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_ASSETS).catch((err) => {
-        console.warn('[SW] Non-blocking precache notice:', err);
-      });
-    })
-  );
 });
 
 // 2. ACTIVATE LIFECYCLE
@@ -220,7 +211,8 @@ self.addEventListener('activate', (event) => {
       caches.keys().then((keys) => {
         return Promise.all(
           keys.map((key) => {
-            if (key !== STATIC_CACHE_NAME && key !== API_CACHE_NAME) {
+            // Delete all previous caches including any static asset caches
+            if (key !== API_CACHE_NAME) {
               return caches.delete(key);
             }
           })
@@ -239,7 +231,13 @@ self.addEventListener('fetch', (event) => {
   if (!url.protocol.startsWith('http')) return;
   if (url.pathname.includes('/@vite/') || url.pathname.includes('hmr')) return;
 
-  const isApiRequest = url.pathname.startsWith('/api/');
+  // STRICT RULE: Only intercept /api/ requests!
+  // All HTML, JS modules, TSX files, fonts, and assets MUST pass through directly to avoid white screens
+  if (!url.pathname.startsWith('/api/')) {
+    return;
+  }
+
+  const isApiRequest = true;
 
   // CASE A: API MUTATION REQUESTS (POST, PUT, PATCH, DELETE)
   if (isApiRequest && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
@@ -374,24 +372,6 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
-
-  // CASE C: STATIC ASSETS (Stale-While-Revalidate)
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      const fetchPromise = fetch(request)
-        .then((networkResponse) => {
-          if (networkResponse.ok && request.method === 'GET') {
-            caches.open(STATIC_CACHE_NAME).then((cache) => {
-              cache.put(request, networkResponse.clone()).catch(() => {});
-            });
-          }
-          return networkResponse;
-        })
-        .catch(() => cached);
-
-      return cached || fetchPromise;
-    })
-  );
 });
 
 // 4. BACKGROUND SYNC EVENT

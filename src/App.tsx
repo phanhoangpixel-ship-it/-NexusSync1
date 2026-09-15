@@ -536,6 +536,18 @@ if (found) return found;
     localStorage.setItem('nexussync_favorites', JSON.stringify(favorites));
   }, [favorites]);
 
+  // Clean up static bootstrap loader upon React mount
+  useEffect(() => {
+    try {
+      const loader = document.getElementById('app-bootstrap-loader');
+      if (loader) {
+        loader.remove();
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   // Record visit on module change
   useEffect(() => {
     if (!currentModule) return;

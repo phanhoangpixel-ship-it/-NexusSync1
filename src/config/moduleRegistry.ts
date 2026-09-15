@@ -124,7 +124,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     permissions: ['pos', 'sales', 'cashier', 'manager', 'admin'],
     description: 'Quản lý ca làm việc thu ngân, két tiền mặt, đối soát doanh thu POS, thu/chi và chốt ca bán hàng lẻ.',
     iconName: 'Store',
-    workspaceId: 'WS21_POS'
+    workspaceId: 'WS23_POS'
   },
   {
     moduleId: 'M07',

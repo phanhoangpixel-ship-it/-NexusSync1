@@ -8,8 +8,8 @@ import React, { lazy } from 'react';
 export function lazyWithRetry<T extends React.ComponentType<any>>(
   factory: () => Promise<any>,
   componentName?: string,
-  retries = 3,
-  delayMs = 800
+  retries = 4,
+  baseDelayMs = 600
 ): React.LazyExoticComponent<T> {
   return lazy(() => {
     const attempt = (retriesLeft: number): Promise<{ default: T }> => {
@@ -44,7 +44,8 @@ export function lazyWithRetry<T extends React.ComponentType<any>>(
           );
 
           if (retriesLeft > 0 && isChunkError) {
-            return new Promise((resolve) => setTimeout(resolve, delayMs)).then(() =>
+            const currentDelay = baseDelayMs * (5 - retriesLeft);
+            return new Promise((resolve) => setTimeout(resolve, currentDelay)).then(() =>
               attempt(retriesLeft - 1)
             );
           }

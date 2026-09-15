@@ -440,3 +440,6 @@ export const M05EventBusWorkspace: React.FC<M05EventBusWorkspaceProps> = ({
     </div>
   );
 };
+
+export default M05EventBusWorkspace;
+

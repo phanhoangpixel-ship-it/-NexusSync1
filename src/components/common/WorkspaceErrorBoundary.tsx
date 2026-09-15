@@ -40,15 +40,10 @@ export class WorkspaceErrorBoundary extends Component<Props, State> {
   }
 
   private handleReset = () => {
-    const isChunkError =
-      this.state.error?.message?.includes('dynamically imported module') ||
-      this.state.error?.message?.includes('Failed to fetch') ||
-      this.state.error?.message?.includes('Importing a module script failed') ||
-      this.state.error?.name === 'TypeError';
-
-    if (isChunkError) {
-      window.location.reload();
-      return;
+    if ('caches' in window) {
+      caches.keys().then((keys) => {
+        keys.forEach((k) => caches.delete(k).catch(() => {}));
+      }).catch(() => {});
     }
     this.setState({ hasError: false, error: null, errorInfo: null });
   };
@@ -60,19 +55,15 @@ export class WorkspaceErrorBoundary extends Component<Props, State> {
         localStorage.removeItem(`nexus_tab_${this.props.moduleId}`);
       }
       localStorage.removeItem('nexussync_workspace_cache');
+      if ('caches' in window) {
+        caches.keys().then((keys) => {
+          keys.forEach((k) => caches.delete(k).catch(() => {}));
+        }).catch(() => {});
+      }
     } catch {
       // ignore
     }
-    const isChunkError =
-      this.state.error?.message?.includes('dynamically imported module') ||
-      this.state.error?.message?.includes('Failed to fetch') ||
-      this.state.error?.name === 'TypeError';
-
-    if (isChunkError) {
-      window.location.reload();
-      return;
-    }
-    this.setState({ hasError: false, error: null, errorInfo: null });
+    window.location.reload();
   };
 
   private handleCopyError = () => {
