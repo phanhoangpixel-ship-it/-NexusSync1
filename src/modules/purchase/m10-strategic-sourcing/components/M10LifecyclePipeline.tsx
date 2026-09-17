@@ -1,9 +1,10 @@
 import React from 'react';
-import { FileText, ShieldCheck, Award, Scale, CheckCircle2 } from 'lucide-react';
+import { Layers, FileText, ShieldCheck, Award, Scale, CheckCircle2 } from 'lucide-react';
 
 interface M10LifecyclePipelineProps {
-  activeTab: 'rfqs' | 'bids' | 'evaluation' | 'comparison' | 'awards' | 'analytics';
-  onSelectTab: (tab: 'rfqs' | 'bids' | 'evaluation' | 'comparison' | 'awards' | 'analytics') => void;
+  activeTab: 'packages' | 'rfqs' | 'bids' | 'evaluation' | 'comparison' | 'awards' | 'analytics';
+  onSelectTab: (tab: 'packages' | 'rfqs' | 'bids' | 'evaluation' | 'comparison' | 'awards' | 'analytics') => void;
+  packagesCount?: number;
   rfqsCount: number;
   bidsCount: number;
   evaluationsCount: number;
@@ -13,6 +14,7 @@ interface M10LifecyclePipelineProps {
 export const M10LifecyclePipeline: React.FC<M10LifecyclePipelineProps> = ({
   activeTab,
   onSelectTab,
+  packagesCount = 0,
   rfqsCount,
   bidsCount,
   evaluationsCount,
@@ -20,34 +22,42 @@ export const M10LifecyclePipeline: React.FC<M10LifecyclePipelineProps> = ({
 }) => {
   const steps = [
     {
+      id: 'packages' as const,
+      step: '0',
+      title: 'Gói Thầu Mua Sắm (PKG)',
+      desc: 'Quy hoạch ngân sách, cost center & hạn mức gói thầu',
+      tag: `${packagesCount} Gói`,
+      icon: <Layers className="w-3.5 h-3.5" />,
+    },
+    {
       id: 'rfqs' as const,
       step: '1',
-      title: 'Khởi Tạo Gói Thầu RFQ',
-      desc: 'Phát hành yêu cầu chào giá, tiêu chuẩn kỹ thuật & hạn định thầu',
-      tag: `${rfqsCount} Gói thầu`,
+      title: 'Yêu Cầu Báo Giá RFQ',
+      desc: 'Phát hành yêu cầu chào giá, tiêu chuẩn kỹ thuật & hạn định',
+      tag: `${rfqsCount} RFQ`,
       icon: <FileText className="w-3.5 h-3.5" />,
     },
     {
       id: 'bids' as const,
       step: '2',
-      title: 'Tiếp Nhận Chào Giá Bids',
-      desc: 'Hồ sơ niêm phong, đơn giá chào thầu & cam kết thời gian lead time',
-      tag: `${bidsCount} Hồ sơ`,
+      title: 'Hồ Sơ Chào Giá Bids',
+      desc: 'Hồ sơ niêm phong, đơn giá chào thầu & cam kết lead time',
+      tag: `${bidsCount} Bids`,
       icon: <ShieldCheck className="w-3.5 h-3.5" />,
     },
     {
       id: 'evaluation' as const,
       step: '3',
       title: 'Hội Đồng Chấm Thầu',
-      desc: 'Chấm điểm 4 tiêu chí: Giá (40%), Chất lượng (30%), Tiến độ, Bảo hành',
+      desc: 'Chấm điểm 4 tiêu chí: Giá, Chất lượng, Tiến độ, Bảo hành',
       tag: `${evaluationsCount} Đánh giá`,
       icon: <Award className="w-3.5 h-3.5" />,
     },
     {
       id: 'comparison' as const,
       step: '4',
-      title: 'Ma Trận So Sánh & Xếp Hạng',
-      desc: 'So sánh đa chiều, tính toán điểm tổng hợp & xếp hạng thứ bậc 1, 2, 3...',
+      title: 'Ma Trận So Sánh Báo Giá',
+      desc: 'So sánh đa chiều, tính toán điểm tổng hợp & xếp hạng thứ bậc',
       tag: 'Rank Matrix',
       icon: <Scale className="w-3.5 h-3.5" />,
     },
@@ -55,7 +65,7 @@ export const M10LifecyclePipeline: React.FC<M10LifecyclePipelineProps> = ({
       id: 'awards' as const,
       step: '5',
       title: 'Phê Duyệt Trao Thầu',
-      desc: 'Ban hành quyết định trúng thầu & phát sinh sự kiện M08 PO Boundary',
+      desc: 'Ban hành quyết định trúng thầu & tạo đơn mua PO (M08 Boundary)',
       tag: `${awardsCount} Quyết định`,
       icon: <CheckCircle2 className="w-3.5 h-3.5" />,
     },
@@ -69,15 +79,15 @@ export const M10LifecyclePipeline: React.FC<M10LifecyclePipelineProps> = ({
             Tiến Trình Đấu Thầu Chiến Lược (Strategic Sourcing Lifecycle Pipeline)
           </span>
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 font-mono font-bold">
-            Standard Flow
+            Standard Flow (PKG → RFQ → PO)
           </span>
         </div>
         <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono hidden sm:inline">
-          Quy trình 5 bước khép kín RFQ → Bids → Eval → Matrix → Award
+          Quy trình 6 bước chuẩn hóa: PKG → RFQ → Bids → Eval → Matrix → Award
         </span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
         {steps.map(s => {
           const isCurrent = activeTab === s.id;
           return (

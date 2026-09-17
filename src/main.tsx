@@ -20,12 +20,26 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// Global override to make default toLocaleString use vi-VN (dot separator)
+// Global override to make default toLocaleString use vi-VN (dot for thousands, comma for decimals e.g., 1.000.000,50)
 try {
   const originalToLocaleString = Number.prototype.toLocaleString;
   Number.prototype.toLocaleString = function(locales, options) {
-    if (locales === undefined) {
-      return originalToLocaleString.call(this, 'vi-VN', options);
+    if (locales === undefined || locales === 'vi-VN') {
+      const numVal = Number(this);
+      if (options !== undefined) {
+        return originalToLocaleString.call(this, 'vi-VN', options);
+      }
+      // If the number has decimal places, format with comma decimal separator (e.g. 1.000.000,50)
+      if (!isNaN(numVal) && !Number.isInteger(numVal)) {
+        const str = numVal.toString();
+        const decimalPart = str.split('.')[1] || '';
+        const fractionDigits = Math.min(Math.max(decimalPart.length, 2), 4);
+        return originalToLocaleString.call(this, 'vi-VN', {
+          minimumFractionDigits: fractionDigits >= 2 ? 2 : 0,
+          maximumFractionDigits: 4,
+        });
+      }
+      return originalToLocaleString.call(this, 'vi-VN');
     }
     return originalToLocaleString.call(this, locales, options);
   };

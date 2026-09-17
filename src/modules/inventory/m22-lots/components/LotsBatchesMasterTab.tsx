@@ -22,7 +22,14 @@ interface LotsBatchesMasterTabProps {
   onViewDrilldown?: (lot: LotItem) => void;
 }
 
-export const LotsBatchesMasterTab: React.FC<LotsBatchesMasterTabProps> = ({ lots, setLots, onNotify, onSelectEntity, onViewTraceability }) => {
+export const LotsBatchesMasterTab: React.FC<LotsBatchesMasterTabProps> = ({ 
+  lots, 
+  setLots, 
+  onNotify, 
+  onSelectEntity, 
+  onViewTraceability,
+  onViewDrilldown
+}) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   
@@ -707,7 +714,7 @@ export const LotsBatchesMasterTab: React.FC<LotsBatchesMasterTabProps> = ({ lots
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              setSelectedLotForDrilldown(lot);
+                              if (onViewDrilldown) onViewDrilldown(lot);
                               if (onSelectEntity) onSelectEntity(lot);
                             }}
                             className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg transition-colors cursor-pointer"

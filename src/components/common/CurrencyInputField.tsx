@@ -54,7 +54,18 @@ export const CurrencyInputField: React.FC<CurrencyInputFieldProps> = ({
     if (min !== undefined && parsed < min) parsed = min;
     if (max !== undefined && parsed > max) parsed = max;
 
-    const newFormatted = formatNumberWithDots(parsed);
+    let newFormatted = formatNumberWithDots(parsed);
+    if (rawInput.endsWith(',')) {
+      if (!newFormatted.includes(',')) {
+        newFormatted = newFormatted + ',';
+      }
+    } else if (rawInput.includes(',')) {
+      const parts = rawInput.split(',');
+      const decimalDigits = parts[1].replace(/[^0-9]/g, '');
+      if (decimalDigits.length > 0) {
+        newFormatted = formatNumberWithDots(parsed) + ',' + decimalDigits;
+      }
+    }
     setDisplayValue(newFormatted);
 
     let newCursorPos = 0;

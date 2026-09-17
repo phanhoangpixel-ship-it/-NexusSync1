@@ -514,10 +514,10 @@ export const M39QualityControlWorkspace: React.FC<Props> = ({ onSelectEntity, on
     return quarantineItems.filter(item => {
       const q = quarantineSearch.toLowerCase();
       return (
-        item.lotNumber.toLowerCase().includes(q) ||
-        item.itemName.toLowerCase().includes(q) ||
-        item.itemSku.toLowerCase().includes(q) ||
-        item.sourceRef.toLowerCase().includes(q)
+        String(item.lotNumber || '').toLowerCase().includes(q) ||
+        String(item.itemName || '').toLowerCase().includes(q) ||
+        String(item.itemSku || '').toLowerCase().includes(q) ||
+        String(item.sourceRef || '').toLowerCase().includes(q)
       );
     });
   }, [quarantineItems, quarantineSearch]);
@@ -525,8 +525,8 @@ export const M39QualityControlWorkspace: React.FC<Props> = ({ onSelectEntity, on
   const filteredInspections = useMemo(() => {
     return inspections.filter(item => {
       const q = inspectionSearch.toLowerCase();
-      const matchSearch = item.id.toLowerCase().includes(q) || item.item.toLowerCase().includes(q) || item.inspector.toLowerCase().includes(q);
-      const matchType = inspectionTypeFilter === 'ALL' || item.type.includes(inspectionTypeFilter);
+      const matchSearch = String(item.id || '').toLowerCase().includes(q) || String(item.item || '').toLowerCase().includes(q) || String(item.inspector || '').toLowerCase().includes(q);
+      const matchType = inspectionTypeFilter === 'ALL' || String(item.type || '').includes(inspectionTypeFilter);
       const matchStatus = inspectionStatusFilter === 'ALL' || item.status === inspectionStatusFilter;
       return matchSearch && matchType && matchStatus;
     });
@@ -535,7 +535,7 @@ export const M39QualityControlWorkspace: React.FC<Props> = ({ onSelectEntity, on
   const filteredNCRs = useMemo(() => {
     return ncrs.filter(ncr => {
       const q = ncrSearch.toLowerCase();
-      const matchSearch = ncr.id.toLowerCase().includes(q) || ncr.refId.toLowerCase().includes(q) || ncr.description.toLowerCase().includes(q);
+      const matchSearch = String(ncr.id || '').toLowerCase().includes(q) || String(ncr.refId || '').toLowerCase().includes(q) || String(ncr.description || '').toLowerCase().includes(q);
       const matchSeverity = ncrSeverityFilter === 'ALL' || ncr.severity === ncrSeverityFilter;
       const matchStatus = ncrStatusFilter === 'ALL' || ncr.status === ncrStatusFilter;
       return matchSearch && matchSeverity && matchStatus;

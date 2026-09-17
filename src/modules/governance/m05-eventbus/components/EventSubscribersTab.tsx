@@ -11,7 +11,9 @@ import {
   ShieldCheck,
   RotateCcw,
   SlidersHorizontal,
-  Layers
+  Layers,
+  Plus,
+  X
 } from 'lucide-react';
 import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 
@@ -32,6 +34,13 @@ export const EventSubscribersTab: React.FC<EventSubscribersTabProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+
+  // Modal Đăng ký Consumer Mới (Rule A.7)
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [newConsumerName, setNewConsumerName] = useState('');
+  const [newConsumerTopic, setNewConsumerTopic] = useState('');
+  const [newConsumerGroup, setNewConsumerGroup] = useState('Custom-Consumers');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ConfirmDialog State cho Rule #19
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -96,6 +105,41 @@ export const EventSubscribersTab: React.FC<EventSubscribersTabProps> = ({
         }
       }
     });
+  };
+
+  const handleRegisterConsumer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newConsumerName.trim() || !newConsumerTopic.trim()) {
+      onNotify('warning', 'Thiếu dữ liệu', 'Vui lòng nhập đầy đủ Tên Consumer và Topic Pattern.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/events/subscribers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newConsumerName.trim(),
+          topic: newConsumerTopic.trim(),
+          consumerGroup: newConsumerGroup.trim() || 'Custom-Consumers'
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        onNotify('success', 'Đăng ký thành công', data.message || `Consumer ${newConsumerName} đã sẵn sàng nhận tin.`);
+        setIsRegisterModalOpen(false);
+        setNewConsumerName('');
+        setNewConsumerTopic('');
+        onRefresh();
+      } else {
+        onNotify('danger', 'Lỗi đăng ký', data.error || 'Không thể đăng ký Consumer.');
+      }
+    } catch (err: any) {
+      onNotify('danger', 'Lỗi hệ thống', err.message || 'Lỗi mạng khi kết nối API EventBus.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -182,13 +226,23 @@ export const EventSubscribersTab: React.FC<EventSubscribersTabProps> = ({
           </select>
         </div>
 
-        <button
-          onClick={onRefresh}
-          className="px-3.5 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs self-end sm:self-auto"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Kiểm Tra Lại Healthcheck</span>
-        </button>
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          <button
+            onClick={() => setIsRegisterModalOpen(true)}
+            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Đăng Ký Consumer Mới</span>
+          </button>
+
+          <button
+            onClick={onRefresh}
+            className="px-3.5 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Kiểm Tra Healthcheck</span>
+          </button>
+        </div>
       </div>
 
       {/* ========================================================================= */}
@@ -286,6 +340,102 @@ export const EventSubscribersTab: React.FC<EventSubscribersTabProps> = ({
           );
         })}
       </div>
+
+      {/* ========================================================================= */}
+      {/* MODAL: ĐĂNG KÝ CONSUMER MỚI (RULE A.7)                                    */}
+      {/* ========================================================================= */}
+      {isRegisterModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/80 dark:text-blue-400 flex items-center justify-center">
+                  <Server className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Đăng Ký Consumer Mới Vào EventBus
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsRegisterModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRegisterConsumer} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
+                  Tên Dịch Vụ Consumer <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="VD: AuditImmutableLedgerWriter"
+                  value={newConsumerName}
+                  onChange={(e) => setNewConsumerName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
+                  Mẫu Topic Đăng Ký (Wildcard Pattern) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="VD: erp.finance.* hoặc erp.sales.order.#"
+                  value={newConsumerTopic}
+                  onChange={(e) => setNewConsumerTopic(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                  Hỗ trợ wildcard: <code className="font-mono text-blue-600 dark:text-blue-400">*</code> (1 cấp) hoặc <code className="font-mono text-blue-600 dark:text-blue-400">#</code> (nhiều cấp).
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
+                  Nhóm Consumer Group
+                </label>
+                <input
+                  type="text"
+                  placeholder="VD: Finance-Consumers"
+                  value={newConsumerGroup}
+                  onChange={(e) => setNewConsumerGroup(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setIsRegisterModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl"
+                >
+                  Hủy Bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Đang Đăng Ký...</span>
+                    </>
+                  ) : (
+                    <span>Xác Nhận Đăng Ký</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* CONFIRM DIALOG (RULE #19 COMPLIANCE)                                      */}

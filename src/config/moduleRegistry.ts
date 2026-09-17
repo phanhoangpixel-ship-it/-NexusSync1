@@ -712,6 +712,20 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     iconName: 'Calculator',
     workspaceId: 'WS31_COGS'
   },
+  {
+    moduleId: 'M43',
+    code: 'M43',
+    moduleName: 'Hồ Sơ Ngành Hàng (Industry Profiles)',
+    domain: 'MASTER DATA / CONFIG',
+    group: '01. Dữ liệu Chủ & Thiết lập (Master Data & Setup)',
+    route: '/industry-profiles',
+    readEndpoint: '/api/industry-profiles',
+    approvalProvider: false,
+    permissions: ['admin', 'manager'],
+    description: 'Quản lý và thiết lập thông số vận hành, tiêu chuẩn tuân thủ, phương pháp định giá tồn kho theo từng ngành hàng.',
+    iconName: 'Building2',
+    workspaceId: 'WS32_INDUSTRY'
+  },
 ];
 
 export const WORKSPACES = [
@@ -746,6 +760,7 @@ export const WORKSPACES = [
   { id: 'WS29_EHS', name: 'An toàn lao động & Môi trường EHS', group: 'GOVERNANCE', primaryModule: 'M40' },
   { id: 'WS30_PRICING', name: 'Cơ cấu Giá & Chính sách Thương mại', group: 'SALES', primaryModule: 'M41' },
   { id: 'WS31_COGS', name: 'Phân bổ Chi phí & Giá vốn COGS', group: 'FINANCE', primaryModule: 'M42' },
+  { id: 'WS32_INDUSTRY', name: 'Hồ Sơ Ngành Hàng', group: 'MASTER_DATA', primaryModule: 'M43' },
 ];
 
 export const SYSTEM_ROLES = [

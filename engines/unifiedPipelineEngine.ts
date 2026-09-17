@@ -1,6 +1,7 @@
 import { db, client } from "../db/index";
 import * as schema from "../db/schema";
 import { eq, desc } from "drizzle-orm";
+import { AuditService } from "./auditService";
 
 export interface PipelineStepResult {
   stepId: number;
@@ -368,27 +369,24 @@ export class UnifiedPipelineEngine {
       );
 
       // -----------------------------------------------------------------------
-      // STEP 10: Single Writer General Ledger (GL) & Audit Log Traceability
+      // STEP 10: Central Audit Gateway (M02 Enterprise Ledger)
       // -----------------------------------------------------------------------
-      await db.insert(schema.auditLogs).values({
-        auditCode: `AUD-UNIFIED-${timestampSuffix}`,
+      await AuditService.recordAuditLog({
         userId: operatorUserId,
         username: "admin",
         role: "SUPER_ADMIN",
-        module: "FINANCE",
+        module: "M30",
         action: "EXECUTE_UNIFIED_DATA_PIPELINE",
         entityType: "PIPELINE_RUN",
         entityId: correlationId,
         result: "SUCCESS",
-        beforeData: "{}",
-        afterData: JSON.stringify({
+        afterData: {
           correlationId,
           totalSteps: steps.length + 1,
           glEntriesCreated,
           netVatPayable,
-        }),
-        createdAt: new Date(),
-      } as any).run();
+        },
+      });
 
       addStep(
         10,

@@ -21,6 +21,7 @@ import { BankReconciliationEngine } from "../../engines/bankReconciliationEngine
 import { PricingService } from "../../engines/pricingService";
 import { CashMovementService } from "../../engines/CashMovementService";
 import { SalesEngine } from "../services/SalesEngine";
+import { AuditService } from "../../engines/auditService";
 import { eq, desc, sql } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
 
@@ -734,9 +735,8 @@ router.post("/api/sales/fulfillment/transition", async (req, res) => {
         } as any)
         .where(eq(schema.salesOrders.id, order.id));
 
-      // 6. AUDIT TRAIL ENTRY (Standardized Transition Traceability: timestamp, actor, source, previousStatus, newStatus, referenceId)
-      await (tx.insert(schema.auditLogs) as any).values({
-        auditCode: `AUD-FULFILL-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      // 6. Central Audit Gateway (Asynchronous Hash Chaining)
+      AuditService.captureAsync({
         userId,
         username: "fulfillment_controller",
         userName: "Điều phối viên Fulfillment",
@@ -746,9 +746,9 @@ router.post("/api/sales/fulfillment/transition", async (req, res) => {
         action: "UPDATE",
         entityType: "SALES_ORDER",
         entityId: order.code,
-        module: "SALES",
+        module: "M13",
         result: "SUCCESS",
-        metadata: JSON.stringify({
+        metadata: {
           timestamp: new Date().toISOString(),
           actor: { userId, username: "fulfillment_controller", userName: "Điều phối viên Fulfillment", role: "WAREHOUSE_MANAGER" },
           source: metadata.source || metadata.channel || "ONLINE",
@@ -761,8 +761,7 @@ router.post("/api/sales/fulfillment/transition", async (req, res) => {
           inventoryRef: targetStatus === "COMPLETED" ? inventoryRef : null,
           glRef: targetStatus === "COMPLETED" ? glRef : null,
           cogsAmount: totalCogs
-        }),
-        createdAt: new Date()
+        }
       });
     });
 
@@ -935,9 +934,8 @@ router.post(["/api/sales/payment/process", "/api/sales/payment/collect-cod"], as
         } as any)
         .where(eq(schema.invoices.orderId, order.id));
 
-      // Step E: Write Audit Log with Idempotency Key (Standardized Transition Traceability)
-      await tx.insert(schema.auditLogs).values({
-        auditCode: `AUD-PAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      // Step E: Central Audit Gateway (Asynchronous Hash Chaining)
+      AuditService.captureAsync({
         userId,
         username: "payment_settler",
         userName: "Hệ thống Xử lý Thanh toán Idempotent",
@@ -947,9 +945,9 @@ router.post(["/api/sales/payment/process", "/api/sales/payment/collect-cod"], as
         action: "PAYMENT",
         entityType: "PAYMENT",
         entityId: order.code,
-        module: "SALES",
+        module: "M13",
         result: "SUCCESS",
-        metadata: JSON.stringify({
+        metadata: {
           timestamp: new Date().toISOString(),
           actor: { userId, username: "payment_settler", userName: "Hệ thống Xử lý Thanh toán Idempotent", role: "ACCOUNTANT" },
           source: notesObj.channel || "PAYMENT_GATEWAY",
@@ -964,9 +962,8 @@ router.post(["/api/sales/payment/process", "/api/sales/payment/collect-cod"], as
           paymentStatus: newPaymentStatus,
           paymentRef: payRef,
           glRef: glJournalRef
-        }),
-        createdAt: new Date()
-      } as any);
+        }
+      });
     });
 
     res.json({
@@ -1116,9 +1113,8 @@ router.post("/api/sales/rma/create", async (req, res) => {
       .set({ notes: JSON.stringify(parsedMeta) } as any)
       .where(eq(schema.salesOrders.id, order.id));
 
-    // Audit Log for M15 RMA creation (Standardized Transition Traceability)
-    await db.insert(schema.auditLogs).values({
-      auditCode: `AUD-RMA-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    // Central Audit Gateway (M15 RMA Returns)
+    AuditService.captureAsync({
       userId,
       username: "rma_officer",
       userName: "Nhân viên Tiếp nhận Bảo hành RMA M15",
@@ -1128,9 +1124,9 @@ router.post("/api/sales/rma/create", async (req, res) => {
       action: "CREATE",
       entityType: "RMA_REQUEST",
       entityId: rmaCode,
-      module: "SALES",
+      module: "M15",
       result: "SUCCESS",
-      metadata: JSON.stringify({
+      metadata: {
         timestamp: new Date().toISOString(),
         actor: { userId, username: "rma_officer", userName: "Nhân viên Tiếp nhận Bảo hành RMA M15", role: "CUSTOMER_SERVICE" },
         source: "M15_RMA_RETURNS",
@@ -1141,9 +1137,8 @@ router.post("/api/sales/rma/create", async (req, res) => {
         reason,
         refundAmount: totalRefundFinal,
         idempotencyKey
-      }),
-      createdAt: new Date()
-    } as any);
+      }
+    });
 
     res.json({
       success: true,
@@ -1360,9 +1355,8 @@ router.post("/api/sales/rma/process", async (req, res) => {
       .set({ notes: JSON.stringify(parsedMeta) } as any)
       .where(eq(schema.salesOrders.id, order.id));
 
-    // Audit Log for RMA Processing Transition
-    await db.insert(schema.auditLogs).values({
-      auditCode: `AUD-RMA-PROC-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    // Central Audit Gateway (M15 RMA Processing Transition)
+    AuditService.captureAsync({
       userId,
       username: "rma_processor",
       userName: "Bộ phận Giám định & Xử lý RMA M15",
@@ -1372,9 +1366,9 @@ router.post("/api/sales/rma/process", async (req, res) => {
       action: action === "EXECUTE_RETURN_AND_REFUND" ? "REFUND" : "UPDATE",
       entityType: "RMA_REQUEST",
       entityId: rmaCode,
-      module: "SALES",
+      module: "M15",
       result: "SUCCESS",
-      metadata: JSON.stringify({
+      metadata: {
         timestamp: new Date().toISOString(),
         actor: { userId, username: "rma_processor", userName: "Bộ phận Giám định & Xử lý RMA M15", role: "QC_MANAGER" },
         source: "M15_RMA_RETURNS",
@@ -1386,9 +1380,8 @@ router.post("/api/sales/rma/process", async (req, res) => {
         refundMethod,
         idempotencyKey,
         creditNoteNumber: currentRma.creditNoteNumber || null
-      }),
-      createdAt: new Date()
-    } as any);
+      }
+    });
 
     res.json({
       success: true,

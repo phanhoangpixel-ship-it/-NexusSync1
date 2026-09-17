@@ -14,7 +14,7 @@ import { PaginationControl } from '../../../../components/common/PaginationContr
 import { L3ContentState } from '../../../../components/common/L3ContentState';
 import { ENTERPRISE_MASTER_PRODUCTS } from '../../../../data/enterpriseMaster';
 import { jsPDF } from 'jspdf';
-import { SerialTimelineEvent, SerialItem, SerialProfile } from "./types";
+import { SerialTimelineEvent, SerialItem, SerialProfile, M23SerialsWorkspaceProps } from "./types";
 
 const defaultProductsCatalog = ENTERPRISE_MASTER_PRODUCTS.map((p, idx) => ({
   sku: p.sku,
@@ -33,7 +33,8 @@ const removeVietnameseTones = (str: string) => {
 };
 export const M23SerialsWorkspace: React.FC<M23SerialsWorkspaceProps> = ({
   onSelectEntity,
-  onNotify
+  onNotify,
+  onNavigate
 }) => {
   const { setPrimaryAction } = useWorkspaceAction();
   const [serials, setSerials] = useState<SerialItem[]>([
@@ -226,14 +227,23 @@ export const M23SerialsWorkspace: React.FC<M23SerialsWorkspaceProps> = ({
     }
   ]);
 
-  const [profiles] = useState<SerialProfile[]>([
+  const [profiles, setProfiles] = useState<SerialProfile[]>([
     { id: 'PR-01', code: 'MEDICAL', name: 'Thiết bị Y tế & Đo lường', categoryType: 'MEDICAL', warrantyMonths: 24, prefix: 'MED-', description: 'Quản lý mã UDI, hiệu chuẩn định kỳ & kiểm định y tế.' },
     { id: 'PR-02', code: 'ELECTRONICS', name: 'Thiết bị Điện tử & IMEI', categoryType: 'ELECTRONICS', warrantyMonths: 12, prefix: 'IMEI-', description: 'Quản lý mã IMEI di động, MAC Address & bảo hành điện tử.' },
     { id: 'PR-03', code: 'MACHINERY', name: 'Máy móc & Thiết bị Công nghiệp', categoryType: 'MACHINERY', warrantyMonths: 18, prefix: 'MCH-', description: 'Quản lý số máy (Engine No), giờ vận hành & bảo trì định kỳ.' },
     { id: 'PR-04', code: 'CUSTOM', name: 'Linh kiện Chung / Tùy chỉnh', categoryType: 'CUSTOM', warrantyMonths: 12, prefix: 'SN-', description: 'Quy tắc mã hóa linh hoạt theo đơn hàng hoặc sản phẩm.' }
   ]);
 
+  const [createProfileModal, setCreateProfileModal] = useState(false);
+  const [newProfName, setNewProfName] = useState('');
+  const [newProfCode, setNewProfCode] = useState('');
+  const [newProfCategory, setNewProfCategory] = useState('CUSTOM');
+  const [newProfPrefix, setNewProfPrefix] = useState('SN-');
+  const [newProfWarranty, setNewProfWarranty] = useState('12');
+  const [newProfDesc, setNewProfDesc] = useState('');
+
   const [searchQuery, setSearchQuery] = useState('');
+  const [quickScanInput, setQuickScanInput] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [activeTab, setActiveTab] = useWorkspaceSessionTab<'serials' | 'profiles' | 'history'>('M23', 'serials');
   const [internalCreateModal, setInternalCreateModal] = useState(false);
@@ -275,6 +285,41 @@ export const M23SerialsWorkspace: React.FC<M23SerialsWorkspaceProps> = ({
         }
       })
       .catch(() => {});
+
+    fetch('/api/serial-profiles', { headers })
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setProfiles(data);
+        }
+      })
+      .catch(() => {});
+
+    console.log('[M23 Diagnostics] Fetch Serials Payload / Request Initiated for endpoint: /api/serials');
+    fetch('/api/serials', { headers })
+      .then(async r => {
+        const rawText = await r.text();
+        let json;
+        try {
+          json = JSON.parse(rawText);
+        } catch {
+          json = rawText;
+        }
+        console.log('[M23 Diagnostics] Fetch Serials Raw Response:', {
+          status: r.status,
+          ok: r.ok,
+          data: json
+        });
+        return json;
+      })
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setSerials(data);
+        }
+      })
+      .catch((err) => {
+        console.error('[M23 Diagnostics] Fetch Serials Error:', err);
+      });
   }, []);
 
   const handleSkuChange = (skuVal: string) => {
@@ -328,36 +373,122 @@ export const M23SerialsWorkspace: React.FC<M23SerialsWorkspaceProps> = ({
     }
   };
 
-  const handleCreateSerial = (e: React.FormEvent) => {
+  const handleQuickScanSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
-    const newItem: SerialItem = {
-      id: `SN-00${serials.length + 1}`,
-      serialNumber: newSerialNo,
-      sku: newSku,
-      productName: newProductName,
-      category: 'Thiết bị & Linh kiện',
-      warehouse: newWarehouse,
-      status: 'IN_STOCK',
-      manufactureDate: new Date().toISOString().slice(0, 10),
-      warrantyMonths: 12,
-      notes: newNotes,
-      timeline: [
-        {
-          id: `TL-${Date.now()}`,
-          timestamp: nowStr,
-          type: 'CREATED',
-          title: 'Đăng ký & Nhập kho mới',
-          description: newNotes || 'Đăng ký số Serial/IMEI vào hệ thống',
-          actor: 'Thủ kho Hệ thống',
-          location: newWarehouse
-        }
-      ]
-    };
+    if (!quickScanInput.trim()) return;
+    const code = quickScanInput.trim().toUpperCase();
+    const found = serials.find(s => s.serialNumber.toUpperCase() === code || s.serialNumber.toUpperCase().includes(code));
+    if (found) {
+      handleInspectSerial(found);
+      onNotify('success', 'Quét mã vạch thành công', `Đã tìm thấy và mở hồ sơ 360° cho Serial: ${found.serialNumber}`);
+      setQuickScanInput('');
+    } else {
+      onNotify('warning', 'Không tìm thấy Serial', `Không tìm thấy số Serial / IMEI "${code}" trong hệ thống kho.`);
+    }
+  };
 
-    setSerials([newItem, ...serials]);
-    handleCloseModal();
-    onNotify('success', 'Thành công', `Đã đăng ký số Serial / IMEI ${newSerialNo} thành công.`);
+  const handleCreateSerial = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = localStorage.getItem('nexus_jwt') || '';
+    try {
+      const res = await fetch('/api/serials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({
+          serialNumber: newSerialNo,
+          sku: newSku,
+          warehouseId: 1,
+          notes: newNotes,
+          warrantyMonths: 12
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const r2 = await fetch('/api/serials', { headers: token ? { 'Authorization': `Bearer ${token}` } : {} });
+        const list = await r2.json();
+        if (Array.isArray(list)) setSerials(list);
+        handleCloseModal();
+        onNotify('success', 'Thành công', `Đã đăng ký số Serial / IMEI ${newSerialNo} thành công.`);
+      } else {
+        onNotify('error', 'Lỗi đăng ký', data.error || 'Không thể đăng ký serial mới.');
+      }
+    } catch (err: any) {
+      const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
+      const newItem: SerialItem = {
+        id: `SN-00${serials.length + 1}`,
+        serialNumber: newSerialNo,
+        sku: newSku,
+        productName: newProductName,
+        category: 'Thiết bị & Linh kiện',
+        warehouse: newWarehouse,
+        status: 'IN_STOCK',
+        manufactureDate: new Date().toISOString().slice(0, 10),
+        warrantyMonths: 12,
+        notes: newNotes,
+        timeline: [
+          {
+            id: `TL-${Date.now()}`,
+            timestamp: nowStr,
+            type: 'CREATED',
+            title: 'Đăng ký & Nhập kho mới',
+            description: newNotes || 'Đăng ký số Serial/IMEI vào hệ thống',
+            actor: 'Thủ kho Hệ thống',
+            location: newWarehouse
+          }
+        ]
+      };
+      setSerials([newItem, ...serials]);
+      handleCloseModal();
+      onNotify('success', 'Thành công (Local Fallback)', `Đã đăng ký số Serial / IMEI ${newSerialNo} thành công.`);
+    }
+  };
+
+  const handleCreateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProfName || !newProfCode || !newProfPrefix) {
+      onNotify('error', 'Thiếu thông tin', 'Vui lòng điền đầy đủ Tên, Mã định danh và Tiền tố (Prefix).');
+      return;
+    }
+    const token = localStorage.getItem('nexus_jwt') || '';
+    try {
+      const res = await fetch('/api/serial-profiles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({
+          name: newProfName,
+          code: newProfCode,
+          categoryType: newProfCategory,
+          prefix: newProfPrefix,
+          warrantyMonths: Number(newProfWarranty),
+          description: newProfDesc
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setProfiles(prev => [...prev, data.profile]);
+        setCreateProfileModal(false);
+        setNewProfName('');
+        setNewProfCode('');
+        setNewProfPrefix('SN-');
+        setNewProfDesc('');
+        onNotify('success', 'Thành công', `Đã tạo hồ sơ ngành hàng "${newProfName}" thành công.`);
+      } else {
+        onNotify('error', 'Lỗi tạo hồ sơ', data.error || 'Không thể tạo hồ sơ ngành hàng.');
+      }
+    } catch (err: any) {
+      const fallbackProf: SerialProfile = {
+        id: `PR-${Date.now()}`,
+        code: newProfCode.toUpperCase(),
+        name: newProfName,
+        categoryType: newProfCategory,
+        prefix: newProfPrefix.toUpperCase(),
+        warrantyMonths: Number(newProfWarranty) || 12,
+        description: newProfDesc
+      };
+      setProfiles(prev => [...prev, fallbackProf]);
+      setCreateProfileModal(false);
+      onNotify('success', 'Thành công (Local)', `Đã tạo hồ sơ ngành hàng "${newProfName}" thành công.`);
+    }
   };
 
   // Open Action Modal with proper setup
@@ -466,26 +597,55 @@ export const M23SerialsWorkspace: React.FC<M23SerialsWorkspaceProps> = ({
       title: actionTitle,
       message: confirmPrompt,
       variant: actionModalType === 'DEFECTIVE' ? 'danger' : 'primary',
-      onConfirm: () => {
-        setSerials(prev => prev.map(item => {
-          if (item.id === s.id) {
-            const updated: SerialItem = {
-              ...item,
-              status: nextStatus,
-              warehouse: actionModalType === 'TRANSFER' ? actionWarehouse : item.warehouse,
-              customerName: actionModalType === 'SELL' ? actionCustomer : item.customerName,
-              orderNumber: actionModalType === 'SELL' ? actionOrderNo : item.orderNumber,
-              warrantyStart: actionModalType === 'SELL' ? todayDate : item.warrantyStart,
-              warrantyEnd: actionModalType === 'SELL' ? endDate : item.warrantyEnd,
-              timeline: [newEvent, ...(item.timeline || [])]
-            };
-            if (selectedSerial?.id === s.id) {
-              setSelectedSerial(updated);
-            }
-            return updated;
+      onConfirm: async () => {
+        const token = localStorage.getItem('nexus_jwt') || '';
+        const actionPayload = {
+          actionType: actionModalType,
+          customerName: actionCustomer,
+          orderNumber: actionOrderNo,
+          notes: actionReason
+        };
+        console.log('[M23 Diagnostics] Action Payload for serial', s.id, ':', actionPayload);
+        try {
+          const actionRes = await fetch(`/api/serials/${s.id}/actions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify(actionPayload)
+          });
+          const actionResJson = await actionRes.json();
+          console.log('[M23 Diagnostics] Action Execution Raw Response:', actionResJson);
+
+          const r2 = await fetch('/api/serials', { headers: token ? { 'Authorization': `Bearer ${token}` } : {} });
+          const list = await r2.json();
+          console.log('[M23 Diagnostics] Refetch Serials List Raw Response after action:', list);
+          if (Array.isArray(list)) {
+            setSerials(list);
+          } else {
+            console.warn('[M23 Diagnostics] Refetch serials returned non-array:', list);
           }
-          return item;
-        }));
+        } catch (err) {
+          console.error('[M23 Diagnostics] Action execution or refetch error:', err);
+          // Fallback local update
+          setSerials(prev => prev.map(item => {
+            if (item.id === s.id) {
+              const updated: SerialItem = {
+                ...item,
+                status: nextStatus,
+                warehouse: actionModalType === 'TRANSFER' ? actionWarehouse : item.warehouse,
+                customerName: actionModalType === 'SELL' ? actionCustomer : item.customerName,
+                orderNumber: actionModalType === 'SELL' ? actionOrderNo : item.orderNumber,
+                warrantyStart: actionModalType === 'SELL' ? todayDate : item.warrantyStart,
+                warrantyEnd: actionModalType === 'SELL' ? endDate : item.warrantyEnd,
+                timeline: [newEvent, ...(item.timeline || [])]
+              };
+              if (selectedSerial?.id === s.id) {
+                setSelectedSerial(updated);
+              }
+              return updated;
+            }
+            return item;
+          }));
+        }
 
         setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: () => {} });
         setActionModalType(null);
@@ -767,6 +927,16 @@ export const M23SerialsWorkspace: React.FC<M23SerialsWorkspaceProps> = ({
                   className="w-full pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              <form onSubmit={handleQuickScanSubmit} className="relative w-full sm:w-56">
+                <QrCode className="w-4 h-4 text-indigo-500 absolute left-2.5 top-2" />
+                <input
+                  type="text"
+                  placeholder="Quét nhanh Barcode / IMEI..."
+                  value={quickScanInput}
+                  onChange={(e) => setQuickScanInput(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 text-xs font-mono text-slate-900 dark:text-slate-100 bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                />
+              </form>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -975,25 +1145,45 @@ export const M23SerialsWorkspace: React.FC<M23SerialsWorkspaceProps> = ({
 
       {/* Tab 2: Profiles */}
       {activeTab === 'profiles' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {profiles.map((p) => (
-            <div key={p.id} className="bg-white dark:bg-slate-800 dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 dark:border-slate-700 shadow-2xs space-y-3 flex flex-col">
-              <div className="flex items-center justify-between">
-                <span className="px-2 py-0.5 bg-blue-100 text-blue-900 border border-blue-300 dark:bg-blue-950/90 dark:text-blue-200 dark:border-blue-700 font-mono text-[10px] font-bold rounded">
-                  {p.code}
-                </span>
-                <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 dark:text-slate-400">Prefix: {p.prefix}</span>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white dark:text-white leading-tight">{p.name}</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-400 mt-1 line-clamp-2">{p.description}</p>
-              </div>
-              <div className="pt-3 border-t border-slate-200 dark:border-slate-700 dark:border-slate-700 flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 dark:text-slate-400">
-                <span>Bảo hành: <strong className="font-mono tabular-nums">{p.warrantyMonths}</strong> tháng</span>
-                <span className="font-mono bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 dark:border-slate-600">{p.categoryType}</span>
-              </div>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Cấu Hình Hồ Sơ & Tiền Tố Ngành Hàng (Serial Profiles)</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Quản lý quy tắc tiền tố mã định danh, chính sách bảo hành mặc định và thuộc tính chuyên ngành.</p>
             </div>
-          ))}
+            <button
+              onClick={() => {
+                if (onNavigate) {
+                  onNavigate('M43');
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
+            >
+              <ArrowUpRight className="w-4 h-4" />
+              Mở Phân Hệ M43 (Hồ Sơ Ngành Hàng)
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {profiles.map((p) => (
+              <div key={p.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs space-y-3 flex flex-col">
+                <div className="flex items-center justify-between">
+                  <span className="px-2 py-0.5 bg-blue-100 text-blue-900 border border-blue-300 dark:bg-blue-950/90 dark:text-blue-200 dark:border-blue-700 font-mono text-[10px] font-bold rounded">
+                    {p.code}
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">Prefix: {p.prefix}</span>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white leading-tight">{p.name}</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">{p.description}</p>
+                </div>
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400">
+                  <span>Bảo hành: <strong className="font-mono tabular-nums">{p.warrantyMonths}</strong> tháng</span>
+                  <span className="font-mono bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600">{p.categoryType}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1461,6 +1651,110 @@ export const M23SerialsWorkspace: React.FC<M23SerialsWorkspaceProps> = ({
                   className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-colors"
                 >
                   Lưu & Đăng Ký
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Serial Profile Modal */}
+      {createProfileModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700">
+            <div className="px-5 py-3 bg-slate-900 dark:bg-slate-950 text-white flex items-center justify-between border-b border-slate-800">
+              <h3 className="font-bold text-base">Thêm Hồ Sơ & Tiền Tố Ngành Hàng Mới</h3>
+              <button onClick={() => setCreateProfileModal(false)} className="text-slate-400 hover:text-white">&times;</button>
+            </div>
+            <form onSubmit={handleCreateProfile} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-400 uppercase mb-1">Tên Nhóm Ngành Hàng</label>
+                <input
+                  type="text"
+                  required
+                  value={newProfName}
+                  onChange={(e) => setNewProfName(e.target.value)}
+                  className="w-full px-3 py-2 text-sm text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="VD: Thiết bị An ninh & Camera"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-400 uppercase mb-1">Mã Định Danh (Code)</label>
+                  <input
+                    type="text"
+                    required
+                    value={newProfCode}
+                    onChange={(e) => setNewProfCode(e.target.value)}
+                    className="w-full px-3 py-2 text-sm font-mono uppercase text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="VD: SECURITY"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-400 uppercase mb-1">Tiền Tố (Prefix)</label>
+                  <input
+                    type="text"
+                    required
+                    value={newProfPrefix}
+                    onChange={(e) => setNewProfPrefix(e.target.value)}
+                    className="w-full px-3 py-2 text-sm font-mono uppercase text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="VD: CAM-"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-400 uppercase mb-1">Loại Phân Loại</label>
+                  <select
+                    value={newProfCategory}
+                    onChange={(e) => setNewProfCategory(e.target.value)}
+                    className="w-full px-3 py-2 text-sm text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono"
+                  >
+                    <option value="CUSTOM">CUSTOM</option>
+                    <option value="MEDICAL">MEDICAL</option>
+                    <option value="ELECTRONICS">ELECTRONICS</option>
+                    <option value="MACHINERY">MACHINERY</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-400 uppercase mb-1">Bảo Hành (Tháng)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="120"
+                    value={newProfWarranty}
+                    onChange={(e) => setNewProfWarranty(e.target.value)}
+                    className="w-full px-3 py-2 text-sm font-mono text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-400 uppercase mb-1">Mô Tả Quy Tắc</label>
+                <textarea
+                  rows={2}
+                  value={newProfDesc}
+                  onChange={(e) => setNewProfDesc(e.target.value)}
+                  className="w-full px-3 py-2 text-sm text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Mô tả chi tiết quy chuẩn quản lý mã định danh ngành hàng này..."
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-700/50">
+                <button
+                  type="button"
+                  onClick={() => setCreateProfileModal(false)}
+                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-colors"
+                >
+                  Tạo Hồ Sơ
                 </button>
               </div>
             </form>

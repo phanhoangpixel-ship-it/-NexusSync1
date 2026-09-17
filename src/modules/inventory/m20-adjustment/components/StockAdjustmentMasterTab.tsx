@@ -666,12 +666,118 @@ export const StockAdjustmentMasterTab: React.FC<StockAdjustmentMasterTabProps> =
 
             {/* Drawer Footer Actions */}
             <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between gap-3">
-              <button
-                onClick={() => setIsDrawerOpen(false)}
-                className="px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-xl hover:bg-slate-100 cursor-pointer"
-              >
-                Đóng
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsDrawerOpen(false)}
+                  className="px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-xl hover:bg-slate-100 cursor-pointer"
+                >
+                  Đóng
+                </button>
+                {selectedAdj.status === 'APPROVED' && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(`/api/stock-adjustments/${selectedAdj.id}/print`);
+                        if (res.ok) {
+                          const data = await res.json();
+                          onNotify('success', 'Mẫu in 02-VT Bộ Tài chính', `Đã kết xuất thành công mẫu in chuẩn Thông tư 200 cho chứng từ ${selectedAdj.code}`);
+                          const printWindow = window.open('', '_blank');
+                          if (printWindow) {
+                            printWindow.document.write(`
+                              <html>
+                                <head>
+                                  <title>Mẫu số 02-VT - ${data.template.documentNo}</title>
+                                  <style>
+                                    body { font-family: 'Times New Roman', serif; padding: 30px; color: #000; }
+                                    .header { text-align: center; margin-bottom: 20px; }
+                                    .header h2 { margin: 0; font-size: 18px; text-transform: uppercase; }
+                                    .header p { margin: 2px 0; font-size: 13px; }
+                                    .meta { margin-bottom: 15px; font-size: 13px; }
+                                    table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+                                    th, td { border: 1px solid #000; padding: 6px 8px; text-align: left; }
+                                    th { background: #f2f2f2; text-align: center; }
+                                    .text-right { text-align: right; }
+                                    .text-center { text-align: center; }
+                                    .signatures { display: flex; justify-content: space-between; margin-top: 40px; text-align: center; font-size: 13px; }
+                                    .sig-box { width: 30%; }
+                                  </style>
+                                </head>
+                                <body>
+                                  <div class="header">
+                                    <p><b>${data.template.enterpriseName}</b></p>
+                                    <p>${data.template.formCode} (${data.template.circular})</p>
+                                    <h2>${data.template.documentTitle}</h2>
+                                    <p>Số: <b>${data.template.documentNo}</b> | Ngày: ${new Date(data.template.createdAt).toLocaleDateString('vi-VN')}</p>
+                                  </div>
+                                  <div class="meta">
+                                    <p><b>Kho hàng:</b> ${data.template.warehouseName}</p>
+                                    <p><b>Lý do điều chỉnh:</b> ${data.template.reason}</p>
+                                  </div>
+                                  <table>
+                                    <thead>
+                                      <tr>
+                                        <th>STT</th>
+                                        <th>Mã SKU</th>
+                                        <th>Tên sản phẩm</th>
+                                        <th>ĐVT</th>
+                                        <th>SL</th>
+                                        <th>Đơn giá</th>
+                                        <th>Thành tiền</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      ${data.template.items.map((it: any, idx: number) => `
+                                        <tr>
+                                          <td class="text-center">${idx + 1}</td>
+                                          <td><b>${it.productSku || ''}</b></td>
+                                          <td>${it.productName || ''}</td>
+                                          <td class="text-center">${it.baseUnit || 'Cái'}</td>
+                                          <td class="text-right">${it.quantity}</td>
+                                          <td class="text-right">${(it.unitCost || 0).toLocaleString('vi-VN')} đ</td>
+                                          <td class="text-right">${(it.totalCost || (it.quantity * (it.unitCost || 0))).toLocaleString('vi-VN')} đ</td>
+                                        </tr>
+                                      `).join('')}
+                                    </tbody>
+                                  </table>
+                                  <div style="margin-top: 15px; text-align: right; font-size: 13px;">
+                                    <b>Tổng giá trị biến động:</b> ${data.template.totalCost.toLocaleString('vi-VN')} đ
+                                  </div>
+                                  <div class="signatures">
+                                    <div class="sig-box">
+                                      <p><b>${data.template.signatories.creator}</b></p>
+                                      <p style="font-size: 11px; font-style: italic;">(Ký, họ tên)</p>
+                                    </div>
+                                    <div class="sig-box">
+                                      <p><b>${data.template.signatories.accountant}</b></p>
+                                      <p style="font-size: 11px; font-style: italic;">(Ký, họ tên)</p>
+                                    </div>
+                                    <div class="sig-box">
+                                      <p><b>${data.template.signatories.director}</b></p>
+                                      <p style="font-size: 11px; font-style: italic;">(Ký, đóng dấu)</p>
+                                    </div>
+                                  </div>
+                                </body>
+                              </html>
+                            `);
+                            printWindow.document.close();
+                            printWindow.focus();
+                            setTimeout(() => printWindow.print(), 500);
+                          }
+                        } else {
+                          onNotify('error', 'Lỗi xuất mẫu in', 'Không thể kết xuất dữ liệu mẫu in 02-VT từ server.');
+                        }
+                      } catch (err: any) {
+                        onNotify('error', 'Lỗi kết nối', err.message || 'Lỗi khi gọi API mẫu in 02-VT');
+                      }
+                    }}
+                    className="px-3.5 py-1.5 text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+                    title="Xuất mẫu in chuẩn Bộ Tài chính (02-VT)"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>In Mẫu 02-VT (BTC)</span>
+                  </button>
+                )}
+              </div>
               {selectedAdj.status === 'DRAFT' && (
                 <div className="flex items-center gap-2">
                   <button

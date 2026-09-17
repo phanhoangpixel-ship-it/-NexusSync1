@@ -81,7 +81,129 @@ export async function ensureSchemaSynchronized() {
     `CREATE INDEX IF NOT EXISTS idx_journal_entries_date ON journal_entries (entry_date, status)`,
     `CREATE INDEX IF NOT EXISTS idx_journal_lines_account ON journal_lines (account_id, entry_id)`,
     `CREATE INDEX IF NOT EXISTS idx_outbox_events_status_retry ON outbox_events (status, next_retry_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs (entity_type, entity_id, created_at)`
+    `CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs (entity_type, entity_id, created_at)`,
+    // M02 SHA-256 Hash Chain and Block Immutability
+    `ALTER TABLE audit_logs ADD COLUMN prev_hash TEXT`,
+    `ALTER TABLE audit_logs ADD COLUMN sha256_checksum TEXT`,
+    `ALTER TABLE audit_logs ADD COLUMN tamper_status TEXT DEFAULT 'VALID'`,
+    `ALTER TABLE audit_logs ADD COLUMN masked_fields TEXT`,
+    `ALTER TABLE audit_logs ADD COLUMN block_number INTEGER`,
+    `CREATE INDEX IF NOT EXISTS idx_audit_logs_block ON audit_logs (block_number)`,
+    `CREATE INDEX IF NOT EXISTS idx_audit_logs_checksum ON audit_logs (sha256_checksum)`,
+    `CREATE INDEX IF NOT EXISTS idx_audit_logs_module_action ON audit_logs (module, action, created_at)`,
+    `CREATE TRIGGER IF NOT EXISTS trg_audit_logs_no_update BEFORE UPDATE ON audit_logs BEGIN SELECT RAISE(FAIL, 'UPDATE operation is strictly prohibited on immutable audit_logs (Rule #03 & Rule #16)'); END;`,
+    `CREATE TRIGGER IF NOT EXISTS trg_audit_logs_no_delete BEFORE DELETE ON audit_logs BEGIN SELECT RAISE(FAIL, 'DELETE operation is strictly prohibited on immutable audit_logs (Rule #03 & Rule #16)'); END;`,
+    // M18 WMS Spatial & Physical Topology Enhancements
+    `ALTER TABLE warehouse_locations ADD COLUMN zone_type TEXT DEFAULT 'GENERAL'`,
+    `ALTER TABLE warehouse_locations ADD COLUMN max_weight_capacity REAL DEFAULT 1000.0`,
+    `ALTER TABLE warehouse_locations ADD COLUMN current_weight REAL DEFAULT 0.0`,
+    `ALTER TABLE warehouse_locations ADD COLUMN max_volume_capacity REAL DEFAULT 5.0`,
+    `ALTER TABLE warehouse_locations ADD COLUMN current_volume REAL DEFAULT 0.0`,
+    `ALTER TABLE warehouse_locations ADD COLUMN barcode TEXT`,
+    `ALTER TABLE warehouse_locations ADD COLUMN aisle_code TEXT`,
+    `ALTER TABLE warehouse_locations ADD COLUMN rack_code TEXT`,
+    `ALTER TABLE warehouse_locations ADD COLUMN shelf_code TEXT`,
+    `ALTER TABLE warehouse_locations ADD COLUMN bin_code TEXT`,
+    `ALTER TABLE warehouse_locations ADD COLUMN temperature_min REAL`,
+    `ALTER TABLE warehouse_locations ADD COLUMN temperature_max REAL`,
+    `ALTER TABLE warehouse_locations ADD COLUMN humidity_max REAL`,
+    `ALTER TABLE products ADD COLUMN storage_condition TEXT DEFAULT 'DRY'`,
+    `ALTER TABLE products ADD COLUMN unit_weight_kg REAL DEFAULT 1.0`,
+    `ALTER TABLE products ADD COLUMN unit_volume_m3 REAL DEFAULT 0.005`,
+    // M24 WMS Extended Columns Migration
+    `ALTER TABLE wave_picks ADD COLUMN assigned_picker_id INTEGER`,
+    `ALTER TABLE wave_picks ADD COLUMN progress TEXT DEFAULT '0%'`,
+    `ALTER TABLE wave_picks ADD COLUMN orders_count INTEGER DEFAULT 1`,
+    `ALTER TABLE wave_picks ADD COLUMN total_lines INTEGER DEFAULT 1`,
+    `ALTER TABLE wave_picks ADD COLUMN zone_code TEXT DEFAULT 'ZONE-A'`,
+    `ALTER TABLE wave_picks ADD COLUMN created_at INTEGER`,
+    `ALTER TABLE wave_picks ADD COLUMN updated_at INTEGER`,
+    `ALTER TABLE wave_pick_items ADD COLUMN product_id INTEGER`,
+    `ALTER TABLE wave_pick_items ADD COLUMN product_name TEXT`,
+    `ALTER TABLE wave_pick_items ADD COLUMN location_id INTEGER`,
+    `ALTER TABLE wave_pick_items ADD COLUMN assigned_bin TEXT`,
+    `ALTER TABLE wave_pick_items ADD COLUMN lot_no TEXT`,
+    `ALTER TABLE wave_pick_items ADD COLUMN serial_no TEXT`,
+    `ALTER TABLE wave_pick_items ADD COLUMN picked_qty INTEGER DEFAULT 0`,
+    `ALTER TABLE wave_pick_items ADD COLUMN status TEXT DEFAULT 'PENDING'`,
+    `ALTER TABLE wave_pick_items ADD COLUMN created_at INTEGER`,
+    `ALTER TABLE lpn ADD COLUMN carton_size TEXT DEFAULT 'Box Medium (40x30x20cm)'`,
+    `ALTER TABLE lpn ADD COLUMN weight TEXT DEFAULT '5.0 kg'`,
+    `ALTER TABLE lpn ADD COLUMN so_code TEXT`,
+    `ALTER TABLE lpn ADD COLUMN status TEXT DEFAULT 'PACKING'`,
+    `ALTER TABLE lpn ADD COLUMN warehouse_id INTEGER`,
+    `ALTER TABLE lpn ADD COLUMN location_id INTEGER`,
+    `ALTER TABLE lpn ADD COLUMN sealed_by_user_id INTEGER`,
+    `ALTER TABLE lpn ADD COLUMN sealed_at INTEGER`,
+    `ALTER TABLE lpn ADD COLUMN created_at INTEGER`,
+    `ALTER TABLE lpn ADD COLUMN updated_at INTEGER`,
+    `ALTER TABLE lpn_contents ADD COLUMN product_id INTEGER`,
+    `ALTER TABLE lpn_contents ADD COLUMN product_name TEXT`,
+    `ALTER TABLE lpn_contents ADD COLUMN lot_no TEXT`,
+    `ALTER TABLE lpn_contents ADD COLUMN serial_no TEXT`,
+    `ALTER TABLE lpn_contents ADD COLUMN created_at INTEGER`,
+    `ALTER TABLE dock_appointments ADD COLUMN warehouse_id INTEGER`,
+    `ALTER TABLE dock_appointments ADD COLUMN dock_type TEXT DEFAULT 'INBOUND'`,
+    `ALTER TABLE dock_appointments ADD COLUMN po_code TEXT`,
+    `ALTER TABLE dock_appointments ADD COLUMN so_code TEXT`,
+    `ALTER TABLE dock_appointments ADD COLUMN check_in_time INTEGER`,
+    `ALTER TABLE dock_appointments ADD COLUMN check_out_time INTEGER`,
+    `ALTER TABLE dock_appointments ADD COLUMN notes TEXT`,
+    `ALTER TABLE dock_appointments ADD COLUMN created_at INTEGER`,
+    `ALTER TABLE dock_appointments ADD COLUMN updated_at INTEGER`,
+    // M10 Strategic Sourcing & RFQ (Phase 1) Foundation
+    `CREATE TABLE IF NOT EXISTS sourcing_packages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      package_code TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'Direct Materials',
+      estimated_budget REAL NOT NULL DEFAULT 0,
+      cost_center TEXT NOT NULL DEFAULT 'CC-PROCUREMENT',
+      submission_deadline INTEGER,
+      status TEXT NOT NULL DEFAULT 'DRAFT',
+      description TEXT,
+      cancellation_reason TEXT,
+      created_by INTEGER,
+      created_at INTEGER,
+      updated_at INTEGER
+    )`,
+    `ALTER TABLE srm_rfqs ADD COLUMN package_id INTEGER`,
+    `ALTER TABLE srm_bids ADD COLUMN round_number INTEGER DEFAULT 1`,
+    `CREATE INDEX IF NOT EXISTS sourcing_packages_code_idx ON sourcing_packages (package_code)`,
+    `CREATE INDEX IF NOT EXISTS sourcing_packages_status_idx ON sourcing_packages (status)`,
+    `CREATE INDEX IF NOT EXISTS sourcing_packages_cost_center_idx ON sourcing_packages (cost_center)`,
+    `CREATE INDEX IF NOT EXISTS srm_rfqs_package_id_idx ON srm_rfqs (package_id)`,
+    `CREATE INDEX IF NOT EXISTS srm_rfqs_status_idx ON srm_rfqs (status)`,
+    `CREATE INDEX IF NOT EXISTS srm_rfq_items_rfq_id_idx ON srm_rfq_items (rfq_id)`,
+    `CREATE INDEX IF NOT EXISTS srm_rfq_items_product_id_idx ON srm_rfq_items (product_id)`,
+    `CREATE INDEX IF NOT EXISTS srm_rfq_suppliers_rfq_id_idx ON srm_rfq_suppliers (rfq_id)`,
+    `CREATE INDEX IF NOT EXISTS srm_rfq_suppliers_supplier_id_idx ON srm_rfq_suppliers (supplier_id)`,
+    `CREATE INDEX IF NOT EXISTS srm_bids_rfq_id_idx ON srm_bids (rfq_id)`,
+    `CREATE INDEX IF NOT EXISTS srm_bids_supplier_id_idx ON srm_bids (supplier_id)`,
+    `CREATE INDEX IF NOT EXISTS srm_bids_round_number_idx ON srm_bids (round_number)`,
+    `CREATE INDEX IF NOT EXISTS srm_bid_items_bid_id_idx ON srm_bid_items (bid_id)`,
+    `CREATE INDEX IF NOT EXISTS srm_bid_items_rfq_item_id_idx ON srm_bid_items (rfq_item_id)`,
+    `CREATE INDEX IF NOT EXISTS sourcing_evaluations_rfq_id_idx ON sourcing_evaluations (rfq_id)`,
+    `CREATE INDEX IF NOT EXISTS sourcing_evaluations_bid_id_idx ON sourcing_evaluations (bid_id)`,
+    `CREATE INDEX IF NOT EXISTS sourcing_awards_rfq_id_idx ON sourcing_awards (rfq_id)`,
+    `CREATE INDEX IF NOT EXISTS sourcing_awards_bid_id_idx ON sourcing_awards (bid_id)`,
+    `CREATE INDEX IF NOT EXISTS sourcing_awards_supplier_id_idx ON sourcing_awards (supplier_id)`,
+    `ALTER TABLE srm_rfqs ADD COLUMN current_round INTEGER DEFAULT 1`,
+    `CREATE TABLE IF NOT EXISTS srm_auction_rounds (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      rfq_id INTEGER NOT NULL REFERENCES srm_rfqs(id),
+      round_number INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      target_reduction_percent REAL DEFAULT 0,
+      ceiling_price REAL,
+      deadline INTEGER,
+      notes TEXT,
+      opened_by INTEGER REFERENCES users(id),
+      opened_at INTEGER,
+      closed_at INTEGER
+    )`,
+    `CREATE INDEX IF NOT EXISTS srm_auction_rounds_rfq_id_idx ON srm_auction_rounds (rfq_id)`,
+    `CREATE INDEX IF NOT EXISTS srm_auction_rounds_round_num_idx ON srm_auction_rounds (round_number)`
   ];
 
   for (const stmt of migrations) {
@@ -267,19 +389,57 @@ export async function bootstrapDatabase() {
         VALUES (2, 'WH-SOUTH', 'Kho Chi Nhánh Miền Nam', 'BRANCH', 'Khu Công Nghiệp Tân Bình, TP.HCM', 1)
       `);
 
+      // 6.1 Seed Full 5-tier Hierarchy for WH-MAIN if needed
       await client.execute(`
-        INSERT INTO warehouse_locations (id, warehouse_id, code, name, type, is_active, is_picking)
-        VALUES (1, 1, 'LOC-A-01-01', 'Khu A - Kệ 01 - Tầng 1', 'BIN', 1, 1)
-      `);
-      await client.execute(`
-        INSERT INTO warehouse_locations (id, warehouse_id, code, name, type, is_active, is_picking)
-        VALUES (2, 1, 'LOC-A-01-02', 'Khu A - Kệ 01 - Tầng 2', 'BIN', 1, 1)
-      `);
-      await client.execute(`
-        INSERT INTO warehouse_locations (id, warehouse_id, code, name, type, is_active, is_picking)
-        VALUES (3, 2, 'LOC-S-01-01', 'Khu Nam - Kệ 01', 'BIN', 1, 1)
+        INSERT OR IGNORE INTO warehouse_locations (id, warehouse_id, code, name, type, parent_id, zone_type, max_weight_capacity, current_weight, max_volume_capacity, current_volume, barcode, is_active, is_picking)
+        VALUES 
+        -- ZONES (Level 1)
+        (10, 1, 'ZONE-DRY', 'Khu Khô Lưu Trữ Tổng Hợp', 'ZONE', NULL, 'DRY', 25000, 12600, 120, 65, 'ZN-WH1-DRY', 1, 1),
+        (20, 1, 'ZONE-COLD', 'Khu Kho Lạnh Y Tế & Dược Phẩm (2-8°C)', 'ZONE', NULL, 'COLD', 15000, 6800, 80, 38, 'ZN-WH1-COLD', 1, 1),
+        (30, 1, 'ZONE-BULKY', 'Khu Hàng Cồng Kềnh & Pallet Nặng', 'ZONE', NULL, 'BULKY', 50000, 32000, 300, 195, 'ZN-WH1-BULKY', 1, 0),
+        (40, 1, 'ZONE-QC', 'Khu Vực Cách Ly KCS / IQC Chờ Thẩm Định', 'ZONE', NULL, 'QUARANTINE', 10000, 1420, 50, 8, 'ZN-WH1-QC', 1, 0),
+
+        -- AISLES (Level 2)
+        (100, 1, 'AISLE-A01', 'Dãy Aisle A01 - Kệ Chọn Nhanh', 'AISLE', 10, 'DRY', 12000, 6200, 60, 32, 'AISLE-WH1-A01', 1, 1),
+        (101, 1, 'AISLE-A02', 'Dãy Aisle A02 - Kệ Lưu Trữ Phổ Thông', 'AISLE', 10, 'DRY', 13000, 6400, 60, 33, 'AISLE-WH1-A02', 1, 1),
+        (200, 1, 'AISLE-C01', 'Dãy Kệ Lạnh Y Tế C01', 'AISLE', 20, 'COLD', 15000, 6800, 80, 38, 'AISLE-WH1-C01', 1, 1),
+        (300, 1, 'AISLE-B01', 'Dãy Pallet Nền B01', 'AISLE', 30, 'BULKY', 50000, 32000, 300, 195, 'AISLE-WH1-B01', 1, 0),
+        (400, 1, 'AISLE-Q01', 'Dãy Cách Ly KCS Q01', 'AISLE', 40, 'QUARANTINE', 10000, 1420, 50, 8, 'AISLE-WH1-Q01', 1, 0),
+
+        -- RACKS (Level 3)
+        (1000, 1, 'RACK-A01-R01', 'Giá Kệ A01-R01 (Tải Trọng Chuẩn)', 'RACK', 100, 'DRY', 6000, 3100, 30, 16, 'RACK-WH1-A01-R01', 1, 1),
+        (1001, 1, 'RACK-A01-R02', 'Giá Kệ A01-R02 (Gần Đầy Tải - 94%)', 'RACK', 100, 'DRY', 5000, 4700, 25, 23, 'RACK-WH1-A01-R02', 1, 1),
+        (2000, 1, 'RACK-C01-R01', 'Kệ Lạnh C01-R01 (Bảo Quản Thiết Bị)', 'RACK', 200, 'COLD', 7500, 3400, 40, 19, 'RACK-WH1-C01-R01', 1, 1),
+        (3000, 1, 'RACK-B01-R01', 'Kệ Heavy-Duty Pallet B01-R01', 'RACK', 300, 'BULKY', 25000, 16000, 150, 98, 'RACK-WH1-B01-R01', 1, 0),
+        (4000, 1, 'RACK-Q01-R01', 'Kệ KCS Phân Loại Lỗi Q01-R01', 'RACK', 400, 'QUARANTINE', 5000, 1420, 25, 8, 'RACK-WH1-Q01-R01', 1, 0),
+
+        -- BINS (Level 4/5)
+        (10001, 1, 'BIN-A01-01', 'Ô Kệ A01-R01-Tầng 1 (Pick Face)', 'BIN', 1000, 'DRY', 1500, 950, 5.0, 3.2, 'BIN-WH1-A01-01', 1, 1),
+        (10002, 1, 'BIN-A01-02', 'Ô Kệ A01-R01-Tầng 2 (Lưu Trữ)', 'BIN', 1000, 'DRY', 1500, 1200, 5.0, 4.0, 'BIN-WH1-A01-02', 1, 1),
+        (10003, 1, 'BIN-A01-03', 'Ô Kệ A01-R02-Tầng 1 (Cảnh Báo Quá Tải 96.7%)', 'BIN', 1001, 'DRY', 1500, 1450, 5.0, 4.8, 'BIN-WH1-A01-03', 1, 1),
+        (20001, 1, 'BIN-C01-01', 'Ô Kệ Lạnh C01-01 (Monitor Y Tế 2-8°C)', 'BIN', 2000, 'COLD', 1200, 600, 4.0, 2.0, 'BIN-WH1-C01-01', 1, 1),
+        (20002, 1, 'BIN-C01-02', 'Ô Kệ Lạnh C01-02 (Máy ECG Y Tế 2-8°C)', 'BIN', 2000, 'COLD', 1200, 750, 4.0, 2.5, 'BIN-WH1-C01-02', 1, 1),
+        (30001, 1, 'BIN-B01-P01', 'Vị Trí Pallet Nền B01-P01 (Tải Trọng Lớn)', 'BIN', 3000, 'BULKY', 8000, 5400, 30.0, 22.0, 'BIN-WH1-B01-P01', 1, 0),
+        (40001, 1, 'BIN-QA01', 'Ô Cách Ly KCS IQC Chờ Tái Kiểm', 'BIN', 4000, 'QUARANTINE', 2000, 420, 8.0, 2.0, 'BIN-WH1-QA01', 1, 0)
       `);
     }
+
+    // 6.2 Ensure products have storage conditions and unit weights configured
+    await client.execute(`
+      UPDATE products SET storage_condition = 'COLD', unit_weight_kg = 8.5 WHERE sku = 'SKU-MED-MON' OR name LIKE '%Monitor%' OR name LIKE '%màn hình theo dõi%'
+    `);
+    await client.execute(`
+      UPDATE products SET storage_condition = 'COLD', unit_weight_kg = 5.2 WHERE sku = 'SKU-MED-ECG' OR name LIKE '%ECG%' OR name LIKE '%Điện tim%'
+    `);
+    await client.execute(`
+      UPDATE products SET storage_condition = 'DRY', unit_weight_kg = 0.15 WHERE sku = 'SKU-RAM-16G' OR name LIKE '%RAM%'
+    `);
+    await client.execute(`
+      UPDATE products SET storage_condition = 'DRY', unit_weight_kg = 0.08 WHERE sku = 'SKU-SSD-1TB' OR name LIKE '%SSD%'
+    `);
+    await client.execute(`
+      UPDATE products SET storage_condition = 'BULKY', unit_weight_kg = 45.0 WHERE name LIKE '%Máy siêu âm%' OR name LIKE '%Server%'
+    `);
 
     // 7. Seed Default Categories & Sample Products if none exist
     const categoryNames = Array.from(new Set(ENTERPRISE_MASTER_PRODUCTS.map(p => p.category || 'Chung')));
@@ -662,6 +822,45 @@ export async function bootstrapDatabase() {
         (2, 1, 'FT2624098123915', -110000000, 'THANH TOAN TIEN MUA NVL HOADON INV-AP-UNIFIED-859744 MINH PHAT', 1787893800000, 'UNMATCHED'),
         (3, 1, 'FT2624098124001', 65000000, 'CCTY PHONG VU CHUYEN TIEN DAT COC SO-2026-018', 1787907600000, 'UNMATCHED'),
         (4, 1, 'FT2624098124088', -1250000, 'PHI DICH VU QUAN LY TAI KHOAN DOANH NGHIEP THANG 08/2026', 1787913600000, 'UNMATCHED')
+      `);
+    }
+
+    // Seed M24 WMS Extended (Wave picks, LPNs, Dock Appointments)
+    const waveCount = await client.execute(`SELECT COUNT(*) as count FROM wave_picks`);
+    if (Number(waveCount.rows[0]?.count || 0) === 0) {
+      const nowSec = Math.floor(Date.now() / 1000);
+      await client.execute(`
+        INSERT INTO wave_picks (id, wave_code, warehouse_id, zone_code, orders_count, total_lines, status, progress, created_at) VALUES
+        (1, 'WAVE-2026-001', 1, 'ZONE-A (Linh Kiện)', 3, 4, 'IN_PROGRESS', '50%', ${nowSec}),
+        (2, 'WAVE-2026-002', 1, 'ZONE-B (Thành Phẩm)', 2, 2, 'PLANNING', '0%', ${nowSec}),
+        (3, 'WAVE-2026-003', 1, 'ZONE-C (Nguyên Liệu)', 5, 8, 'RELEASED_TO_PICKER', '25%', ${nowSec})
+      `);
+
+      await client.execute(`
+        INSERT INTO wave_pick_items (id, wave_id, product_id, sku, product_name, requested_qty, picked_qty, assigned_bin, status, created_at) VALUES
+        (1, 1, 1, 'PRD-001', 'Màn Hình Công Nghiệp LCD 15.6 inch', 10, 10, 'LOC-A-01-01', 'PICKED', ${nowSec}),
+        (2, 1, 2, 'PRD-002', 'Bộ Điều Khiển Lập Trình PLC S7-1200', 5, 0, 'LOC-A-01-02', 'PENDING', ${nowSec}),
+        (3, 2, 1, 'PRD-001', 'Màn Hình Công Nghiệp LCD 15.6 inch', 20, 0, 'LOC-A-01-01', 'PENDING', ${nowSec})
+      `);
+
+      await client.execute(`
+        INSERT INTO lpn (id, lpn_code, carton_size, weight, so_code, status, warehouse_id, location_id, created_at) VALUES
+        (1, 'LPN-2026-001', 'Euro Pallet (120x80cm)', '245.0 kg', 'SO-2026-0120', 'PACKING', 1, 1, ${nowSec}),
+        (2, 'LPN-2026-002', 'Box Medium (40x30x20cm)', '12.5 kg', 'SO-2026-0122', 'PUTAWAY', 1, 2, ${nowSec}),
+        (3, 'LPN-2026-003', 'Box Large (60x40x40cm)', '35.0 kg', 'SO-2026-0125', 'SEALED', 1, 1, ${nowSec})
+      `);
+
+      await client.execute(`
+        INSERT INTO lpn_contents (id, lpn_id, product_id, sku, product_name, quantity, lot_no, created_at) VALUES
+        (1, 1, 1, 'PRD-001', 'Màn Hình Công Nghiệp LCD 15.6 inch', 50, 'LOT-LCD-2026-08A', ${nowSec}),
+        (2, 2, 2, 'PRD-002', 'Bộ Điều Khiển Lập Trình PLC S7-1200', 10, 'LOT-PLC-2026-03B', ${nowSec})
+      `);
+
+      await client.execute(`
+        INSERT INTO dock_appointments (id, appointment_code, dock_name, dock_type, carrier, po_code, so_code, time_slot, status, warehouse_id, created_at) VALUES
+        (1, 'APT-2026-001', 'Dock Bay 01 (Inbound)', 'INBOUND', 'Giao Hàng Nhanh (GHN Express)', 'PO-2026-0089', NULL, '08:00 - 10:00', 'CHECKED_IN', 1, ${nowSec}),
+        (2, 'APT-2026-002', 'Dock Bay 02 (Outbound)', 'OUTBOUND', 'Viettel Post Logistics', NULL, 'SO-2026-0120', '10:30 - 12:00', 'SCHEDULED', 1, ${nowSec}),
+        (3, 'APT-2026-003', 'Dock Bay 03 (Heavy Duty)', 'INBOUND', 'DHL Global Forwarding', 'PO-2026-0092', NULL, '14:00 - 16:00', 'SCHEDULED', 1, ${nowSec})
       `);
     }
 

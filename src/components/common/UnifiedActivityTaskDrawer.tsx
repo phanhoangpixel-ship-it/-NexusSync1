@@ -478,42 +478,42 @@ export const UnifiedActivityTaskDrawer: React.FC<UnifiedActivityTaskDrawerProps>
       <div
         id="unified-drawer"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-200 cursor-default select-text"
+        className="w-full max-w-lg bg-white dark:bg-slate-900 h-full shadow-2xl border-l border-slate-200 dark:border-slate-800 flex flex-col animate-in slide-in-from-right duration-200 cursor-default select-text"
       >
         {/* Drawer Header */}
-        <div className="p-5 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between">
+        <div className="p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/90 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
               <Layers className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900">Trung tâm Hoạt động & Tác vụ</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Hàng chờ SLA & Thông báo hệ thống hợp nhất</p>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">Trung tâm Hoạt động & Tác vụ</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Hàng chờ SLA & Thông báo hệ thống hợp nhất</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-200/50 transition-colors cursor-pointer"
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex border-b border-slate-200 bg-white px-3 pt-2 gap-1.5 overflow-x-auto">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 pt-2 gap-1.5 overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveTab('workqueue')}
             className={`pb-3 px-2.5 text-xs font-bold transition-all border-b-2 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
               activeTab === 'workqueue'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <Clock className="w-3.5 h-3.5" />
             <span>Công việc</span>
             {pendingWorkCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-mono font-bold">
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 text-[10px] font-mono font-bold">
                 {pendingWorkCount}
               </span>
             )}
@@ -524,14 +524,14 @@ export const UnifiedActivityTaskDrawer: React.FC<UnifiedActivityTaskDrawerProps>
             onClick={() => setActiveTab('notifications')}
             className={`pb-3 px-2.5 text-xs font-bold transition-all border-b-2 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
               activeTab === 'notifications'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <Bell className="w-3.5 h-3.5" />
             <span>Thông báo</span>
             {unreadNotifCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-mono font-bold">
+              <span className="px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 text-[10px] font-mono font-bold">
                 {unreadNotifCount}
               </span>
             )}
@@ -542,8 +542,8 @@ export const UnifiedActivityTaskDrawer: React.FC<UnifiedActivityTaskDrawerProps>
             onClick={() => setActiveTab('activity_log')}
             className={`pb-3 px-2.5 text-xs font-bold transition-all border-b-2 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
               activeTab === 'activity_log'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
             title="Nhật ký thực thi tác vụ WorkQueue"
           >
@@ -553,8 +553,8 @@ export const UnifiedActivityTaskDrawer: React.FC<UnifiedActivityTaskDrawerProps>
               <span
                 className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
                   activityLogs.some((l) => l.status === 'FAILURE')
-                    ? 'bg-rose-100 text-rose-700'
-                    : 'bg-slate-100 text-slate-700'
+                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300'
+                    : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
                 }`}
               >
                 {activityLogs.length}
@@ -567,8 +567,8 @@ export const UnifiedActivityTaskDrawer: React.FC<UnifiedActivityTaskDrawerProps>
             onClick={() => setActiveTab('preferences')}
             className={`pb-3 px-2 text-xs font-bold transition-all border-b-2 flex items-center gap-1 cursor-pointer whitespace-nowrap ${
               activeTab === 'preferences'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
             title="Cài đặt bộ lọc thông báo"
           >
@@ -1629,13 +1629,13 @@ export const UnifiedActivityTaskDrawer: React.FC<UnifiedActivityTaskDrawerProps>
         {activeTab === 'preferences' && (
           <div className="flex-1 overflow-y-auto p-5 space-y-6">
             <div>
-              <h4 className="text-sm font-bold text-slate-900 mb-1">Cài đặt bộ lọc Thông báo & Cảnh báo</h4>
-              <p className="text-xs text-slate-500">Tùy chỉnh các loại thông báo bạn muốn nhận trên hệ thống.</p>
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">Cài đặt bộ lọc Thông báo & Cảnh báo</h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Tùy chỉnh các loại thông báo bạn muốn nhận trên hệ thống.</p>
             </div>
 
             <div className="space-y-4">
               <div className="space-y-3">
-                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">Theo mức độ nghiêm trọng</span>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">Theo mức độ nghiêm trọng</span>
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { key: 'danger', label: 'Nghiêm trọng (Danger)' },
@@ -1643,12 +1643,12 @@ export const UnifiedActivityTaskDrawer: React.FC<UnifiedActivityTaskDrawerProps>
                     { key: 'success', label: 'Thành công (Success)' },
                     { key: 'info', label: 'Thông tin (Info)' },
                   ].map((item) => (
-                    <label key={item.key} className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 cursor-pointer text-xs font-semibold text-slate-800">
+                    <label key={item.key} className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 cursor-pointer text-xs font-semibold text-slate-800 dark:text-slate-200 transition-colors">
                       <input
                         type="checkbox"
                         checked={(preferences as any)[item.key]}
                         onChange={(e) => onPreferencesChange({ ...preferences, [item.key]: e.target.checked })}
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        className="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-slate-900"
                       />
                       <span>{item.label}</span>
                     </label>
@@ -1656,8 +1656,8 @@ export const UnifiedActivityTaskDrawer: React.FC<UnifiedActivityTaskDrawerProps>
                 </div>
               </div>
 
-              <div className="space-y-3 pt-4 border-t border-slate-100">
-                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">Theo phân hệ nghiệp vụ</span>
+              <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">Theo phân hệ nghiệp vụ</span>
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { key: 'inventory', label: 'Kho & VMS' },
@@ -1666,12 +1666,12 @@ export const UnifiedActivityTaskDrawer: React.FC<UnifiedActivityTaskDrawerProps>
                     { key: 'sales', label: 'Bán hàng & CRM' },
                     { key: 'system', label: 'Hệ thống & EventBus' },
                   ].map((item) => (
-                    <label key={item.key} className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 cursor-pointer text-xs font-semibold text-slate-800">
+                    <label key={item.key} className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 cursor-pointer text-xs font-semibold text-slate-800 dark:text-slate-200 transition-colors">
                       <input
                         type="checkbox"
                         checked={(preferences as any)[item.key]}
                         onChange={(e) => onPreferencesChange({ ...preferences, [item.key]: e.target.checked })}
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        className="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 bg-white dark:bg-slate-900"
                       />
                       <span>{item.label}</span>
                     </label>
@@ -1682,7 +1682,7 @@ export const UnifiedActivityTaskDrawer: React.FC<UnifiedActivityTaskDrawerProps>
           </div>
         )}
 
-        <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-mono">
+        <div className="p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-mono">
           <span>Trung tâm Hoạt động Hợp nhất</span>
           <span>NexusSync v1.0</span>
         </div>

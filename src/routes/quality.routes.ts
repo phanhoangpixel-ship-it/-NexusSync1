@@ -1,364 +1,523 @@
-import { Router } from "express";
+import { Router, Request, Response, NextFunction } from "express";
+import { QualityService, getAqlSampleSize } from "../../services/qualityService";
 import { db } from "../../db/index";
 import * as schema from "../../db/schema";
-import { sql } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 
 const router = Router();
 
-// In-Memory State for Realtime Synchronization with fallback
-let quarantineStore: any[] = [
-  {
-    id: 'Q-2026-001',
-    sourceType: 'PO Inbound GRN',
-    sourceRef: 'GRN-2026-084',
-    itemSku: 'RM-STEEL-01',
-    itemName: 'Thép Tấm Cuộn Cán Nóng SS400',
-    quantity: 500,
-    unit: 'Kg',
-    supplierOrDept: 'Công ty CP Gang Thép Thái Nguyên',
-    receivedDate: '02/09/2026',
-    status: 'PENDING_INSPECTION',
-    lotNumber: 'LOT-202609-01'
-  },
-  {
-    id: 'Q-2026-002',
-    sourceType: 'MES Work Order Output',
-    sourceRef: 'WO-2026-042',
-    itemSku: 'FG-VALVE-50',
-    itemName: 'Van Công Nghiệp Khí Nén DN50',
-    quantity: 60,
-    unit: 'Bộ',
-    supplierOrDept: 'Phân Xưởng Cơ Khí Chính Xác',
-    receivedDate: '03/09/2026',
-    status: 'PENDING_INSPECTION',
-    lotNumber: 'LOT-202609-FG02'
-  },
-  {
-    id: 'Q-2026-003',
-    sourceType: 'PO Inbound GRN',
-    sourceRef: 'GRN-2026-089',
-    itemSku: 'ELEC-SENS-08',
-    itemName: 'Cảm Biến Áp Suất Điện Tử 4-20mA',
-    quantity: 120,
-    unit: 'Cái',
-    supplierOrDept: 'Omron Industrial Distributor',
-    receivedDate: '03/09/2026',
-    status: 'PENDING_INSPECTION',
-    lotNumber: 'LOT-202609-E08'
-  },
-  {
-    id: 'Q-2026-004',
-    sourceType: 'MES Work Order Output',
-    sourceRef: 'WO-2026-051',
-    itemSku: 'ALUM-BRACKET-2',
-    itemName: 'Khung Nhôm Định Hình Anodize 40x40',
-    quantity: 350,
-    unit: 'Mét',
-    supplierOrDept: 'Tổ Gia Công Khung Vỏ',
-    receivedDate: '05/09/2026',
-    status: 'PENDING_INSPECTION',
-    lotNumber: 'LOT-202609-AL04'
-  }
-];
-
-let inspectionsStore: any[] = [
-  { id: 'QA-2608-001', type: 'IQC (Đầu vào)', item: 'Linh kiện điện tử X', date: '28/08/2026', status: 'Passed', inspector: 'Nguyễn Văn A', notes: 'Dung sai điện áp kiểm tra đạt chuẩn ±0.5%' },
-  { id: 'QA-2608-002', type: 'OQC (Đầu ra)', item: 'Máy bơm công nghiệp', date: '28/08/2026', status: 'Failed', inspector: 'Trần Thị B', notes: 'Áp lực thử tải không đạt 10 bar định mức' },
-  { id: 'QA-2608-003', type: 'IPQC (Trong SX)', item: 'Vỏ máy nhựa định hình', date: '27/08/2026', status: 'Pending', inspector: 'Lê Văn C', notes: 'Đang kiểm tra độ co ngót và độ bóng bề mặt' },
-  { id: 'QA-2608-004', type: 'IQC (Đầu vào)', item: 'Ốc vít thép không gỉ SUS304', date: '27/08/2026', status: 'Passed', inspector: 'Nguyễn Văn A', notes: 'Kiểm tra độ cứng và kiểm tra phun muối đạt' },
-  { id: 'QA-2608-005', type: 'OQC (Đầu ra)', item: 'Hộp số giảm tốc NMRV-050', date: '26/08/2026', status: 'Passed', inspector: 'Phạm Minh D', notes: 'Tiếng ồn khi vận hành đạt < 65dB' },
-  { id: 'QA-2608-006', type: 'IQC (Đầu vào)', item: 'Đồng đỏ tấm C1100 dày 2mm', date: '25/08/2026', status: 'Passed', inspector: 'Trần Thị B', notes: 'Chứng chỉ CO/CQ chuẩn, độ tinh khiết > 99.9%' }
-];
-
-let ncrsStore: any[] = [
-  { id: 'NCR-2608-01', refId: 'QA-2608-002', severity: 'High', description: 'Động cơ không đạt tốc độ vòng quay tiêu chuẩn (Thiếu 150 RPM)', status: 'Open', action: 'Rework (Quấn lại stator & thay vòng bi)' },
-  { id: 'NCR-2608-02', refId: 'QA-2607-015', severity: 'Medium', description: 'Trầy xước bề mặt sơn tĩnh điện vượt quá 5% diện tích', status: 'Closed', action: 'Scrap & Xử lý bồi thường nhà cung ứng' },
-  { id: 'NCR-2608-03', refId: 'QA-2608-009', severity: 'Low', description: 'Sai lệch nhãn dán thông số cảnh báo an toàn', status: 'Open', action: 'In lại nhãn & Dán bổ sung tại phân xưởng' }
-];
-
-// ================= 1. QUARANTINE GATE API =================
-// GET Quarantine Items
-router.get("/api/quality/quarantine", (req, res) => {
-  try {
-    res.json(quarantineStore);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST New Quarantine Lot
-router.post("/api/quality/quarantine", (req, res) => {
-  try {
-    const { sourceType, sourceRef, itemSku, itemName, quantity, unit, supplierOrDept, lotNumber } = req.body;
-    const newItem = {
-      id: `Q-2026-${String(quarantineStore.length + 1).padStart(3, '0')}`,
-      sourceType: sourceType || 'PO Inbound GRN',
-      sourceRef: sourceRef || `GRN-2026-${Date.now().toString().slice(-3)}`,
-      itemSku: itemSku || 'RM-NEW-01',
-      itemName: itemName || 'Vật tư nhập kho chờ kiểm định',
-      quantity: Number(quantity) || 100,
-      unit: unit || 'Đơn vị',
-      supplierOrDept: supplierOrDept || 'Nhà cung ứng / Xưởng',
-      receivedDate: new Date().toLocaleDateString('vi-VN'),
-      status: 'PENDING_INSPECTION',
-      lotNumber: lotNumber || `LOT-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Date.now().toString().slice(-2)}`
-    };
-    quarantineStore.unshift(newItem);
-    res.status(201).json(newItem);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST Approve Quarantine Lot (Rule #03: Release to Available Inventory)
-router.post("/api/quality/quarantine/:id/approve", (req, res) => {
-  try {
-    const { id } = req.params;
-    const itemIndex = quarantineStore.findIndex(q => q.id === id || q.lotNumber === id);
-    if (itemIndex === -1) {
-      return res.status(404).json({ error: "Không tìm thấy lô hàng cách ly." });
+// RBAC Middleware Helper for QMS permissions
+function requireQualityPermission(permission: string) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const user = (req as any).user;
+    if (!user) {
+      if (process.env.NODE_ENV !== 'production') {
+        return next(); // Default to dev super admin
+      }
+      return res.status(401).json({ error: "UNAUTHORIZED", message: "Yêu cầu đăng nhập." });
     }
 
-    const item = quarantineStore[itemIndex];
-    // Remove from quarantine store
-    quarantineStore.splice(itemIndex, 1);
-
-    // Create a Passed Inspection record
-    const newInspection = {
-      id: `QA-${Date.now().toString().slice(-4)}`,
-      type: item.sourceType.includes('PO') ? 'IQC (Đầu vào)' : 'OQC (Đầu ra)',
-      item: `${item.itemName} (${item.lotNumber})`,
-      date: new Date().toLocaleDateString('vi-VN'),
-      status: 'Passed',
-      inspector: 'Trưởng nhóm KCS (QA Approved)',
-      notes: `Đã thẩm định đạt chuẩn kỹ thuật dung sai. Giải phóng ${item.quantity} ${item.unit} sang kho khả dụng (Available).`
-    };
-    inspectionsStore.unshift(newInspection);
-
-    res.json({
-      success: true,
-      message: `Lô hàng ${item.lotNumber} đã được nghiệm thu và giải phóng sang kho khả dụng.`,
-      inspection: newInspection,
-      quarantineItems: quarantineStore
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST Reject Quarantine Lot (Lock & Create NCR)
-router.post("/api/quality/quarantine/:id/reject", (req, res) => {
-  try {
-    const { id } = req.params;
-    const itemIndex = quarantineStore.findIndex(q => q.id === id || q.lotNumber === id);
-    if (itemIndex === -1) {
-      return res.status(404).json({ error: "Không tìm thấy lô hàng cách ly." });
+    if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || user.role === 'QA_MANAGER' || user.role === 'QC_INSPECTOR') {
+      return next();
     }
 
-    const item = quarantineStore[itemIndex];
-    quarantineStore.splice(itemIndex, 1);
+    const permissions: string[] = user.permissions || [];
+    if (permissions.includes(permission) || permissions.includes('quality.*') || permissions.includes('*')) {
+      return next();
+    }
 
-    // Create a Failed Inspection record
-    const newInspection = {
-      id: `QA-${Date.now().toString().slice(-4)}`,
-      type: item.sourceType.includes('PO') ? 'IQC (Đầu vào)' : 'OQC (Đầu ra)',
-      item: `${item.itemName} (${item.lotNumber})`,
-      date: new Date().toLocaleDateString('vi-VN'),
-      status: 'Failed',
-      inspector: 'Kỹ sư KCS (QA Rejected)',
-      notes: `Lô hàng không đạt tiêu chuẩn dung sai & ngoại quan. Đã cách ly khóa xuất.`
-    };
-    inspectionsStore.unshift(newInspection);
-
-    // Create an NCR record
-    const newNcr = {
-      id: `NCR-2026-${Date.now().toString().slice(-3)}`,
-      refId: item.sourceRef || newInspection.id,
-      severity: 'High',
-      description: `Lô ${item.lotNumber} (${item.itemName}): Sai lệch thông số kỹ thuật và độ cứng`,
-      status: 'Open',
-      action: item.sourceType.includes('PO') ? 'Return to Vendor (RTV)' : 'Scrap / Rework'
-    };
-    ncrsStore.unshift(newNcr);
-
-    res.json({
-      success: true,
-      message: `Lô hàng ${item.lotNumber} đã bị từ chối và lập biên bản ${newNcr.id}.`,
-      inspection: newInspection,
-      ncr: newNcr,
-      quarantineItems: quarantineStore
+    return res.status(403).json({
+      error: "FORBIDDEN",
+      message: `Tài khoản không có quyền '${permission}' để thực hiện nghiệp vụ này.`,
     });
+  };
+}
+
+// ==========================================
+// 1. KPI SUMMARY & METRICS
+// ==========================================
+router.get("/api/quality/kpi", async (req, res) => {
+  try {
+    const kpi = await QualityService.getKpiSummary();
+    res.json(kpi);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ================= 2. INSPECTIONS API =================
-// GET Inspections
+// ==========================================
+// 2. QUALITY INSPECTION PLANS (M39-F01)
+// ==========================================
+router.get("/api/quality/plans", async (req, res) => {
+  try {
+    const { type, productId, status } = req.query;
+    const plans = await QualityService.getPlans({
+      type: type as string,
+      productId: productId ? Number(productId) : undefined,
+      status: status as string,
+    });
+    res.json(plans);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/api/quality/plans/:id", async (req, res) => {
+  try {
+    const plan = await QualityService.getPlanById(Number(req.params.id));
+    if (!plan) return res.status(404).json({ error: "Không tìm thấy kế hoạch kiểm định." });
+    res.json(plan);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/api/quality/plans", requireQualityPermission("quality.plan.manage"), async (req, res) => {
+  try {
+    const userId = (req as any).user?.id || 1;
+    const plan = await QualityService.createPlan({
+      ...req.body,
+      userId,
+    });
+    res.status(201).json(plan);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 3. QUALITY INSPECTIONS (M39-F02: IQC/PQC/OQC)
+// ==========================================
 router.get("/api/quality/inspections", async (req, res) => {
   try {
-    const rawInspections = await db.select({
-      id: schema.qualityInspections.id,
-      inspectionCode: schema.qualityInspections.inspectionCode,
-      inspectionType: schema.qualityInspections.inspectionType,
-      productId: schema.qualityInspections.productId,
-      productName: schema.products.name,
-      status: schema.qualityInspections.status,
-      decision: schema.qualityInspections.decision,
-      createdAt: schema.qualityInspections.createdAt,
-    }).from(schema.qualityInspections)
-      .leftJoin(schema.products, sql`${schema.products.id} = ${schema.qualityInspections.productId}`)
-      .all();
-
-    if (rawInspections && rawInspections.length > 0) {
-      const formatted = rawInspections.map(r => ({
-        id: r.inspectionCode,
-        type: r.inspectionType || 'IQC (Đầu vào)',
-        item: r.productName || 'Linh kiện kỹ thuật',
-        date: r.createdAt ? new Date(r.createdAt).toLocaleDateString('vi-VN') : 'N/A',
-        status: r.status === 'COMPLETED' ? (r.decision === 'PASSED' ? 'Passed' : 'Failed') : 'Pending',
-        inspector: 'Hệ thống KCS',
-        notes: `Phiếu kiểm định ${r.inspectionCode} - QMS ISO 9001`
-      }));
-
-      // Combine with memory store (avoid duplicates by id)
-      const existingIds = new Set(formatted.map(f => f.id));
-      const merged = [...formatted, ...inspectionsStore.filter(i => !existingIds.has(i.id))];
-      return res.json(merged);
-    }
-
-    res.json(inspectionsStore);
-  } catch (err: any) {
-    res.json(inspectionsStore);
-  }
-});
-
-// POST Create Inspection
-router.post("/api/quality/inspections", async (req, res) => {
-  try {
-    const { type, item, inspector, notes } = req.body;
-    const newRecord = {
-      id: `QA-${Date.now().toString().slice(-4)}`,
-      type: type || 'IQC (Đầu vào)',
-      item: item || 'Linh kiện kiểm tra',
-      date: new Date().toLocaleDateString('vi-VN'),
-      status: 'Pending',
-      inspector: inspector || 'Nguyễn Văn A',
-      notes: notes || 'Kiểm định theo tiêu chuẩn ISO 9001:2015'
-    };
-    inspectionsStore.unshift(newRecord);
-    res.status(201).json(newRecord);
+    const inspections = await QualityService.getInspections();
+    res.json(inspections);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ================= 3. NCR API =================
-// GET NCRs
+router.get("/api/quality/inspections/:id", async (req, res) => {
+  try {
+    const inspection = await QualityService.getInspectionById(Number(req.params.id));
+    if (!inspection) return res.status(404).json({ error: "Không tìm thấy phiếu kiểm định." });
+    res.json(inspection);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/api/quality/inspections", requireQualityPermission("quality.inspection.manage"), async (req, res) => {
+  try {
+    const userId = (req as any).user?.id || 1;
+    const inspection = await QualityService.createInspection({
+      ...req.body,
+      userId,
+    });
+    res.status(201).json(inspection);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/api/quality/inspections/:id/evaluate", requireQualityPermission("quality.inspection.manage"), async (req, res) => {
+  try {
+    const userId = (req as any).user?.id || 1;
+    const updated = await QualityService.submitInspectionResults(Number(req.params.id), {
+      ...req.body,
+      userId,
+    });
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/api/quality/inspections/aql-sample-size", (req, res) => {
+  try {
+    const { lotSize, inspectionLevel } = req.body;
+    const result = getAqlSampleSize(Number(lotSize) || 100, inspectionLevel || 'II');
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 4. NON-CONFORMANCE REPORTS & CAPA (M39-F03)
+// ==========================================
 router.get("/api/quality/ncrs", async (req, res) => {
   try {
-    const rawNcrs = await db.select().from(schema.qualityNcrs).all();
-    if (rawNcrs && rawNcrs.length > 0) {
-      const formatted = rawNcrs.map((r: any) => ({
-        id: r.ncrCode,
-        refId: r.sourceReferenceNo || 'QA-INSP-001',
-        severity: r.severity || 'Medium',
-        description: r.description || 'Lỗi sai lệch quy cách sản phẩm',
-        status: r.status === 'CLOSED' ? 'Closed' : 'Open',
-        action: r.dispositionDecision || 'Rework'
-      }));
-      const existingIds = new Set(formatted.map(f => f.id));
-      const merged = [...formatted, ...ncrsStore.filter(n => !existingIds.has(n.id))];
-      return res.json(merged);
-    }
-    res.json(ncrsStore);
-  } catch (err: any) {
-    res.json(ncrsStore);
-  }
-});
-
-// POST Create NCR
-router.post("/api/quality/ncrs", async (req, res) => {
-  try {
-    const { refId, severity, description, action } = req.body;
-    const newNcr = {
-      id: `NCR-2608-${Date.now().toString().slice(-3)}`,
-      refId: refId || 'QA-INSP-MANUAL',
-      severity: severity || 'Medium',
-      description: description || 'Lỗi sai lệch quy cách kỹ thuật',
-      status: 'Open',
-      action: action || 'Rework (Sửa chữa kỹ thuật)'
-    };
-    ncrsStore.unshift(newNcr);
-    res.status(201).json(newNcr);
+    const ncrs = await QualityService.getNcrs();
+    res.json(ncrs);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST Close NCR
-router.post("/api/quality/ncrs/:id/close", (req, res) => {
+router.get("/api/quality/ncrs/:id", async (req, res) => {
+  try {
+    const ncr = await QualityService.getNcrById(Number(req.params.id));
+    if (!ncr) return res.status(404).json({ error: "Không tìm thấy biên bản NCR." });
+    res.json(ncr);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/api/quality/ncrs", requireQualityPermission("quality.ncr.manage"), async (req, res) => {
+  try {
+    const userId = (req as any).user?.id || 1;
+    const ncr = await QualityService.createNcr({
+      ...req.body,
+      userId,
+    });
+    res.status(201).json(ncr);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/api/quality/ncrs/:id/disposition", requireQualityPermission("quality.ncr.approve"), async (req, res) => {
+  try {
+    const userId = (req as any).user?.id || 1;
+    const ncr = await QualityService.approveNcrDisposition(Number(req.params.id), {
+      ...req.body,
+      userId,
+    });
+    res.json(ncr);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/api/quality/capas", async (req, res) => {
+  try {
+    const capas = await QualityService.getCapas();
+    res.json(capas);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/api/quality/capas", requireQualityPermission("quality.ncr.manage"), async (req, res) => {
+  try {
+    const userId = (req as any).user?.id || 1;
+    const capa = await QualityService.createCapa({
+      ...req.body,
+      userId,
+    });
+    res.status(201).json(capa);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/api/quality/capas/:id/verify", requireQualityPermission("quality.ncr.approve"), async (req, res) => {
+  try {
+    const userId = (req as any).user?.id || 1;
+    const capa = await QualityService.verifyCapa(Number(req.params.id), {
+      ...req.body,
+      userId,
+    });
+    res.json(capa);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 5. BATCH RELEASES & QUARANTINE (M39-F04)
+// ==========================================
+router.get("/api/quality/batch-releases", async (req, res) => {
+  try {
+    const releases = await QualityService.getBatchReleases();
+    res.json(releases);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/api/quality/batch-releases", requireQualityPermission("quality.inspection.manage"), async (req, res) => {
+  try {
+    const userId = (req as any).user?.id || 1;
+    const release = await QualityService.createBatchRelease({
+      ...req.body,
+      userId,
+    });
+    res.status(201).json(release);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/api/quality/batch-releases/:id/post-inventory", requireQualityPermission("quality.ncr.approve"), async (req, res) => {
+  try {
+    const userId = (req as any).user?.id || 1;
+    const release = await QualityService.approveAndPostBatchRelease(Number(req.params.id), {
+      ...req.body,
+      userId,
+    });
+    res.json(release);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 6. QUARANTINE LOTS (REALTIME ADAPTER FOR UI)
+// ==========================================
+router.get("/api/quality/quarantine", async (req, res) => {
+  try {
+    // Return pending inspections and pending releases as quarantine items
+    const inspections = await db.select({
+      id: schema.qcInspections.id,
+      code: schema.qcInspections.code,
+      productId: schema.qcInspections.productId,
+      productName: schema.products.name,
+      productSku: schema.products.sku,
+      lotNumber: schema.qcInspections.lotNumber,
+      sourceDocumentType: schema.qcInspections.sourceDocumentType,
+      sourceDocumentCode: schema.qcInspections.sourceDocumentCode,
+      totalQuantity: schema.qcInspections.totalQuantity,
+      quarantineQuantity: schema.qcInspections.quarantineQuantity,
+      supplierName: schema.suppliers.name,
+      warehouseName: schema.warehouses.name,
+      status: schema.qcInspections.status,
+      createdAt: schema.qcInspections.createdAt,
+    }).from(schema.qcInspections)
+      .leftJoin(schema.products, eq(schema.products.id, schema.qcInspections.productId))
+      .leftJoin(schema.suppliers, eq(schema.suppliers.id, schema.qcInspections.supplierId))
+      .leftJoin(schema.warehouses, eq(schema.warehouses.id, schema.qcInspections.warehouseId))
+      .where(sql`${schema.qcInspections.status} IN ('PENDING', 'IN_PROGRESS', 'CONDITIONAL_PASS')`)
+      .orderBy(desc(schema.qcInspections.id))
+      .all();
+
+    const formatted = inspections.map(i => ({
+      id: `Q-${i.code}`,
+      inspectionId: i.id,
+      sourceType: i.sourceDocumentType || 'PO Inbound GRN',
+      sourceRef: i.sourceDocumentCode || `GRN-${i.id}`,
+      itemSku: i.productSku || 'SKU-GEN',
+      itemName: i.productName || 'Vật tư kỹ thuật',
+      quantity: i.quarantineQuantity || i.totalQuantity,
+      unit: 'Đơn vị',
+      supplierOrDept: i.supplierName || i.warehouseName || 'Nhà cung ứng',
+      receivedDate: i.createdAt ? new Date(i.createdAt).toLocaleDateString('vi-VN') : new Date().toLocaleDateString('vi-VN'),
+      status: 'PENDING_INSPECTION',
+      lotNumber: i.lotNumber || `LOT-${i.code}`,
+    }));
+
+    res.json(formatted);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/api/quality/quarantine/:id/approve", requireQualityPermission("quality.ncr.approve"), async (req, res) => {
   try {
     const { id } = req.params;
-    const { resolutionNotes } = req.body;
-    const ncr = ncrsStore.find(n => n.id === id);
-    if (!ncr) {
-      return res.status(404).json({ error: "Không tìm thấy biên bản NCR." });
+    const userId = (req as any).user?.id || 1;
+
+    // Check if matching inspection by code
+    const rawCode = id.startsWith('Q-') ? id.slice(2) : id;
+    const inspection = await db.select().from(schema.qcInspections)
+      .where(sql`${schema.qcInspections.code} = ${rawCode} OR ${schema.qcInspections.id} = ${Number(id) || 0}`)
+      .get();
+
+    if (inspection) {
+      const evaluated = await QualityService.submitInspectionResults(inspection.id, {
+        results: [],
+        decision: 'ACCEPT',
+        decisionNotes: 'Nghiệm thu đạt chuẩn kỹ thuật & giải phóng kho cách ly',
+        passedQuantity: inspection.totalQuantity,
+        failedQuantity: 0,
+        userId,
+      });
+
+      // If batch release was created, post to inventory
+      if (evaluated?.batchReleaseId) {
+        await QualityService.approveAndPostBatchRelease(evaluated.batchReleaseId, {
+          userId,
+          notes: `Giải phóng trực tiếp từ cổng kiểm định cách ly (${inspection.code})`,
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: `Lô hàng ${inspection.code} đã được nghiệm thu và giải phóng tồn kho khả dụng thành công.`,
+        inspection: evaluated,
+      });
     }
-    ncr.status = 'Closed';
-    if (resolutionNotes) {
-      ncr.action = `${ncr.action} — ${resolutionNotes}`;
-    }
-    res.json({
-      success: true,
-      message: `Biên bản ${id} đã được đóng và lưu hồ sơ kiểm toán.`,
-      ncr
-    });
+
+    res.json({ success: true, message: `Lô hàng ${id} đã được nghiệm thu.` });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ================= 4. ANALYTICS API =================
-// GET Quality Analytics
-router.get("/api/quality/analytics", (req, res) => {
+router.post("/api/quality/quarantine/:id/reject", requireQualityPermission("quality.ncr.approve"), async (req, res) => {
   try {
-    const totalInspections = inspectionsStore.length;
-    const passedCount = inspectionsStore.filter(i => i.status === 'Passed').length;
-    const failedCount = inspectionsStore.filter(i => i.status === 'Failed').length;
-    const pendingCount = inspectionsStore.filter(i => i.status === 'Pending').length;
-    const passRate = totalInspections > 0 ? Math.round((passedCount / totalInspections) * 100) : 98;
+    const { id } = req.params;
+    const userId = (req as any).user?.id || 1;
 
-    const openNcrs = ncrsStore.filter(n => n.status === 'Open').length;
-    const highSeverityNcrs = ncrsStore.filter(n => n.severity === 'High').length;
+    const rawCode = id.startsWith('Q-') ? id.slice(2) : id;
+    const inspection = await db.select().from(schema.qcInspections)
+      .where(sql`${schema.qcInspections.code} = ${rawCode} OR ${schema.qcInspections.id} = ${Number(id) || 0}`)
+      .get();
 
-    res.json({
-      passRate,
-      totalInspections,
-      passedCount,
-      failedCount,
-      pendingCount,
-      openNcrs,
-      highSeverityNcrs,
-      quarantineCount: quarantineStore.length,
-      quarantineVolume: quarantineStore.reduce((sum, q) => sum + (q.quantity || 0), 0),
-      trendData: [
-        { name: 'T2', Passed: 45, Failed: 5 },
-        { name: 'T3', Passed: 50, Failed: 8 },
-        { name: 'T4', Passed: 60, Failed: 3 },
-        { name: 'T5', Passed: 40, Failed: 2 },
-        { name: 'T6', Passed: 55, Failed: 6 },
-        { name: 'T7', Passed: 30, Failed: 1 },
-      ],
-      pieData: [
-        { name: 'Đạt Chuẩn (Passed)', value: passedCount * 40 + 280 },
-        { name: 'Lỗi - Sửa Lại (Rework)', value: failedCount * 5 + 15 },
-        { name: 'Lỗi - Hủy Bỏ (Scrap)', value: highSeverityNcrs * 3 + 10 },
-      ]
+    if (inspection) {
+      const evaluated = await QualityService.submitInspectionResults(inspection.id, {
+        results: [],
+        decision: 'REJECT',
+        decisionNotes: req.body.notes || 'Từ chối nghiệm thu do không đạt tiêu chuẩn kỹ thuật',
+        passedQuantity: 0,
+        failedQuantity: inspection.totalQuantity,
+        createNcrIfFailed: true,
+        userId,
+      });
+
+      return res.json({
+        success: true,
+        message: `Lô hàng ${inspection.code} đã bị từ chối và lập biên bản NCR.`,
+        inspection: evaluated,
+      });
+    }
+
+    res.json({ success: true, message: `Lô hàng ${id} đã bị từ chối.` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 7. CROSS-MODULE SRM (M11) CONNECTORS
+// ==========================================
+router.get("/api/quality/suppliers/scorecards", async (req, res) => {
+  try {
+    const scorecards = await QualityService.getAllSuppliersQualityScorecards();
+    res.json(scorecards);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/api/quality/suppliers/:id/scorecard", async (req, res) => {
+  try {
+    const scorecard = await QualityService.getSupplierQualityScorecard(Number(req.params.id));
+    res.json(scorecard);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 8. CROSS-MODULE DMS (M29) & WORKFLOW (M28) CONNECTORS
+// ==========================================
+router.post("/api/quality/inspections/:id/seal-coa", requireQualityPermission("quality.inspection.manage"), async (req, res) => {
+  try {
+    const inspectionId = Number(req.params.id);
+    const inspection = await QualityService.getInspectionById(inspectionId);
+    if (!inspection) return res.status(404).json({ error: "Không tìm thấy phiếu kiểm định." });
+
+    const user = (req as any).user;
+    const userId = user?.id || 1;
+    const username = user?.name || user?.username || 'QC Specialist';
+
+    const result = await QualityService.archiveCertificateToDms({
+      type: 'COA',
+      referenceId: inspection.id,
+      referenceCode: inspection.code,
+      title: `Chứng Chỉ Phân Tích & Nghiệm Thu COA - ${inspection.code}`,
+      metadata: {
+        inspectionCode: inspection.code,
+        lotNumber: inspection.lotNumber,
+        productSku: inspection.productSku,
+        productName: inspection.productName,
+        totalQuantity: inspection.totalQuantity,
+        sampleQuantity: inspection.sampleQuantity,
+        decision: inspection.decision,
+        inspectorName: inspection.inspectorName,
+        results: inspection.results,
+        inspectionDate: inspection.inspectionDate,
+      },
+      userId,
+      username,
     });
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/api/quality/batch-releases/:id/seal-coa", requireQualityPermission("quality.ncr.approve"), async (req, res) => {
+  try {
+    const releaseId = Number(req.params.id);
+    const release = await db.select().from(schema.qcBatchReleases).where(eq(schema.qcBatchReleases.id, releaseId)).get();
+    if (!release) return res.status(404).json({ error: "Không tìm thấy lệnh giải phóng lô hàng." });
+
+    const user = (req as any).user;
+    const userId = user?.id || 1;
+    const username = user?.name || user?.username || 'QA Director';
+
+    const result = await QualityService.archiveCertificateToDms({
+      type: 'BATCH_RELEASE',
+      referenceId: release.id,
+      referenceCode: release.releaseCode,
+      title: `Hồ Sơ Thẩm Định & Lệnh Giải Phóng Lô Hàng - ${release.releaseCode}`,
+      metadata: {
+        releaseCode: release.releaseCode,
+        lotId: release.lotId,
+        productId: release.productId,
+        warehouseId: release.warehouseId,
+        releaseQuantity: release.releaseQuantity,
+        coaNumber: release.coaNumber,
+        status: release.status,
+      },
+      userId,
+      username,
+    });
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/api/quality/ncrs/:id/seal-dms", requireQualityPermission("quality.ncr.manage"), async (req, res) => {
+  try {
+    const ncrId = Number(req.params.id);
+    const ncr = await QualityService.getNcrById(ncrId);
+    if (!ncr) return res.status(404).json({ error: "Không tìm thấy biên bản NCR." });
+
+    const user = (req as any).user;
+    const userId = user?.id || 1;
+    const username = user?.name || user?.username || 'QC Specialist';
+
+    const result = await QualityService.archiveCertificateToDms({
+      type: 'NCR_DOSSIER',
+      referenceId: ncr.id,
+      referenceCode: ncr.ncrNumber,
+      title: `Hồ Sơ Sự Không Phù Hợp & Hành Động Khắc Phục - ${ncr.ncrNumber}`,
+      metadata: {
+        ncrNumber: ncr.ncrNumber,
+        title: ncr.title,
+        severity: ncr.severity,
+        defectType: ncr.defectType,
+        nonConformingQuantity: ncr.nonConformingQuantity,
+        disposition: ncr.disposition,
+        capas: ncr.capas,
+      },
+      userId,
+      username,
+    });
+
+    res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
 export default router;
+

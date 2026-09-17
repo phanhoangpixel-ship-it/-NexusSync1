@@ -253,6 +253,33 @@ export const SettingsParametersTab: React.FC<SettingsParametersTabProps> = ({
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Địa chỉ Đăng ký Kinh doanh & Xuất Hóa đơn
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.companyAddress || 'Tòa nhà Nexus Tower, Lô E2 Khu đô thị Cầu Giấy, TP. Hà Nội'}
+                    onChange={(e) => onUpdateSettings({ companyAddress: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                    placeholder="Địa chỉ trụ sở chính..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Thông tin Đơn vị Phát hành Hóa đơn VAT (M31 Issuer)
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.invoiceIssuerInfo || 'Tập đoàn Công nghệ NexusSync Việt Nam - Hotline: 1900 8899'}
+                    onChange={(e) => onUpdateSettings({ invoiceIssuerInfo: e.target.value })}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                    placeholder="Hotline / Người đại diện pháp luật..."
+                  />
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -293,6 +320,118 @@ export const SettingsParametersTab: React.FC<SettingsParametersTabProps> = ({
                     <option value=",">Dấu phẩy (,) [Ví dụ: 172,30]</option>
                     <option value=".">Dấu chấm (.) [Ví dụ: 172.30]</option>
                   </select>
+                </div>
+              </div>
+
+              {/* REGIONAL FORMATS & ROUNDING RULES */}
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center justify-between">
+                  <span>Quy Tắc Làm Tròn Số Học & Định Dạng Khu Vực (Enterprise Rounding)</span>
+                  <span className="text-[10px] font-mono text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-950 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                    Rule #03 Accounting Authority
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      Thập phân Số Tiền
+                    </label>
+                    <select
+                      value={settings.currencyDecimals ?? 0}
+                      onChange={(e) => onUpdateSettings({ currencyDecimals: Number(e.target.value) })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono text-center font-bold"
+                    >
+                      <option value={0}>0 (VND chuẩn)</option>
+                      <option value={2}>2 (Ngoại tệ USD/EUR)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      Thập phân Đơn Giá
+                    </label>
+                    <select
+                      value={settings.unitPriceDecimals ?? 2}
+                      onChange={(e) => onUpdateSettings({ unitPriceDecimals: Number(e.target.value) })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono text-center font-bold"
+                    >
+                      <option value={0}>0 chữ số</option>
+                      <option value={2}>2 chữ số</option>
+                      <option value={4}>4 chữ số (Chi phí BOM)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      Thập phân Số Lượng
+                    </label>
+                    <select
+                      value={settings.quantityDecimals ?? 2}
+                      onChange={(e) => onUpdateSettings({ quantityDecimals: Number(e.target.value) })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono text-center font-bold"
+                    >
+                      <option value={0}>0 chữ số (Nguyên chiếc)</option>
+                      <option value={2}>2 chữ số (Kg/Mét)</option>
+                      <option value={3}>3 chữ số (Tấn/Gram)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      Phương Thức Làm Tròn
+                    </label>
+                    <select
+                      value={settings.roundingMethod || 'HALF_UP'}
+                      onChange={(e) => onUpdateSettings({ roundingMethod: e.target.value as any })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-medium"
+                    >
+                      <option value="HALF_UP">Làm tròn 0.5 (HALF_UP)</option>
+                      <option value="FLOOR">Làm tròn xuống (FLOOR)</option>
+                      <option value="CEIL">Làm tròn lên (CEIL)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      Định Dạng Ngày Tháng
+                    </label>
+                    <select
+                      value={settings.dateFormat || 'DD/MM/YYYY'}
+                      onChange={(e) => onUpdateSettings({ dateFormat: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono"
+                    >
+                      <option value="DD/MM/YYYY">DD/MM/YYYY (Việt Nam chuẩn)</option>
+                      <option value="YYYY-MM-DD">YYYY-MM-DD (ISO chuẩn)</option>
+                      <option value="MM/DD/YYYY">MM/DD/YYYY (US format)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      Múi Giờ Hệ Thống
+                    </label>
+                    <input
+                      type="text"
+                      disabled
+                      value={settings.timezone || 'Asia/Ho_Chi_Minh (UTC+7)'}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      Thời Hạn Công Nợ Mặc Định
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min={0}
+                        max={365}
+                        value={settings.defaultPaymentTermDays ?? 30}
+                        onChange={(e) => onUpdateSettings({ defaultPaymentTermDays: Number(e.target.value) })}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono text-center font-bold"
+                      />
+                      <span className="text-xs text-slate-500 shrink-0 font-medium">ngày</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 

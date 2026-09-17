@@ -1,8 +1,15 @@
 import { getSystemPreferences, parseNumber } from './numberFormat';
 
+export interface FormatNumberOptions {
+  thousandSeparator?: '.' | ',';
+  decimalSeparator?: ',' | '.';
+  minimumFractionDigits?: number;
+  maximumFractionDigits?: number;
+}
+
 export function formatNumber(
   amount: number | string | null | undefined, 
-  forcedThousandSeparator?: '.' | ',',
+  optionsOrThousand?: FormatNumberOptions | '.' | ',',
   forcedDecimalSeparator?: ',' | '.'
 ): string {
   if (amount === null || amount === undefined || amount === '') return '0';
@@ -11,14 +18,38 @@ export function formatNumber(
   if (isNaN(num)) return '0';
 
   const prefs = getSystemPreferences();
-  const thousand = forcedThousandSeparator || prefs.thousandSeparator || '.';
-  const decimal = forcedDecimalSeparator || prefs.decimalSeparator || ',';
+  let thousand = prefs.thousandSeparator || '.';
+  let decimal = prefs.decimalSeparator || ',';
+  let minFractionDigits: number | undefined;
+  let maxFractionDigits: number | undefined;
 
-  const parts = num.toString().split('.');
+  if (typeof optionsOrThousand === 'object' && optionsOrThousand !== null) {
+    if (optionsOrThousand.thousandSeparator) thousand = optionsOrThousand.thousandSeparator;
+    if (optionsOrThousand.decimalSeparator) decimal = optionsOrThousand.decimalSeparator;
+    minFractionDigits = optionsOrThousand.minimumFractionDigits;
+    maxFractionDigits = optionsOrThousand.maximumFractionDigits;
+  } else if (typeof optionsOrThousand === 'string') {
+    thousand = optionsOrThousand;
+    if (forcedDecimalSeparator) decimal = forcedDecimalSeparator;
+  }
+
+  let numStr = num.toString();
+  if (minFractionDigits !== undefined || maxFractionDigits !== undefined) {
+    const minD = minFractionDigits ?? 0;
+    const maxD = maxFractionDigits ?? Math.max(minD, 2);
+    numStr = num.toFixed(Math.min(Math.max(minD, maxD), 4));
+  }
+
+  const parts = numStr.split('.');
   parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, thousand);
   
   if (parts.length > 1) {
-    return `${parts[0]}${decimal}${parts[1]}`;
+    let frac = parts[1];
+    // If no explicit minFractionDigits and single decimal digit (e.g. .5), display as .50 for currency convention
+    if (minFractionDigits === undefined && frac.length === 1) {
+      frac = frac + '0';
+    }
+    return `${parts[0]}${decimal}${frac}`;
   }
   return parts[0];
 }
@@ -26,11 +57,12 @@ export function formatNumber(
 export function formatCurrency(
   amount: number | string | null | undefined, 
   customCurrencySymbol?: string,
-  customPosition?: 'prefix' | 'suffix'
+  customPosition?: 'prefix' | 'suffix',
+  options?: FormatNumberOptions
 ): string {
   const prefs = getSystemPreferences();
   const num = parseNumber(amount);
-  const formattedNum = formatNumber(num);
+  const formattedNum = formatNumber(num, options);
   
   const symbol = customCurrencySymbol !== undefined ? customCurrencySymbol : (prefs.currencySymbol || '₫');
   const position = customPosition || prefs.currencyPosition || 'suffix';

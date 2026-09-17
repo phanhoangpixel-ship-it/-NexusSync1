@@ -17,13 +17,17 @@
 
 ---
 
-## TAB A — WAREHOUSE SETUP & FACILITIES MASTER
+## TAB A — WAREHOUSE SETUP, SPATIAL TOPOLOGY & SLOTTING GUARD
 
 ### 1.1 Cấu trúc bố cục (Layout Architecture)
 - **L0 Hệ Thống**: Vỏ workspace tích hợp với thẻ phiên làm việc `useWorkspaceSessionTab('M18', 'setup')`.
+- **Sub-View Switcher (3 Chế độ xem tích hợp)**:
+  1. `1. Danh Mục Cơ Sở Kho (Facilities Master)`: Danh mục kho, KPI Metrics 6 chỉ số, bộ lọc nâng cao, in tem QR, modal CRUD kho và Drawer chi tiết 360°.
+  2. `2. Cấu Trúc Không Gian & Tải Trọng Kệ (Spatial Topology)`: Sơ đồ cây phân cấp 5 tầng (`Warehouse ➔ Zone ➔ Aisle ➔ Rack ➔ Shelf/Bin`), thước đo tải trọng (kg) và thể tích (m³) thời gian thực, CRUD vị trí kho an toàn.
+  3. `3. Mô Phỏng Xếp Hàng & Kiểm Soát An Toàn (Slotting Guard)`: Thẩm định tự động tương thích điều kiện bảo quản (`COLD`, `DRY`, `BULKY`, `QUARANTINE`) và chặn quá tải kệ (`BLOCKED_OVER_CAPACITY`) trước khi ghi nhận phân bổ tồn kho.
 - **L1 Command Bar**: Thanh tìm kiếm kho, cụm Zone, bộ lọc trạng thái kho (`ALL`, `ACTIVE`, `MAINTENANCE`), nút hành động nhanh "Thêm Kho Mới" (`bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-xs`).
-- **L2 KPI Summary Strip**: 4 thẻ KPI gồm Tổng số Kho (`Warehouse`), Tổng số Zone (`Layers`), Tổng số Bin (`Box`), và Tỷ lệ lấp đầy kho (`Activity`).
-- **L3 Content Area**: Lưới thẻ kho (Warehouse Cards) kết hợp Bảng danh mục Bin/Vị trí theo Zone với trạng thái tải `L3ContentState` (Skeleton 5 dòng, Empty State với nút CTA, Error State với nút Thử lại).
+- **L2 KPI Summary Strip**: 6 thẻ KPI gồm Tổng số Kho, Tổng số Zone, Tổng số Kệ/Bin, Tồn vật lý, Giá trị tồn kho định giá và Tỷ lệ lấp đầy kho bình quân.
+- **L3 Content Area**: Lưới bảng danh mục kho (Warehouse Data Grid) kết hợp Cây không gian 5 tầng & Trình mô phỏng xếp hàng với trạng thái tải `L3ContentState` (Skeleton, Empty State với nút CTA, Error State với nút Thử lại).
 - **L4 Sticky Footer**: Phân trang cố định `PaginationControl` đồng bộ số bản ghi trên trang (10, 25, 50).
 
 ### 1.2 Typography

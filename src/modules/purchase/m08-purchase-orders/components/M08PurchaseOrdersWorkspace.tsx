@@ -40,7 +40,8 @@ import {
   Info,
   Truck,
   Warehouse,
-  PackageCheck
+  PackageCheck,
+  Sparkles
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -246,6 +247,7 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
   const [receivingPo, setReceivingPo] = useState<any | null>(null);
   const [receivingWarehouseId, setReceivingWarehouseId] = useState<string | number>('');
   const [receivingNotes, setReceivingNotes] = useState('');
+  const [receivingQuantities, setReceivingQuantities] = useState<Record<number, number>>({});
   const [isSubmittingGr, setIsSubmittingGr] = useState(false);
   const [goodsReceiptsList, setGoodsReceiptsList] = useState<any[]>([]);
   const [isGrModalOpen, setIsGrModalOpen] = useState(false);
@@ -284,7 +286,7 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
   const fetchPurchaseOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/purchases');
+      const res = await fetch('/api/purchase-orders');
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
@@ -533,21 +535,38 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
   }, [filteredMatchingCases, matchingPage, matchingPageSize]);
 
   // Handlers
-  const handleExecuteGoodsReceipt = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const executeGoodsReceipt = async () => {
     if (!receivingPo) return;
 
     setIsSubmittingGr(true);
     const targetWhId = Number(receivingWarehouseId) || (warehousesList[0]?.id ?? 1);
     const idempKey = `IDEMP-GR-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
+    // Build items payload for partial or full receipt
+    const itemsPayload = receivingPo.lineItems && receivingPo.lineItems.length > 0
+      ? receivingPo.lineItems.map((it: any) => {
+          const rec = it.receivedQuantity || 0;
+          const rem = Math.max(0, it.quantity - rec);
+          const customQty = receivingQuantities[it.id] !== undefined ? receivingQuantities[it.id] : rem;
+          return {
+            poItemId: it.id,
+            productId: it.productId,
+            quantity: Math.min(Math.max(0, Number(customQty) || 0), rem),
+            uomId: it.uomId || null
+          };
+        }).filter((it: any) => it.quantity > 0)
+      : undefined;
+
     try {
-      const res = await fetch(`/api/purchase/orders/${encodeURIComponent(receivingPo.id)}/receive`, {
+      const res = await fetch('/api/goods-receipts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          poId: receivingPo.internalId || receivingPo.id,
+          poCode: receivingPo.id,
           warehouseId: targetWhId,
           idempotencyKey: idempKey,
+          items: itemsPayload,
           notes: receivingNotes || `Phiếu nhập kho hàng hóa cho PO ${receivingPo.id}`
         })
       });
@@ -560,8 +579,9 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
       onNotify('success', 'Nhập kho thành công (GR)', `Đã tiếp nhận vật tư vào kho và cập nhật số dư tồn kho qua InventoryService.`);
       setReceivingPo(null);
       setReceivingNotes('');
+      setReceivingQuantities({});
       if (selectedPoForModal && selectedPoForModal.id === receivingPo.id) {
-        setSelectedPoForModal((prev: any) => prev ? { ...prev, status: 'COMPLETED' } : null);
+        setSelectedPoForModal((prev: any) => prev ? { ...prev, status: data.status || 'COMPLETED' } : null);
       }
 
       await Promise.all([
@@ -574,6 +594,28 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
     } finally {
       setIsSubmittingGr(false);
     }
+  };
+
+  const triggerExecuteGoodsReceipt = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!receivingPo) return;
+
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Xác nhận Nhập Kho & Tạo Phiếu GR',
+      message: `Bạn có chắc chắn muốn xác nhận tiếp nhận vật tư cho Đơn mua hàng ${receivingPo.id} vào kho tiếp nhận? Thao tác này sẽ ủy quyền cho InventoryService.postTransaction() cập nhật số dư tồn kho thực tế và ghi vết kiểm toán SHA-256 (M02).`,
+      variant: 'primary',
+      confirmText: 'Xác nhận Nhập Kho',
+      cancelText: 'Quay lại',
+      onConfirm: async () => {
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        await executeGoodsReceipt();
+      }
+    });
+  };
+
+  const handleExecuteGoodsReceipt = (e: React.FormEvent) => {
+    triggerExecuteGoodsReceipt(e);
   };
 
   const handleCreatePO = async (e: React.FormEvent) => {
@@ -589,7 +631,7 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
     const idempKey = `IDEMP-PO-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
     try {
-      const res = await fetch('/api/purchase/orders', {
+      const res = await fetch('/api/purchase-orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -653,7 +695,7 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
 
   const executeApprovePO = (poId: string) => {
     setPurchaseOrders(prev => prev.map(p => p.id === poId ? { ...p, status: 'APPROVED' } : p));
-    fetch(`/api/purchase/orders/${encodeURIComponent(poId)}/approve`, { method: 'POST' })
+    fetch(`/api/purchase-orders/${encodeURIComponent(poId)}/approve`, { method: 'POST' })
       .catch(err => console.warn('Approve PO error:', err));
     onNotify('success', 'Phê duyệt PO thành công', `Đơn mua hàng ${poId} đã chính thức được phê duyệt ngân sách và chuyển sang nhà cung cấp.`);
   };
@@ -676,12 +718,12 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
 
   const executeRejectPO = (poId: string) => {
     setPurchaseOrders(prev => prev.map(p => p.id === poId ? { ...p, status: 'REJECTED' } : p));
-    fetch(`/api/purchase/orders/${encodeURIComponent(poId)}/cancel`, { method: 'POST' })
+    fetch(`/api/purchase-orders/${encodeURIComponent(poId)}/reject`, { method: 'POST' })
       .catch(err => console.warn('Reject PO error:', err));
     onNotify('warning', 'Đã từ chối đơn hàng', `Đã từ chối phê duyệt đơn hàng ${poId}.`);
   };
 
-  const handleResolveMismatch = async () => {
+  const executeResolveMismatch = async () => {
     if (!selectedMatchCase) return;
 
     try {
@@ -723,6 +765,27 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
     const caseId = selectedMatchCase.id;
     setSelectedMatchCase(null);
     onNotify('success', 'Xử lý chênh lệch thành công', `Mã đối soát ${caseId} đã được phân xử và thông qua phê duyệt ngoại lệ.`);
+  };
+
+  const triggerResolveMismatch = () => {
+    if (!selectedMatchCase) return;
+
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Xác nhận Phân xử & Thông qua Chênh lệch',
+      message: `Bạn có chắc chắn muốn phân xử hồ sơ đối soát ${selectedMatchCase.id} cho PO ${selectedMatchCase.poId}? Bút toán giải trình và điều chỉnh công nợ sẽ được bảo vệ bởi chữ ký số SHA-256 trên Sổ cái Kiểm toán M02.`,
+      variant: 'warning',
+      confirmText: 'Xác nhận Phân xử',
+      cancelText: 'Hủy bỏ',
+      onConfirm: async () => {
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        await executeResolveMismatch();
+      }
+    });
+  };
+
+  const handleResolveMismatch = () => {
+    triggerResolveMismatch();
   };
 
   const handleCreateContract = async (e: React.FormEvent) => {
@@ -1121,7 +1184,15 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
                           }`}
                         >
                           <td className="py-3 px-3 font-mono tabular-nums font-bold text-blue-600 dark:text-blue-400">
-                            {po.id}
+                            <div className="flex flex-col gap-1 items-start">
+                              <span>{po.id}</span>
+                              {(po.sourceType === 'SOURCING_AWARD' || po.sourcingAwardNo) && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700">
+                                  <Sparkles className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                                  <span>{po.sourcingAwardNo || 'M10 Award'}</span>
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3 px-3 font-bold text-slate-900 dark:text-white">
                             {po.supplier}
@@ -1789,6 +1860,38 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
                 </div>
               </div>
 
+              {/* Sourcing Award Backwards-Traceability (M10) */}
+              {(selectedPoForModal.sourceType === 'SOURCING_AWARD' || selectedPoForModal.sourcingAwardNo) ? (
+                <div className="p-3.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 text-amber-950 dark:text-amber-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 font-bold text-xs text-amber-900 dark:text-amber-300">
+                      <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                      <span>Phả Hệ Nguồn Gốc M10 (Sourcing Award Traceability)</span>
+                    </div>
+                    <span className="px-2 py-0.5 text-[9px] font-mono tabular-nums font-bold rounded bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700">
+                      M10 ➔ M08 LINKED
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[10px] pt-1 border-t border-amber-200/60 dark:border-amber-800/60">
+                    <div>
+                      <span className="text-amber-800 dark:text-amber-400 font-semibold block">QUYẾT ĐỊNH TRAO THẦU:</span>
+                      <strong className="font-mono tabular-nums font-bold text-amber-950 dark:text-white">
+                        {selectedPoForModal.sourcingAwardNo || 'AWARD-2026-0089'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-amber-800 dark:text-amber-400 font-semibold block">GÓI THẦU / RFQ LIÊN KẾT:</span>
+                      <strong className="font-mono tabular-nums font-bold text-amber-950 dark:text-white">
+                        {selectedPoForModal.rfqId || 'RFQ-2026-0012'}
+                      </strong>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-amber-900 dark:text-amber-300 leading-relaxed italic">
+                    💡 Đơn hàng này được phát hành ủy quyền trực tiếp từ kết quả đấu thầu chiến lược M10. Đơn giá và thông số kỹ thuật được bảo toàn nguyên vẹn, ngăn chặn nguy cơ sai lệch giá sau đấu thầu.
+                  </p>
+                </div>
+              ) : null}
+
               <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 flex items-start gap-2.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                 <div>
@@ -1894,28 +1997,56 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
 
               <div>
                 <span className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Danh mục vật tư tiếp nhận theo đơn PO
+                  Danh mục vật tư tiếp nhận (Hỗ trợ nhận từng phần & Quy chuẩn ĐVT)
                 </span>
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-medium">
                   {receivingPo.lineItems && receivingPo.lineItems.length > 0 ? (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {receivingPo.lineItems.map((it: any) => {
                         const rec = it.receivedQuantity || 0;
                         const rem = Math.max(0, it.quantity - rec);
+                        const currentVal = receivingQuantities[it.id] !== undefined ? receivingQuantities[it.id] : rem;
                         return (
-                          <div key={it.id} className="flex items-center justify-between text-xs py-1 border-b border-slate-200/50 dark:border-slate-800/50 last:border-0">
-                            <div>
-                              <span className="font-semibold">{it.name}</span>
-                              <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5">
-                                <span>Đặt mua: <strong className="text-slate-700 dark:text-slate-300">{it.quantity}</strong></span>
+                          <div key={it.id} className="p-2.5 rounded-lg bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-slate-900 dark:text-slate-100">{it.name || `Sản phẩm #${it.productId}`}</span>
+                                {it.uomName && (
+                                  <span className="px-1.5 py-0.5 text-[10px] font-mono bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 rounded border border-blue-200 dark:border-blue-800">
+                                    ĐVT: {it.uomName}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-1">
+                                <span>Đặt: <strong className="text-slate-700 dark:text-slate-200 font-mono">{it.quantity}</strong></span>
                                 <span>•</span>
-                                <span>Đã nhận: <strong className="text-blue-600 dark:text-blue-400">{rec}</strong></span>
+                                <span>Đã nhận: <strong className="text-blue-600 dark:text-blue-400 font-mono">{rec}</strong></span>
+                                <span>•</span>
+                                <span>Còn lại: <strong className="text-amber-600 dark:text-amber-400 font-mono">{rem}</strong></span>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <span className={`font-mono font-bold text-xs ${rem > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
-                                {rem > 0 ? `Nhận đợt này: ${rem}` : '✓ Đã nhận đủ'}
-                              </span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {rem > 0 ? (
+                                <div className="flex items-center gap-1.5">
+                                  <label className="text-[11px] text-slate-500 font-medium">Nhận đợt này:</label>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={rem}
+                                    value={currentVal}
+                                    onChange={(e) => {
+                                      const val = Math.min(Math.max(0, Number(e.target.value) || 0), rem);
+                                      setReceivingQuantities(prev => ({ ...prev, [it.id]: val }));
+                                    }}
+                                    className="w-20 px-2 py-1 text-xs text-right font-mono font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                                  />
+                                </div>
+                              ) : (
+                                <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Đã đủ 100%</span>
+                                </span>
+                              )}
                             </div>
                           </div>
                         );

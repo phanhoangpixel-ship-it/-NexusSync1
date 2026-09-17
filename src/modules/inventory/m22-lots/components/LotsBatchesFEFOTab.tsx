@@ -9,9 +9,19 @@ interface LotsBatchesFEFOTabProps {
   lots: LotItem[];
   onSelectEntity?: (entity: any) => void;
   activeLotId?: string;
+  onViewDrilldown?: (lot: LotItem) => void;
+  onViewTraceability?: (lot: LotItem) => void;
+  onNotify?: (type: 'success' | 'warning' | 'error' | 'info', title: string, message: string) => void;
 }
 
-export const LotsBatchesFEFOTab: React.FC<LotsBatchesFEFOTabProps> = ({ lots, onSelectEntity, activeLotId }) => {
+export const LotsBatchesFEFOTab: React.FC<LotsBatchesFEFOTabProps> = ({ 
+  lots, 
+  onSelectEntity, 
+  activeLotId,
+  onViewDrilldown,
+  onViewTraceability,
+  onNotify
+}) => {
   // Sort lots by expiration date for FEFO (First Expired, First Out)
   const fefoSortedLots = useMemo(() => {
     return [...lots].sort((a, b) => a.expDate.localeCompare(b.expDate));
@@ -372,13 +382,33 @@ export const LotsBatchesFEFOTab: React.FC<LotsBatchesFEFOTabProps> = ({ lots, on
                       </td>
 
                       <td className="p-3 text-center">
-                        <button
-                          onClick={() => onSelectEntity && onSelectEntity(lot)}
-                          className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center"
-                          title="Chi tiết & Lịch sử"
-                        >
-                          <ArrowUpRight className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => onViewDrilldown ? onViewDrilldown(lot) : (onSelectEntity && onSelectEntity(lot))}
+                            className="p-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-lg transition-colors cursor-pointer"
+                            title="Xem chi tiết vòng đời & lịch sử tồn kho lô"
+                          >
+                            <ArrowUpRight className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => onViewTraceability && onViewTraceability(lot)}
+                            className="p-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-300 rounded-lg transition-colors cursor-pointer"
+                            title="Truy xuất phả hệ D3"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSimSku(lot.sku);
+                              setSimQty(String(Math.min(lot.currentQty, 100)));
+                              if (onNotify) onNotify('info', 'Đã Nạp SKU Vào Mô Phỏng', `Đã chọn SKU ${lot.sku} (Lô ${lot.batchNumber}) vào bộ mô phỏng FEFO phía trên.`);
+                            }}
+                            className="p-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900 text-amber-600 dark:text-amber-300 rounded-lg transition-colors cursor-pointer"
+                            title="Điền vào bộ mô phỏng FEFO"
+                          >
+                            <Calculator className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

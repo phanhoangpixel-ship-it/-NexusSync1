@@ -10,7 +10,9 @@ import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import { ConfirmDialogState } from '../../../../types';
 import { usePagination } from '../../../../hooks/usePagination';
 import { PaginationControl } from '../../../../components/common/PaginationControl';
-import { OutboundOrderItem, OutboundOrder, WavePickingBatch, PackingCarton, WarehouseFacilityItem, WarehouseKpiMetrics } from "./types";
+import { WarehouseFacilityItem, WarehouseKpiMetrics, WarehouseFacilitiesMasterTabProps } from "./types";
+import { WarehouseSpatialTopologyView } from './WarehouseSpatialTopologyView';
+import { WarehouseSlottingSimulatorView } from './WarehouseSlottingSimulatorView';
 
 const TYPE_NAME_MAP: Record<string, string> = {
   'MAIN': 'Kho Tổng Chính',
@@ -44,6 +46,10 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
   const [occupancyFilter, setOccupancyFilter] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<'code' | 'name' | 'physicalStock' | 'totalStockValue' | 'occupancyRate'>('code');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  // Sub-view switcher state (Facilities Master vs 5-tier Spatial Topology vs Bin Slotting Simulator)
+  const [activeSubView, setActiveSubView] = useState<'FACILITIES' | 'TOPOLOGY' | 'SLOTTING_SIM'>('FACILITIES');
+  const [selectedSpatialWarehouseId, setSelectedSpatialWarehouseId] = useState<number>(1);
 
   // 3. UI Drawers & Modals States
   const [selectedFacility, setSelectedFacility] = useState<WarehouseFacilityItem | null>(null);
@@ -389,11 +395,11 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950">
+    <div className="space-y-4 w-full">
       {/* ========================================================================= */}
       {/* L0: TOP HEADER BAR (Golden Standard)                                      */}
       {/* ========================================================================= */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-4">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-2xs">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0 shadow-2xs">
@@ -418,7 +424,7 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
           </div>
 
           {/* Primary Actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={handleExportExcel}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 shadow-2xs transition-all cursor-pointer"
@@ -448,13 +454,83 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
         </div>
       </div>
 
+      {/* Sub-view Navigation Switcher */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700">
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setActiveSubView('FACILITIES')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeSubView === 'FACILITIES'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Warehouse className="w-4 h-4" />
+            <span>1. Danh Mục Cơ Sở Kho (Facilities Master)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubView('TOPOLOGY')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeSubView === 'TOPOLOGY'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            <span>2. Cấu Trúc Không Gian & Tải Trọng Kệ (Spatial Topology)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubView('SLOTTING_SIM')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeSubView === 'SLOTTING_SIM'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Boxes className="w-4 h-4" />
+            <span>3. Mô Phỏng Xếp Hàng & Kiểm Soát An Toàn (Slotting Guard)</span>
+          </button>
+        </div>
+
+        {activeSubView !== 'FACILITIES' && facilities.length > 0 && (
+          <div className="flex items-center gap-2 px-3 py-1">
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Kho đang chọn:</span>
+            <select
+              value={selectedSpatialWarehouseId}
+              onChange={(e) => setSelectedSpatialWarehouseId(Number(e.target.value))}
+              className="px-3 py-1 text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
+            >
+              {facilities.map(f => (
+                <option key={f.id} value={f.id}>[{f.code}] {f.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {activeSubView === 'TOPOLOGY' ? (
+        <WarehouseSpatialTopologyView
+          warehouseId={selectedSpatialWarehouseId}
+          warehouseName={facilities.find(f => f.id === selectedSpatialWarehouseId)?.name || 'Kho Tổng'}
+          onNotify={onNotify}
+        />
+      ) : activeSubView === 'SLOTTING_SIM' ? (
+        <WarehouseSlottingSimulatorView
+          warehouseId={selectedSpatialWarehouseId}
+          warehouseName={facilities.find(f => f.id === selectedSpatialWarehouseId)?.name || 'Kho Tổng'}
+          onNotify={onNotify}
+          onStockUpdated={loadData}
+        />
+      ) : (
+        <>
       {/* ========================================================================= */}
       {/* L1: KPI METRICS STRIP (6 Golden Standard Metrics with Monospace & Colors) */}
       {/* ========================================================================= */}
-      <div className="px-6 py-4 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
           {/* Card 1: Tổng Kho Vận */}
-          <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-blue-200 dark:border-blue-900/60 shadow-2xs">
+          <div className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tổng Cơ Sở Kho</span>
               <div className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center">
@@ -471,7 +547,7 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
           </div>
 
           {/* Card 2: Phân Vùng & Ô Kệ */}
-          <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 shadow-2xs">
+          <div className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Zones & Ô Kệ Bins</span>
               <div className="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center">
@@ -487,7 +563,7 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
           </div>
 
           {/* Card 3: Tồn Vật Lý */}
-          <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-blue-200 dark:border-blue-900/60 shadow-2xs">
+          <div className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tồn Vật Lý (On-Hand)</span>
               <div className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center">
@@ -503,7 +579,7 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
           </div>
 
           {/* Card 4: Tồn Giữ Chỗ */}
-          <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-amber-200 dark:border-amber-900/60 shadow-2xs">
+          <div className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Giữ Chỗ SO/WO</span>
               <div className="w-6 h-6 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 flex items-center justify-center">
@@ -519,7 +595,7 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
           </div>
 
           {/* Card 5: Khả Dụng Xuất ATP */}
-          <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 shadow-2xs">
+          <div className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Khả Dụng Xuất (ATP)</span>
               <div className="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center">
@@ -535,7 +611,7 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
           </div>
 
           {/* Card 6: Giá Trị & Lấp Đầy */}
-          <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-purple-200 dark:border-purple-900/60 shadow-2xs">
+          <div className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Lấp Đầy & Định Giá</span>
               <div className="w-6 h-6 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-600 flex items-center justify-center">
@@ -550,13 +626,12 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
               {metrics ? `${(metrics.totalStockValue / 1_000_000_000).toFixed(2)}B VNĐ` : '4.85B VNĐ'}
             </div>
           </div>
-        </div>
       </div>
 
       {/* ========================================================================= */}
       {/* L2: ADVANCED FILTER & SEARCH TOOLBAR                                      */}
       {/* ========================================================================= */}
-      <div className="px-6 py-3.5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 relative z-20 shadow-2xs">
+      <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 relative z-10">
           {/* Search Box with 250ms Debounce Intent */}
           <div className="relative flex-1 max-w-md z-10">
@@ -566,12 +641,12 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
               placeholder="Tìm theo mã kho, tên kho, địa chỉ, quản lý..."
-              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-sans"
+              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-sans"
             />
             {searchKeyword && (
               <button
                 onClick={() => setSearchKeyword('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -586,7 +661,7 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                className="h-8 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 text-slate-800 dark:text-slate-200 font-medium cursor-pointer"
+                className="h-8 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-2 text-slate-800 dark:text-slate-200 font-medium cursor-pointer"
               >
                 <option value="ALL">Tất cả loại kho</option>
                 <option value="MAIN">Kho Tổng Chính</option>
@@ -603,7 +678,7 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="h-8 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 text-slate-800 dark:text-slate-200 font-medium cursor-pointer"
+                className="h-8 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-2 text-slate-800 dark:text-slate-200 font-medium cursor-pointer"
               >
                 <option value="ALL">Tất cả trạng thái</option>
                 <option value="ACTIVE">Đang hoạt động</option>
@@ -618,7 +693,7 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
               <select
                 value={occupancyFilter}
                 onChange={(e) => setOccupancyFilter(e.target.value)}
-                className="h-8 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 text-slate-800 dark:text-slate-200 font-medium cursor-pointer"
+                className="h-8 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-2 text-slate-800 dark:text-slate-200 font-medium cursor-pointer"
               >
                 <option value="ALL">Tất cả mức độ</option>
                 <option value="HIGH">Cao (&gt;80%)</option>
@@ -633,7 +708,7 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="h-8 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 text-slate-800 dark:text-slate-200 font-medium cursor-pointer"
+                className="h-8 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-2 text-slate-800 dark:text-slate-200 font-medium cursor-pointer"
               >
                 <option value="code">Mã kho</option>
                 <option value="name">Tên kho</option>
@@ -645,7 +720,7 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
               <button
                 type="button"
                 onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-                className="h-8 px-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-mono font-bold border border-slate-200 dark:border-slate-700 cursor-pointer"
+                className="h-8 px-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-mono font-bold border border-slate-200 dark:border-slate-600 cursor-pointer"
                 title={`Thứ tự: ${sortOrder === 'asc' ? 'Tăng dần' : 'Giảm dần'}`}
               >
                 {sortOrder === 'asc' ? '▲ Tăng' : '▼ Giảm'}
@@ -668,10 +743,9 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
       {/* ========================================================================= */}
       {/* L3: CONTENT AREA / ENTERPRISE DATA TABLE                                  */}
       {/* ========================================================================= */}
-      <div className="flex-1 px-6 py-4">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs overflow-hidden min-h-[480px] flex flex-col justify-between">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs overflow-hidden min-h-[480px] flex flex-col justify-between">
           <div>
-            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
                   Bảng Điều Hành Chi Tiết Cơ Sở Kho Vận
@@ -913,7 +987,7 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
           {/* L4: PINNED PAGINATION FOOTER (Sticky Bottom)                              */}
           {/* ========================================================================= */}
           {!isLoading && !fetchError && filteredFacilities.length > 0 && (
-            <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-4 py-3">
+            <div className="sticky bottom-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-4 py-3">
               <PaginationControl
                 currentPage={pagination.currentPage}
                 pageSize={pagination.pageSize}
@@ -925,7 +999,8 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
             </div>
           )}
         </div>
-      </div>
+        </>
+      )}
 
       {/* ========================================================================= */}
       {/* MODAL 1: ADD / EDIT WAREHOUSE FACILITY                                    */}
@@ -1180,14 +1255,27 @@ export const WarehouseFacilitiesMasterTab: React.FC<WarehouseFacilitiesMasterTab
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900">
-              <button
-                onClick={() => handleOpenPrintQr(selectedFacility)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
-              >
-                <QrCode className="w-4 h-4 text-indigo-600" />
-                In Tem Mã Vạch
-              </button>
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 bg-slate-50 dark:bg-slate-900">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleOpenPrintQr(selectedFacility)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                >
+                  <QrCode className="w-4 h-4 text-indigo-600" />
+                  In Tem
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedSpatialWarehouseId(selectedFacility.id);
+                    setActiveSubView('TOPOLOGY');
+                    setIsDetailDrawerOpen(false);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 rounded-xl hover:bg-indigo-100"
+                >
+                  <Layers className="w-4 h-4" />
+                  Sơ Đồ 5 Tầng & Tải Trọng
+                </button>
+              </div>
               <button
                 onClick={() => {
                   setIsDetailDrawerOpen(false);

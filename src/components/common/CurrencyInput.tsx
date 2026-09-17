@@ -89,8 +89,19 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
       clampedNum = max;
     }
 
-    // Format new display value with Vietnamese thousands dot
-    const newFormatted = formatNumber(clampedNum);
+    // Format new display value with Vietnamese thousands dot and decimal comma
+    let newFormatted = formatNumber(clampedNum);
+    if (rawInput.endsWith(',')) {
+      if (!newFormatted.includes(',')) {
+        newFormatted = newFormatted + ',';
+      }
+    } else if (rawInput.includes(',')) {
+      const parts = rawInput.split(',');
+      const decimalDigits = parts[1].replace(/[^0-9]/g, '');
+      if (decimalDigits.length > 0) {
+        newFormatted = formatNumber(clampedNum, { minimumFractionDigits: decimalDigits.length, maximumFractionDigits: 4 });
+      }
+    }
     setDisplayValue(newFormatted);
 
     // Calculate new cursor position based on digit count

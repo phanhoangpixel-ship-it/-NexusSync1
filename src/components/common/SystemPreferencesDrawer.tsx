@@ -1264,7 +1264,7 @@ export const SystemPreferencesDrawer: React.FC<SystemPreferencesDrawerProps> = (
               <div className="space-y-2.5">
                 <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                   <Layers className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Các tính năng cốt lõi hiện tại (M01 - M42)</span>
+                  <span>Các tính năng cốt lõi hiện tại (M01 - M43)</span>
                 </h4>
 
                 <div className="space-y-2">
@@ -1290,11 +1290,11 @@ export const SystemPreferencesDrawer: React.FC<SystemPreferencesDrawerProps> = (
 
                   <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-800">🛒 Điểm bán POS & Quản lý Ca (M16)</span>
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-800">Cash Flow</span>
+                      <span className="font-bold text-slate-800">🏷️ Hồ Sơ Ngành Hàng & Tiêu Chuẩn (M43)</span>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-cyan-100 text-cyan-800">Master Data</span>
                     </div>
                     <p className="text-[11px] text-slate-600">
-                      Mở/chốt ca tiền mặt độc lập, đối soát mệnh giá, phát hiện chênh lệch tự động và luồng phê duyệt phân quyền nghiêm ngặt (Separation of Duties).
+                      Quản lý cấu hình tiền tố mã định danh, phương pháp định giá tồn kho (FIFO/LIFO/Weighted Average), tiền tệ VAS và tiêu chuẩn tuân thủ (ISO, GMP, FDA) với cơ chế kiểm tra trùng lặp prefix.
                     </p>
                   </div>
 

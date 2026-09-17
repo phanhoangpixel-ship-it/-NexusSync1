@@ -40,4 +40,5 @@ export interface SerialProfile {
 export interface M23SerialsWorkspaceProps {
     onSelectEntity?: (entity: any) => void;
     onNotify: (type: 'success' | 'warning' | 'error' | 'info' | 'danger', title: string, message: string) => void;
+    onNavigate?: (routeOrModule: string) => void;
 }

@@ -2,6 +2,7 @@ import { db } from "../src/db";
 import * as schema from "../src/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { InventoryService } from "./inventoryService";
+import { AuditService } from "./auditService";
 
 export const StockAdjustmentService = {
   async list(filters?: { warehouseId?: number; status?: string; search?: string }) {
@@ -30,12 +31,16 @@ export const StockAdjustmentService = {
       let result = adjustments.map(adj => {
         const wh = wMap.get(adj.warehouseId);
         const adjItems = itemsMap.get(adj.id) || [];
+        const totalCost = adjItems.reduce((sum: number, it: any) => sum + (it.totalCost || (it.quantity * (it.unitCost || 0))), 0);
+        const approvalLevelRequired = totalCost > 50000000 ? 2 : 1;
         return {
           ...adj,
           warehouseCode: wh?.code || "WH-01",
           warehouseName: wh?.name || "Kho Tổng",
           items: adjItems,
           totalLines: adjItems.length,
+          totalCost,
+          approvalLevelRequired: adj.approvalLevelRequired || approvalLevelRequired,
         };
       });
 
@@ -118,6 +123,18 @@ export const StockAdjustmentService = {
     }
 
     let adjId = 0;
+    let shouldFlagForReview = false;
+    const adjTypeUpper = String(input.adjustmentType || "").toUpperCase();
+    if (['LOST', 'DAMAGED', 'EXPIRED', 'DAMAGE'].includes(adjTypeUpper)) {
+      // Check recent adjustments for the same warehouse
+      const recentAdjs = await db.select().from(schema.stockAdjustments)
+        .where(eq(schema.stockAdjustments.warehouseId, input.warehouseId))
+        .all();
+      const recentLossCount = recentAdjs.filter(a => ['LOST', 'DAMAGED', 'EXPIRED', 'DAMAGE'].includes(String(a.adjustmentType).toUpperCase())).length;
+      if (recentLossCount >= 2) {
+        shouldFlagForReview = true;
+      }
+    }
 
     await db.transaction(async (tx) => {
       const newAdj = await tx.insert(schema.stockAdjustments).values({
@@ -128,6 +145,7 @@ export const StockAdjustmentService = {
         reason: input.reason || "Kiểm định tồn kho định kỳ",
         notes: input.notes || "",
         status: "DRAFT",
+        flaggedForReview: shouldFlagForReview,
         createdBy: userId,
       } as any).returning();
 
@@ -168,6 +186,19 @@ export const StockAdjustmentService = {
     });
 
     const created = await this.getById(adjId);
+
+    // Record SHA-256 Audit Log (M02)
+    await AuditService.recordAuditLog({
+      userId,
+      module: 'M20',
+      action: 'CREATE',
+      entityType: 'STOCK_ADJUSTMENT',
+      entityId: adjId,
+      result: 'SUCCESS',
+      afterData: created || { id: adjId, code, warehouseId: input.warehouseId },
+      reason: input.reason
+    }).catch(e => console.error("Audit log error:", e));
+
     if (!created) {
       return {
         id: adjId,
@@ -198,10 +229,22 @@ export const StockAdjustmentService = {
     const adj = await this.getById(id);
     if (!adj) throw new Error("Không tìm thấy phiếu điều chỉnh kho");
     if (adj.status !== "DRAFT") {
-      throw new Error(`Chỉ có thể phê duyệt phiếu ở trạng thái DRAFT. Trạng thái hiện tại: ${adj.status}`);
+      throw new Error(`ALREADY_PROCESSED: Phiếu điều chỉnh này đã được xử lý trước đó (Trạng thái hiện tại: ${adj.status})`);
+    }
+
+    // Phase 4: DMS Evidence Vault Validation for DAMAGE, EXPIRED, LOSS
+    const sensitiveTypes = ['DAMAGED', 'EXPIRED', 'LOST', 'DAMAGE'];
+    if (sensitiveTypes.includes(String(adj.adjustmentType).toUpperCase()) && !adj.evidenceDocId) {
+      throw new Error(`Phiếu điều chỉnh loại ${adj.adjustmentType} bắt buộc phải đính kèm bằng chứng từ DMS Vault trước khi phê duyệt!`);
     }
 
     await db.transaction(async (tx) => {
+      // Re-check status inside transaction lock to prevent race conditions
+      const currentTxAdj = await tx.select().from(schema.stockAdjustments).where(eq(schema.stockAdjustments.id, id)).get();
+      if (!currentTxAdj || currentTxAdj.status !== "DRAFT") {
+        throw new Error("ALREADY_PROCESSED: Phiếu điều chỉnh đã được xử lý trong giao dịch đồng thời song song khác.");
+      }
+
       // 1. Post each item through authoritative InventoryService.postTransaction
       for (const it of adj.items) {
         const isIncrease = it.direction === "INCREASE" || it.type === "INCREASE";
@@ -235,6 +278,20 @@ export const StockAdjustmentService = {
     });
 
     const updated = await this.getById(id);
+
+    // Record SHA-256 Audit Log (M02)
+    await AuditService.recordAuditLog({
+      userId,
+      module: 'M20',
+      action: 'APPROVE',
+      entityType: 'STOCK_ADJUSTMENT',
+      entityId: id,
+      result: 'SUCCESS',
+      beforeData: adj,
+      afterData: updated,
+      reason: 'Phê duyệt phiếu điều chỉnh kho'
+    }).catch(e => console.error("Audit log error:", e));
+
     return updated || { ...adj, status: "APPROVED", approvedAt: new Date().toISOString() };
   },
 
@@ -254,7 +311,22 @@ export const StockAdjustmentService = {
       } as any)
       .where(eq(schema.stockAdjustments.id, id));
 
-    return await this.getById(id);
+    const rejected = await this.getById(id);
+
+    // Record SHA-256 Audit Log (M02)
+    await AuditService.recordAuditLog({
+      userId,
+      module: 'M20',
+      action: 'REJECT',
+      entityType: 'STOCK_ADJUSTMENT',
+      entityId: id,
+      result: 'SUCCESS',
+      beforeData: adj,
+      afterData: rejected,
+      reason: reason || 'Từ chối phiếu điều chỉnh kho'
+    }).catch(e => console.error("Audit log error:", e));
+
+    return rejected;
   },
 
   async duplicate(id: number, userId: number) {

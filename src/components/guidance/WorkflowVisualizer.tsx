@@ -765,10 +765,10 @@ export const WorkflowVisualizer: React.FC<WorkflowVisualizerProps> = ({
   return (
     <div
       id="workflow-visualizer-container"
-      className={`bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col ${className}`}
+      className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col ${className}`}
     >
       {/* Header bar */}
-      <div className="px-5 py-3.5 bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white flex flex-wrap items-center justify-between gap-3 shrink-0 border-b border-slate-800">
+      <div className="px-5 py-3.5 bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 text-white flex flex-wrap items-center justify-between gap-3 shrink-0 border-b border-slate-800">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-blue-600/30 border border-blue-400/40 text-blue-300 flex items-center justify-center shrink-0">
             <Workflow className="w-4 h-4 text-blue-300" />
@@ -800,7 +800,7 @@ export const WorkflowVisualizer: React.FC<WorkflowVisualizerProps> = ({
                 className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap text-xs font-bold ${
                   isSelected
                     ? 'bg-blue-600 text-white shadow-2xs'
-                    : 'bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-800'
+                    : 'bg-slate-800/80 dark:bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
                 }`}
               >
                 {proc.code.replace('_CORE', '')}
@@ -811,17 +811,17 @@ export const WorkflowVisualizer: React.FC<WorkflowVisualizerProps> = ({
       </div>
 
       {/* Description & Stage State Selector Controls */}
-      <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
-        <p className="text-slate-600 max-w-2xl leading-relaxed">
+      <div className="px-5 py-3 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <p className="text-slate-600 dark:text-slate-300 max-w-2xl leading-relaxed">
           {activeProcess.description}
         </p>
 
         {/* Stage Highlight Simulator */}
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-slate-500 font-semibold uppercase text-[10px] tracking-wider">
+          <span className="text-slate-500 dark:text-slate-400 font-semibold uppercase text-[10px] tracking-wider">
             Giai Đoạn Mô Phỏng:
           </span>
-          <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-xl p-0.5 shadow-2xs">
+          <div className="flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-0.5 shadow-2xs">
             {activeProcess.stages.map((stg) => {
               const isSelected = stg.stageIndex === currentStageIndex;
               return (
@@ -832,7 +832,7 @@ export const WorkflowVisualizer: React.FC<WorkflowVisualizerProps> = ({
                   className={`px-2 py-1 rounded-lg text-xs font-mono font-bold transition-colors cursor-pointer ${
                     isSelected
                       ? 'bg-blue-600 text-white shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
                   }`}
                   title={`${stg.stageIndex}. ${stg.label} (${stg.stateCode})`}
                 >
@@ -848,7 +848,7 @@ export const WorkflowVisualizer: React.FC<WorkflowVisualizerProps> = ({
               const match = activeProcess.stages.find((s) => s.moduleId === currentModuleId);
               if (match) setCurrentStageIndex(match.stageIndex);
             }}
-            className="px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors cursor-pointer"
+            className="px-2.5 py-1 text-[11px] font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 rounded-xl transition-colors cursor-pointer"
             title="Tự động nhảy về giai đoạn khớp với phân hệ bạn đang đứng"
           >
             Khớp Phân Hệ ({currentModuleId})
@@ -857,7 +857,7 @@ export const WorkflowVisualizer: React.FC<WorkflowVisualizerProps> = ({
       </div>
 
       {/* NON-INTERACTIVE SVG TIMELINE CANVAS */}
-      <div className="p-4 bg-slate-900/5 flex flex-col items-center justify-center border-b border-slate-200 overflow-x-auto">
+      <div className="p-4 bg-slate-900/5 dark:bg-slate-950/40 flex flex-col items-center justify-center border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
         <div className="min-w-[980px] w-full max-w-5xl py-2">
           <svg
             viewBox={`0 0 ${svgWidth} ${svgHeight}`}
@@ -1209,48 +1209,48 @@ export const WorkflowVisualizer: React.FC<WorkflowVisualizerProps> = ({
       </div>
 
       {/* SVG Timeline Legend Strip */}
-      <div className="px-5 py-2.5 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-4 text-xs">
+      <div className="px-5 py-2.5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4 text-xs">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-emerald-500 border border-emerald-600 inline-block shrink-0" />
-            <span className="text-slate-700 font-semibold">Đã hoàn thành (Recorded in Ledger)</span>
+            <span className="text-slate-700 dark:text-slate-300 font-semibold">Đã hoàn thành (Recorded in Ledger)</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-blue-600 border border-blue-700 inline-block shrink-0" />
-            <span className="text-slate-900 font-bold">Giai đoạn hiện tại (Active State Authority)</span>
+            <span className="text-slate-900 dark:text-white font-bold">Giai đoạn hiện tại (Active State Authority)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full bg-white border-2 border-dashed border-slate-400 inline-block shrink-0" />
-            <span className="text-slate-500 font-medium">Giai đoạn tiếp theo (Upcoming / Blocked)</span>
+            <span className="w-3 h-3 rounded-full bg-white dark:bg-slate-800 border-2 border-dashed border-slate-400 dark:border-slate-600 inline-block shrink-0" />
+            <span className="text-slate-500 dark:text-slate-400 font-medium">Giai đoạn tiếp theo (Upcoming / Blocked)</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 text-slate-500 font-mono text-[11px]">
+        <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-mono text-[11px]">
           <Database className="w-3.5 h-3.5 text-slate-400" />
           <span>Non-interactive SVG Timeline (Deterministic State Machine)</span>
         </div>
       </div>
 
       {/* STATE MACHINE CONTRACT DRILLDOWN: Inspecting Current Highlighted Stage */}
-      <div className="p-5 bg-slate-50/70 flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200">
+      <div className="p-5 bg-slate-50/70 dark:bg-slate-900 flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-2.5">
             <span className="w-7 h-7 rounded-xl bg-blue-600 text-white font-mono font-bold text-xs flex items-center justify-center shadow-2xs">
               {activeStage.stageIndex}
             </span>
             <div>
               <div className="flex items-center gap-2">
-                <h4 className="text-sm font-bold text-slate-900">
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                   {activeStage.label}
                 </h4>
-                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
+                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
                   STATE: {activeStage.stateCode}
                 </span>
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-700">
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                   {activeStage.moduleId} - {activeStage.moduleName}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 {activeStage.description}
               </p>
             </div>
@@ -1271,34 +1271,34 @@ export const WorkflowVisualizer: React.FC<WorkflowVisualizerProps> = ({
         {/* 4 Architectural Columns based on State Machine */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
           {/* Box 1: Single Writer & Authority */}
-          <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col">
-            <div className="flex items-center gap-1.5 text-slate-800 font-bold mb-2 pb-1.5 border-b border-slate-100">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+          <div className="bg-white dark:bg-slate-800 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs flex flex-col">
+            <div className="flex items-center gap-1.5 text-slate-800 dark:text-white font-bold mb-2 pb-1.5 border-b border-slate-100 dark:border-slate-700">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               <span>Thẩm Quyền Đơn Ghi (Single Writer)</span>
             </div>
-            <div className="space-y-1.5 text-slate-600 flex-1">
+            <div className="space-y-1.5 text-slate-600 dark:text-slate-300 flex-1">
               <div>
-                <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Domain Service:</span>
-                <span className="font-mono font-bold text-blue-700 text-[11px]">{activeStage.engineAuthority}</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Domain Service:</span>
+                <span className="font-mono font-bold text-blue-700 dark:text-blue-400 text-[11px]">{activeStage.engineAuthority}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Vai trò thực hiện:</span>
-                <span className="font-semibold text-slate-800">{activeStage.actorRole}</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Vai trò thực hiện:</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">{activeStage.actorRole}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Sự kiện kích hoạt:</span>
-                <span className="font-mono text-slate-700">{activeStage.transitionEvent}</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Sự kiện kích hoạt:</span>
+                <span className="font-mono text-slate-700 dark:text-slate-300">{activeStage.transitionEvent}</span>
               </div>
             </div>
           </div>
 
           {/* Box 2: Preconditions */}
-          <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col">
-            <div className="flex items-center gap-1.5 text-slate-800 font-bold mb-2 pb-1.5 border-b border-slate-100">
-              <Clock className="w-4 h-4 text-amber-600" />
+          <div className="bg-white dark:bg-slate-800 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs flex flex-col">
+            <div className="flex items-center gap-1.5 text-slate-800 dark:text-white font-bold mb-2 pb-1.5 border-b border-slate-100 dark:border-slate-700">
+              <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
               <span>Điều Kiện Tiên Quyết (Preconditions)</span>
             </div>
-            <ul className="space-y-1 text-slate-600 flex-1 list-disc list-inside">
+            <ul className="space-y-1 text-slate-600 dark:text-slate-300 flex-1 list-disc list-inside">
               {activeStage.preconditions.map((p, idx) => (
                 <li key={idx} className="leading-snug">{p}</li>
               ))}
@@ -1306,20 +1306,20 @@ export const WorkflowVisualizer: React.FC<WorkflowVisualizerProps> = ({
           </div>
 
           {/* Box 3: State Transitions (Allowed & Blocked) */}
-          <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col">
-            <div className="flex items-center gap-1.5 text-slate-800 font-bold mb-2 pb-1.5 border-b border-slate-100">
-              <Lock className="w-4 h-4 text-blue-600" />
+          <div className="bg-white dark:bg-slate-800 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs flex flex-col">
+            <div className="flex items-center gap-1.5 text-slate-800 dark:text-white font-bold mb-2 pb-1.5 border-b border-slate-100 dark:border-slate-700">
+              <Lock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               <span>Quy Tắc Chuyển Trạng Thái</span>
             </div>
             <div className="space-y-2 flex-1">
               <div>
-                <span className="text-[10px] text-emerald-700 uppercase font-bold tracking-wider block">
+                <span className="text-[10px] text-emerald-700 dark:text-emerald-400 uppercase font-bold tracking-wider block">
                   Được phép chuyển đến:
                 </span>
                 <div className="flex flex-wrap gap-1 mt-0.5">
                   {activeStage.allowedTransitions.length > 0 ? (
                     activeStage.allowedTransitions.map((t) => (
-                      <span key={t} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-mono text-[10px] font-bold border border-emerald-200">
+                      <span key={t} className="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 font-mono text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
                         {t}
                       </span>
                     ))
@@ -1331,13 +1331,13 @@ export const WorkflowVisualizer: React.FC<WorkflowVisualizerProps> = ({
 
               {activeStage.blockedTransitions.length > 0 && (
                 <div>
-                  <span className="text-[10px] text-rose-700 uppercase font-bold tracking-wider block">
+                  <span className="text-[10px] text-rose-700 dark:text-rose-400 uppercase font-bold tracking-wider block">
                     Bị chặn & Lý do bất biến:
                   </span>
                   <div className="space-y-1 mt-0.5">
                     {activeStage.blockedTransitions.map((b, idx) => (
-                      <div key={idx} className="text-[10px] text-slate-600 leading-tight">
-                        <span className="font-mono font-bold text-rose-700">🚫 {b.targetState}:</span> {b.reason}
+                      <div key={idx} className="text-[10px] text-slate-600 dark:text-slate-300 leading-tight">
+                        <span className="font-mono font-bold text-rose-700 dark:text-rose-400">🚫 {b.targetState}:</span> {b.reason}
                       </div>
                     ))}
                   </div>
@@ -1347,19 +1347,19 @@ export const WorkflowVisualizer: React.FC<WorkflowVisualizerProps> = ({
           </div>
 
           {/* Box 4: Database Effect & Audit */}
-          <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col">
-            <div className="flex items-center gap-1.5 text-slate-800 font-bold mb-2 pb-1.5 border-b border-slate-100">
-              <Database className="w-4 h-4 text-indigo-600" />
+          <div className="bg-white dark:bg-slate-800 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs flex flex-col">
+            <div className="flex items-center gap-1.5 text-slate-800 dark:text-white font-bold mb-2 pb-1.5 border-b border-slate-100 dark:border-slate-700">
+              <Database className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               <span>Tác Động Cơ Sở Dữ Liệu</span>
             </div>
-            <div className="space-y-1.5 text-slate-600 flex-1">
+            <div className="space-y-1.5 text-slate-600 dark:text-slate-300 flex-1">
               <div>
-                <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Hạch toán & Sổ cái:</span>
-                <p className="text-[11px] font-mono text-slate-800 leading-snug">{activeStage.databaseEffect}</p>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Hạch toán & Sổ cái:</span>
+                <p className="text-[11px] font-mono text-slate-800 dark:text-slate-200 leading-snug">{activeStage.databaseEffect}</p>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Kiểm toán Audit:</span>
-                <span className="text-[11px] text-slate-600">{activeStage.auditRequirement}</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Kiểm toán Audit:</span>
+                <span className="text-[11px] text-slate-600 dark:text-slate-300">{activeStage.auditRequirement}</span>
               </div>
             </div>
           </div>

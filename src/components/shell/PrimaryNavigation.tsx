@@ -64,7 +64,7 @@ export const PrimaryNavigation: React.FC<PrimaryNavigationProps> = ({
     {
       name: '01. Thương Mại & Bán Hàng',
       icon: 'ShoppingBag',
-      modules: ['M07', 'M12', 'M13', 'M14', 'M15', 'M16', 'M41']
+      modules: ['M07', 'M12', 'M13', 'M14', 'M15', 'M16', 'M41', 'M43']
     },
     {
       name: '02. Mua Sắm & Cung Ứng',
@@ -115,7 +115,7 @@ export const PrimaryNavigation: React.FC<PrimaryNavigationProps> = ({
           </span>
         </div>
         <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800/90 text-slate-400 border border-slate-700/80 whitespace-nowrap">
-          29 Workspaces
+          30 Workspaces
         </span>
       </div>
 

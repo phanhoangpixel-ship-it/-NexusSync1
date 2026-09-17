@@ -56,21 +56,21 @@ export const SimulatedLoginModal: React.FC<SimulatedLoginModalProps> = ({
       <div
         id="login-modal"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 cursor-default select-text"
+        className="w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 cursor-default select-text"
       >
-        <div className="flex items-center justify-between p-5 border-b border-slate-200 bg-slate-50/70">
+        <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/90">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 flex items-center justify-center">
               <Shield className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900">Thông tin Người dùng & Môi trường</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Cấu hình hồ sơ môi trường ERP và vai trò người dùng</p>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">Thông tin Người dùng & Môi trường</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Cấu hình hồ sơ môi trường ERP và vai trò người dùng</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-200/50 transition-colors"
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -80,8 +80,8 @@ export const SimulatedLoginModal: React.FC<SimulatedLoginModalProps> = ({
           {/* Section 1: Environment Profile Switcher */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <Layers className="w-4 h-4 text-blue-600" />
-              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Hồ Sơ Môi Trường (Environment Profile)</h4>
+              <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Hồ Sơ Môi Trường (Environment Profile)</h4>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {ENVIRONMENT_PROFILES.map((profile) => {
@@ -93,32 +93,32 @@ export const SimulatedLoginModal: React.FC<SimulatedLoginModalProps> = ({
                     onClick={() => onProfileChange(profile.id)}
                     className={`flex flex-col text-left p-3.5 rounded-xl border transition-all ${
                       isSelected
-                        ? 'border-blue-500 bg-blue-50/40 ring-1 ring-blue-500/30'
-                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                        ? 'border-blue-500 bg-blue-50/40 dark:bg-blue-950/40 ring-1 ring-blue-500/30 dark:border-blue-500'
+                        : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/80'
                     }`}
                   >
                     <div className="flex items-center justify-between w-full">
-                      <span className="text-xs font-bold text-slate-900">{profile.name}</span>
+                      <span className="text-xs font-bold text-slate-900 dark:text-white">{profile.name}</span>
                       {isSelected && (
                         <div className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0">
                           <Check className="w-2.5 h-2.5" />
                         </div>
                       )}
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed flex-1">{profile.description}</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed flex-1">{profile.description}</p>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          <div className="h-px bg-slate-100" />
+          <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
           {/* Section 2: User Role / Simulated Login */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <User className="w-4 h-4 text-purple-600" />
-              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Mô phỏng Đăng nhập (User Roles)</h4>
+              <User className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+              <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Mô phỏng Đăng nhập (User Roles)</h4>
             </div>
             <div className="space-y-2">
               {usersList.map((user) => {
@@ -142,26 +142,26 @@ export const SimulatedLoginModal: React.FC<SimulatedLoginModalProps> = ({
                     }}
                     className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition-all ${
                       isCurrent
-                        ? 'border-purple-300 bg-purple-50/80 shadow-xs'
-                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                        ? 'border-purple-300 dark:border-purple-800 bg-purple-50/80 dark:bg-purple-950/50 shadow-xs'
+                        : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/80'
                     }`}
                   >
                     <div className="flex items-center gap-3.5">
                       <div
                         className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${
-                          isCurrent ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-600'
+                          isCurrent ? 'bg-purple-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
                         }`}
                       >
                         <User className="w-4 h-4" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-slate-900">{user.name}</span>
-                          <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-700">
+                          <span className="text-sm font-semibold text-slate-900 dark:text-white">{user.name}</span>
+                          <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                             {user.role}
                           </span>
                         </div>
-                        <p className="text-xs text-slate-500 mt-0.5">{user.department}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{user.department}</p>
                       </div>
                     </div>
 
@@ -177,7 +177,7 @@ export const SimulatedLoginModal: React.FC<SimulatedLoginModalProps> = ({
           </div>
         </div>
 
-        <div className="p-4 bg-slate-50 border-t border-slate-100 text-xs text-slate-500 text-center">
+        <div className="p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 text-center">
           Thay đổi vai trò sẽ điều chỉnh trực tiếp các quyền hạn Approve, Reject, Create và bộ lọc dữ liệu.
         </div>
       </div>

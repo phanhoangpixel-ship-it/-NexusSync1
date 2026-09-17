@@ -100,6 +100,26 @@ html.cool-dark select,
 [role="tabpanel"].dark textarea,
 [role="tabpanel"].dark select {
   color: #f8fafc !important;
+  background-color: #1e293b !important; /* Distinct dark background #1e293b (slate-800) preventing invisible inputs */
+  border: 1px solid #475569 !important; /* Distinct border #475569 (slate-600) */
+}
+
+.dark input:not([type="checkbox"]):not([type="radio"]):focus,
+.dark textarea:focus,
+.dark select:focus,
+.cool-dark input:not([type="checkbox"]):not([type="radio"]):focus,
+.cool-dark textarea:focus,
+.cool-dark select:focus,
+html.dark input:not([type="checkbox"]):not([type="radio"]):focus,
+html.dark textarea:focus,
+html.dark select:focus,
+html.cool-dark input:not([type="checkbox"]):not([type="radio"]):focus,
+html.cool-dark textarea:focus,
+html.cool-dark select:focus {
+  background-color: #0f172a !important;
+  border-color: #3b82f6 !important; /* Blue highlight */
+  outline: none !important;
+  box-shadow: 0 0 0 2px #0f172a, 0 0 0 4px #3b82f6 !important; /* Equivalent to ring-2 ring-offset-2 ring-offset-slate-900 ring-blue-500 */
 }
 
 .dark input:not([type="checkbox"]):not([type="radio"])::placeholder,
@@ -110,7 +130,7 @@ html.dark input:not([type="checkbox"]):not([type="radio"])::placeholder,
 html.dark textarea::placeholder,
 html.cool-dark input:not([type="checkbox"]):not([type="radio"])::placeholder,
 html.cool-dark textarea::placeholder {
-  color: #94a3b8 !important;
+  color: #94a3b8 !important; /* High contrast placeholder */
 }
 
 .dark select option,
@@ -118,7 +138,7 @@ html.cool-dark textarea::placeholder {
 html.dark select option,
 html.cool-dark select option {
   color: #f8fafc !important;
-  background-color: #0f172a !important;
+  background-color: #1e293b !important;
 }
 
 /* 4. Tab Navigation & Sub-Tabs Contrast Guarantee across ALL 42 Modules */

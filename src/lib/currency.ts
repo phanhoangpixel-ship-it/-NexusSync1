@@ -1,20 +1,23 @@
-export const formatVND = (num: number | undefined | null): string => {
-  if (num === undefined || num === null || isNaN(num)) return '0 ₫';
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num);
+import { formatNumber, parseNumber } from '../utils/numberFormat';
+
+export const formatVND = (num: number | undefined | null, options?: { showSymbol?: boolean; fractionDigits?: number }): string => {
+  if (num === undefined || num === null || isNaN(num)) return options?.showSymbol === false ? '0' : '0 ₫';
+  const showSymbol = options?.showSymbol ?? true;
+  const formatted = formatNumber(num, {
+    thousandSeparator: '.',
+    decimalSeparator: ',',
+    minimumFractionDigits: options?.fractionDigits,
+    maximumFractionDigits: options?.fractionDigits,
+  });
+  return showSymbol ? `${formatted} ₫` : formatted;
 };
 
 export const formatNumberWithDots = (num: number | string | undefined | null): string => {
   if (num === undefined || num === null || num === '') return '';
-  const raw = typeof num === 'number' ? num.toString() : num.replace(/\D/g, '');
-  if (!raw) return '';
-  const parsed = parseInt(raw, 10);
-  if (isNaN(parsed)) return '';
-  return parsed.toLocaleString('vi-VN');
+  return formatNumber(num, { thousandSeparator: '.', decimalSeparator: ',' });
 };
 
-export const parseFormattedNumber = (val: string | undefined | null): number => {
-  if (!val) return 0;
-  const raw = val.replace(/\D/g, '');
-  const parsed = parseInt(raw, 10);
-  return isNaN(parsed) ? 0 : parsed;
+export const parseFormattedNumber = (val: string | number | undefined | null): number => {
+  if (!val && val !== 0) return 0;
+  return parseNumber(val);
 };

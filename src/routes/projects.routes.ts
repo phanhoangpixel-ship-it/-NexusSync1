@@ -109,17 +109,8 @@ async function ensureProjectsSeeded() {
 ensureProjectsSeeded();
 
 // ==========================================
-// AUDIT & IT ISSUES API
+// IT ISSUES API (Audit Ledger handled by M02 auditRouter)
 // ==========================================
-router.get("/api/audit/logs", async (req, res) => {
-  try {
-    const logs = await db.select().from(schema.auditLogs).orderBy(desc(schema.auditLogs.id)).limit(100).all();
-    res.json(logs);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 router.get("/api/issues", (req, res) => {
   res.json(seedTickets);
 });

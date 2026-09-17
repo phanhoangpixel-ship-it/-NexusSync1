@@ -69,7 +69,7 @@ export const GuidanceModal: React.FC<GuidanceModalProps> = ({
       >
         <div
           id="nexus-guidance-modal-container"
-          className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+          className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
         >
           {/* Header */}
           <div className="px-6 py-4 bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white flex items-center justify-between shrink-0 border-b border-slate-800">
@@ -102,14 +102,14 @@ export const GuidanceModal: React.FC<GuidanceModalProps> = ({
           </div>
 
           {/* Navigation Tabs (3 Clean Tabs) */}
-          <div className="px-6 py-2.5 bg-slate-100 border-b border-slate-200 flex items-center gap-3 overflow-x-auto text-xs font-bold">
+          <div className="px-6 py-2.5 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 overflow-x-auto text-xs font-bold">
             <button
               type="button"
               onClick={() => setActiveTab('ACTION')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all cursor-pointer ${
                 activeTab === 'ACTION'
                   ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'text-slate-700 hover:text-slate-900 hover:bg-white'
+                  : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-800'
               }`}
             >
               <Zap className="w-4 h-4" />
@@ -122,7 +122,7 @@ export const GuidanceModal: React.FC<GuidanceModalProps> = ({
               className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all cursor-pointer ${
                 activeTab === 'WORKFLOW'
                   ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'text-slate-700 hover:text-slate-900 hover:bg-white'
+                  : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-800'
               }`}
             >
               <Workflow className="w-4 h-4" />
@@ -135,7 +135,7 @@ export const GuidanceModal: React.FC<GuidanceModalProps> = ({
               className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all cursor-pointer ${
                 activeTab === 'CONTRACT'
                   ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'text-slate-700 hover:text-slate-900 hover:bg-white'
+                  : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-800'
               }`}
             >
               <BookOpen className="w-4 h-4" />
@@ -144,15 +144,15 @@ export const GuidanceModal: React.FC<GuidanceModalProps> = ({
           </div>
 
           {/* Modal Body */}
-          <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50 flex flex-col gap-6">
+          <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50 dark:bg-slate-950 flex flex-col gap-6">
             {activeTab === 'ACTION' && (
               <div className="flex flex-col gap-6">
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
-                  <h3 className="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-blue-600" />
+                <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-1 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     <span>Xác Định Mục Tiêu Nhanh Bằng Ngôn Ngữ Tự Nhiên</span>
                   </h3>
-                  <p className="text-xs text-slate-500 mb-4">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
                     Nhập yêu cầu nghiệp vụ để hệ thống tự động định tuyến đến phân hệ chuẩn và đề xuất hành động tối ưu.
                   </p>
                   <IntentBar
@@ -167,9 +167,9 @@ export const GuidanceModal: React.FC<GuidanceModalProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
-                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                      <Zap className="w-4 h-4 text-amber-600" />
+                  <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
+                    <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                      <Zap className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                       Gợi Ý Đề Xuất Bước Tiếp Theo (NBA)
                     </h4>
                     <NextActionCard
@@ -181,9 +181,9 @@ export const GuidanceModal: React.FC<GuidanceModalProps> = ({
                     />
                   </div>
 
-                  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
-                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                      <Briefcase className="w-4 h-4 text-blue-600" />
+                  <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
+                    <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                      <Briefcase className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                       Hồ Sơ Cần Xử Lý (My Work Queue)
                     </h4>
                     <MyWorkWidget
@@ -201,7 +201,7 @@ export const GuidanceModal: React.FC<GuidanceModalProps> = ({
 
             {activeTab === 'WORKFLOW' && (
               <div className="flex flex-col gap-6">
-                <div className="bg-white p-4 rounded-2xl border border-slate-200">
+                <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
                   <BusinessGpsTracker
                     currentModuleId={currentModuleId}
                     onNavigateToStepModule={(modId) => {
@@ -215,17 +215,17 @@ export const GuidanceModal: React.FC<GuidanceModalProps> = ({
 
             {activeTab === 'CONTRACT' && (
               <div className="flex flex-col gap-6">
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs flex flex-col gap-5">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs flex flex-col gap-5">
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-mono font-bold text-sm">
+                      <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-mono font-bold text-sm shadow-inner">
                         {currentModule.moduleId}
                       </div>
                       <div>
-                        <h3 className="text-base font-bold text-slate-900">{currentModule.moduleName}</h3>
-                        <p className="text-xs text-slate-500">
-                          Phân khu: <span className="font-semibold text-slate-700">{currentModule.domain}</span> • Trạng thái:{' '}
-                          <span className="text-emerald-600 font-semibold">Active & Governed</span>
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">{currentModule.moduleName}</h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Phân khu: <span className="font-semibold text-slate-700 dark:text-slate-200">{currentModule.domain}</span> • Trạng thái:{' '}
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Active & Governed</span>
                         </p>
                       </div>
                     </div>
@@ -243,58 +243,58 @@ export const GuidanceModal: React.FC<GuidanceModalProps> = ({
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                      <div className="flex items-center gap-2 text-xs font-bold text-slate-800 mb-2">
-                        <Cpu className="w-4 h-4 text-blue-600" />
+                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-white mb-2">
+                        <Cpu className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                         <span>Domain Engine & Authority</span>
                       </div>
-                      <p className="text-xs text-slate-700 font-mono font-semibold bg-white p-2.5 rounded border border-slate-200">
+                      <p className="text-xs text-slate-700 dark:text-slate-300 font-mono font-semibold bg-white dark:bg-slate-900 p-2.5 rounded border border-slate-200 dark:border-slate-700">
                         {currentContract.engine}
                       </p>
                     </div>
 
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                      <div className="flex items-center gap-2 text-xs font-bold text-slate-800 mb-2">
-                        <Database className="w-4 h-4 text-emerald-600" />
+                    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-white mb-2">
+                        <Database className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                         <span>Database Impact & Persistence</span>
                       </div>
-                      <p className="text-xs text-slate-700 bg-white p-2.5 rounded border border-slate-200">
+                      <p className="text-xs text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 p-2.5 rounded border border-slate-200 dark:border-slate-700">
                         {currentContract.dbImpact}
                       </p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-amber-50/60 p-4 rounded-xl border border-amber-200">
-                      <div className="flex items-center gap-2 text-xs font-bold text-amber-900 mb-1.5">
-                        <AlertCircle className="w-4 h-4 text-amber-600" />
+                    <div className="bg-amber-50/60 dark:bg-amber-950/40 p-4 rounded-xl border border-amber-200 dark:border-amber-800">
+                      <div className="flex items-center gap-2 text-xs font-bold text-amber-900 dark:text-amber-300 mb-1.5">
+                        <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                         <span>Sai Lầm Phổ Biến Cần Tránh</span>
                       </div>
-                      <p className="text-xs text-amber-800 leading-relaxed">
+                      <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
                         {currentContract.commonMistake}
                       </p>
                     </div>
 
-                    <div className="bg-rose-50/60 p-4 rounded-xl border border-rose-200">
-                      <div className="flex items-center gap-2 text-xs font-bold text-rose-900 mb-1.5">
-                        <ShieldCheck className="w-4 h-4 text-rose-600" />
+                    <div className="bg-rose-50/60 dark:bg-rose-950/40 p-4 rounded-xl border border-rose-200 dark:border-rose-800">
+                      <div className="flex items-center gap-2 text-xs font-bold text-rose-900 dark:text-rose-300 mb-1.5">
+                        <ShieldCheck className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                         <span>Quy Tắc Khi Không Nên Sử Dụng</span>
                       </div>
-                      <p className="text-xs text-rose-800 leading-relaxed">
+                      <p className="text-xs text-rose-800 dark:text-rose-200 leading-relaxed">
                         {currentContract.whenNotToUse}
                       </p>
                     </div>
                   </div>
 
-                  <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-200">
-                    <h4 className="text-xs font-bold text-blue-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                  <div className="bg-blue-50/50 dark:bg-blue-950/40 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
+                    <h4 className="text-xs font-bold text-blue-900 dark:text-blue-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                       Bất Biến Nghiệp Vụ & Kiểm Soát (Invariants)
                     </h4>
-                    <ul className="space-y-1.5 text-xs text-blue-950">
+                    <ul className="space-y-1.5 text-xs text-blue-950 dark:text-blue-200">
                       {currentContract.invariants.map((inv, idx) => (
                         <li key={idx} className="flex items-start gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-blue-600 mt-1.5 shrink-0" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400 mt-1.5 shrink-0" />
                           <span>{inv}</span>
                         </li>
                       ))}
@@ -306,14 +306,14 @@ export const GuidanceModal: React.FC<GuidanceModalProps> = ({
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-3 bg-white border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+          <div className="px-6 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span className="font-mono">
               NexusSync ERP v3.4 — Smart Guidance Hub & Contextual Unification
             </span>
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors cursor-pointer"
+              className="px-4 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-xl transition-colors cursor-pointer"
             >
               Đóng
             </button>

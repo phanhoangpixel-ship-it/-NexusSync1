@@ -264,8 +264,8 @@ export const TableExportModal: React.FC<TableExportModalProps> = ({
                         }`}
                       >
                         <div className="truncate pr-2">
-                          <p className="truncate leading-tight">{t.title}</p>
-                          <p className="text-[10px] text-slate-400 font-mono mt-0.5 font-normal">
+                          <p className="truncate leading-tight font-medium text-slate-800">{t.title}</p>
+                          <p className="text-[10px] text-slate-600 font-mono mt-0.5 font-normal">
                             {t.totalRows} dòng • {t.totalColumns} cột
                           </p>
                         </div>
@@ -284,7 +284,7 @@ export const TableExportModal: React.FC<TableExportModalProps> = ({
                       >
                         <div>
                           <p className="font-bold text-slate-900 leading-tight">Xuất toàn bộ {tables.length} bảng</p>
-                          <p className="text-[10px] text-slate-400 font-mono mt-0.5">Tạo Multi-Sheet Workbook (.xlsx)</p>
+                          <p className="text-[10px] text-slate-600 font-mono mt-0.5">Tạo Multi-Sheet Workbook (.xlsx)</p>
                         </div>
                         {selectedTableIndex === -1 && <Check className="w-4 h-4 text-blue-600 shrink-0" />}
                       </button>
@@ -390,7 +390,7 @@ export const TableExportModal: React.FC<TableExportModalProps> = ({
                           </span>
                         )}
                       </h4>
-                      <p className="text-[11px] text-slate-400">Xem trước 5 bản ghi mẫu đầu tiên</p>
+                      <p className="text-[11px] text-slate-600 font-medium">Xem trước 5 bản ghi mẫu đầu tiên</p>
                     </div>
 
                     <button
@@ -445,7 +445,7 @@ export const TableExportModal: React.FC<TableExportModalProps> = ({
                         </tbody>
                       </table>
                     ) : (
-                      <div className="p-8 text-center text-xs text-slate-400">
+                      <div className="p-8 text-center text-xs text-slate-600 font-medium">
                         Chế độ xuất đa bảng được chọn. Tất cả các bảng sẽ được chia thành từng Sheet riêng biệt trong tệp Excel.
                       </div>
                     )}
@@ -453,17 +453,17 @@ export const TableExportModal: React.FC<TableExportModalProps> = ({
 
                   {/* Metadata Stamp Footer */}
                   {includeMetadata && (
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between text-[10px] text-slate-400 font-mono gap-2">
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between text-[10px] text-slate-600 font-mono gap-2 font-semibold">
                       <div className="flex items-center gap-1.5">
-                        <Building2 className="w-3 h-3 text-slate-400" />
+                        <Building2 className="w-3 h-3 text-slate-500" />
                         <span>Chi nhánh: {currentBranchName}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <Calendar className="w-3 h-3 text-slate-400" />
+                        <Calendar className="w-3 h-3 text-slate-500" />
                         <span>Thời gian: {new Date().toLocaleString('vi-VN')}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <Layers className="w-3 h-3 text-slate-400" />
+                        <Layers className="w-3 h-3 text-slate-500" />
                         <span>Người lập: {currentUser.username}</span>
                       </div>
                     </div>

@@ -57,7 +57,13 @@ import { crmRouter } from "./src/routes/crm.routes";
 import { eventsRouter } from "./src/routes/events.routes";
 import rdRouter from "./src/routes/rd.routes";
 import { lotsRouter } from "./src/routes/lots.routes";
+import { serialsRouter } from "./src/routes/serials.routes";
 import { settingsRouter } from "./src/routes/settings.routes";
+import { industryProfilesRouter } from "./src/routes/industryProfiles.routes";
+import { orgWorkflowRouter } from "./src/routes/orgWorkflow.routes";
+import wmsExtendedRouter from "./src/routes/wmsExtended.routes";
+import { auditRouter } from "./src/routes/audit.routes";
+import { AuditService } from "./engines/auditService";
 import { CostingShadowRunner } from "./engines/costingShadowRunner";
 import { costingEngine } from "./engines/costingEngine";
 
@@ -71,12 +77,15 @@ async function startServer() {
   // Bootstrap SQLite database and seeds
   try {
     await bootstrapDatabase();
+    await AuditService.seedInitialChainIfEmpty();
+    await AuditService.init();
   } catch (err) {
     console.error("Warning during bootstrapDatabase:", err);
   }
 
   // --- API ROUTES ---
   app.use("/api", requireAuth);
+  app.use(auditRouter);
   app.use(coreRouter);
   app.use(authRouter);
   app.use(workspaceRouter);
@@ -106,7 +115,13 @@ async function startServer() {
   app.use(eventsRouter);
   app.use(rdRouter);
   app.use(lotsRouter);
+  app.use(serialsRouter);
   app.use(settingsRouter);
+  app.use(industryProfilesRouter);
+  app.use(orgWorkflowRouter);
+
+  // --- PHASE 6: M24 WMS EXTENDED ROUTER (WAVE PICKING, LPN, DOCK SCHEDULING, SERVICE ENGINES) ---
+  app.use(wmsExtendedRouter);
 
   // --- SHADOW RUN GOVERNANCE ENDPOINTS (M42 / Architecture Guard) ---
   app.get("/api/costing/shadow-run/status", async (req, res) => {
@@ -365,14 +380,11 @@ async function startServer() {
   // --- M16: POS Shift & Cash Drawer Endpoints ---
   const fallbackEndpoints = [
     "/api/lots",
-    "/api/serials",
-    "/api/wms/wave-picks",
     "/api/returns",
     "/api/pos/sessions",
     
     "/api/srm/scorecards",
     "/api/quality/plans",
-    "/api/events/outbox",
     "/api/reports/summary",
     "/api/commission/plans",
   ];

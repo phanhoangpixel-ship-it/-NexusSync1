@@ -45,10 +45,10 @@ export const AuditComplianceWorkspace: React.FC<AuditComplianceWorkspaceProps> =
   const fetchAuditLogs = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/audit/logs');
+      const res = await fetch('/api/audit/logs?limit=100');
       if (res.ok) {
         const data = await res.json();
-        setLogs(Array.isArray(data) ? data : []);
+        setLogs(Array.isArray(data) ? data : (data.logs || []));
       } else {
         onNotify('danger', 'Lỗi tải dữ liệu', 'Không thể kết nối đến máy chủ nhật ký kiểm toán.');
       }
@@ -63,17 +63,31 @@ export const AuditComplianceWorkspace: React.FC<AuditComplianceWorkspaceProps> =
     fetchAuditLogs();
   }, []);
 
-  const executeVerifyIntegrity = () => {
+  const executeVerifyIntegrity = async () => {
     setVerifyingIntegrity(true);
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/audit/verify-chain');
+      const data = await res.json();
       setVerifyingIntegrity(false);
-      setIntegrityPassed(true);
-      onNotify(
-        'success',
-        'Xác thực toàn vẹn thành công',
-        `Đã kiểm tra toàn bộ ${logs.length} khối kiểm toán. 100% chữ ký mã hóa SHA-256 khớp tuyệt đối, không phát hiện giả mạo.`
-      );
-    }, 1200);
+      if (data.success && data.integrityPassed) {
+        setIntegrityPassed(true);
+        onNotify(
+          'success',
+          'Xác thực chuỗi mật mã SHA-256 thành công',
+          `Đã đối chiếu ${data.verifiedBlocks} khối kiểm toán. 100% chữ ký mã hóa SHA-256 khớp chuẩn, không phát hiện vi phạm tính toàn vẹn (ISO 27001 / Rule #03).`
+        );
+      } else {
+        setIntegrityPassed(false);
+        onNotify(
+          'danger',
+          'CẢNH BÁO: Phát hiện vi phạm toàn vẹn dữ liệu!',
+          `Phát hiện khối có chữ ký không hợp lệ: ${data.message || 'Đứt gãy chuỗi băm'}`
+        );
+      }
+    } catch (err: any) {
+      setVerifyingIntegrity(false);
+      onNotify('danger', 'Lỗi kiểm tra toàn vẹn', err.message || 'Lỗi mạng khi xác thực chuỗi hash.');
+    }
   };
 
   const handleRequestVerifyIntegrity = () => {

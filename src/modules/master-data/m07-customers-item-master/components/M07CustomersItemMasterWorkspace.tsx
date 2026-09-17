@@ -3,6 +3,7 @@ import { SelectedEntityContext, ConfirmDialogState } from '../../../../types';
 import { useWorkspaceSessionTab } from '../../../../hooks/useWorkspaceSessionTab';
 import { useDynamicContainerHeight } from '../../../../hooks/useDynamicContainerHeight';
 import { ENTERPRISE_MASTER_PRODUCTS, ENTERPRISE_MASTER_CUSTOMERS, EnterpriseProduct, EnterpriseCustomer } from '../../../../data/enterpriseMaster';
+import { formatNumber, parseNumber } from '../../../../utils/numberFormat';
 import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import { usePagination } from '../../../../hooks/usePagination';
 import { PaginationControl } from '../../../../components/common/PaginationControl';
@@ -94,14 +95,26 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
 
   const [itemCategoryFilter, setItemCategoryFilter] = useState('ALL');
 
+  // Định dạng số chuẩn ERP: dấu chấm (.) phân cách hàng nghìn, dấu phẩy (,) phân cách thập phân (VD: 1900000.5 -> "1.900.000,50")
+  const formatThousands = (val: string | number | undefined | null): string => {
+    if (val === undefined || val === null || val === '') return '';
+    return formatNumber(val);
+  };
+
+  // Trích xuất giá trị số chuẩn từ chuỗi định dạng (VD: "1.900.000,50" -> 1900000.5)
+  const parseThousands = (val: string | number | undefined | null): number => {
+    if (val === undefined || val === null || val === '') return 0;
+    return parseNumber(val);
+  };
+
   // Comprehensive New SKU Form States (Fully Aligned with M17 WMS Attributes)
   const [newSkuCode, setNewSkuCode] = useState('');
   const [newSkuName, setNewSkuName] = useState('');
   const [newSkuCategory, setNewSkuCategory] = useState('Thiết bị CNTT');
   const [newSkuUnit, setNewSkuUnit] = useState('Cái');
-  const [newSkuCost, setNewSkuCost] = useState('1500000');
-  const [newSkuWholesale, setNewSkuWholesale] = useState('1900000');
-  const [newSkuRetail, setNewSkuRetail] = useState('2100000');
+  const [newSkuCost, setNewSkuCost] = useState('1.500.000');
+  const [newSkuWholesale, setNewSkuWholesale] = useState('1.900.000');
+  const [newSkuRetail, setNewSkuRetail] = useState('2.100.000');
   const [newSkuStock, setNewSkuStock] = useState('50');
   const [newSkuSafetyStock, setNewSkuSafetyStock] = useState('10');
   const [newSkuSupplier, setNewSkuSupplier] = useState('Công ty Cổ phần Cung ứng Toàn Cầu');
@@ -208,10 +221,10 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
     setEditingItem(it);
     setEditSkuName(it.name || '');
     setEditSkuCategory(it.category || 'Thiết bị CNTT');
-    setEditSkuCost(String(it.costPrice || 0));
-    setEditSkuWholesale(String(it.wholesalePrice || 0));
-    setEditSkuRetail(String(it.retailPrice || 0));
-    setEditSkuStock(String(it.stock || 0));
+    setEditSkuCost(formatThousands(it.costPrice ?? 0));
+    setEditSkuWholesale(formatThousands(it.wholesalePrice ?? 0));
+    setEditSkuRetail(formatThousands(it.retailPrice ?? 0));
+    setEditSkuStock(formatThousands(it.stock ?? 0));
     setEditSkuImageUrl(it.imageUrl || '');
   };
 
@@ -224,10 +237,10 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
           ...it,
           name: editSkuName,
           category: editSkuCategory,
-          costPrice: Number(editSkuCost) || 0,
-          wholesalePrice: Number(editSkuWholesale) || 0,
-          retailPrice: Number(editSkuRetail) || 0,
-          stock: Number(editSkuStock) || 0,
+          costPrice: parseThousands(editSkuCost),
+          wholesalePrice: parseThousands(editSkuWholesale),
+          retailPrice: parseThousands(editSkuRetail),
+          stock: parseThousands(editSkuStock),
           imageUrl: editSkuImageUrl
         };
       }
@@ -241,7 +254,7 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
   // New Customer Form States
   const [newCustName, setNewCustName] = useState('');
   const [newCustTax, setNewCustTax] = useState('');
-  const [newCustLimit, setNewCustLimit] = useState('1,500,000,000 VND');
+  const [newCustLimit, setNewCustLimit] = useState('1.500.000.000 ₫');
 
   const [selectedEntityForModal, setSelectedEntityForModal] = useState<any | null>(null);
 
@@ -256,13 +269,14 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
       name: newCustName,
       taxCode: newCustTax || '031' + Math.floor(1000000 + Math.random() * 9000000),
       creditLimit: newCustLimit,
-      outstanding: '0 VND',
+      outstanding: '0 ₫',
       status: 'ACTIVE',
       tier: 'Standard'
     };
     setCustomers([newCust, ...customers]);
     setNewCustName('');
     setNewCustTax('');
+    setNewCustLimit('1.500.000.000 ₫');
     onNotify('success', 'Thêm khách hàng thành công', `Đã đăng ký khách hàng B2B: ${newCust.name}`);
   };
 
@@ -285,11 +299,11 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
       name: newSkuName.trim(),
       category: newSkuCategory,
       unit: newSkuUnit,
-      costPrice: Number(newSkuCost) || 1000000,
-      wholesalePrice: Number(newSkuWholesale) || 1300000,
-      retailPrice: Number(newSkuRetail) || 1500000,
-      stock: Number(newSkuStock) || 50,
-      safetyStock: Number(newSkuSafetyStock) || 10,
+      costPrice: parseThousands(newSkuCost) || 1000000,
+      wholesalePrice: parseThousands(newSkuWholesale) || 1300000,
+      retailPrice: parseThousands(newSkuRetail) || 1500000,
+      stock: parseThousands(newSkuStock) || 50,
+      safetyStock: parseThousands(newSkuSafetyStock) || 10,
       supplier: newSkuSupplier.trim() || 'Công ty Cổ phần Cung ứng Toàn Cầu',
       technicalSpecs: newSkuTechSpecs.trim() || 'Thông số kỹ thuật tiêu chuẩn công nghiệp',
       status: 'ACTIVE',
@@ -305,6 +319,11 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
     setItems([newItem, ...items]);
     setNewSkuCode('');
     setNewSkuName('');
+    setNewSkuCost('1.500.000');
+    setNewSkuWholesale('1.900.000');
+    setNewSkuRetail('2.100.000');
+    setNewSkuStock('50');
+    setNewSkuSafetyStock('10');
     setNewSkuImageUrl('https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=200&auto=format&fit=crop&q=80');
     onNotify('success', 'Khai báo Item Master thành công', `Đã thêm mặt hàng [${newItem.sku}] ${newItem.name} vào Kho ${newItem.warehouseName} với tồn kho ${newItem.stock} ${newItem.unit}.`);
   };
@@ -713,7 +732,7 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
                                     ? 'bg-rose-100 text-rose-950 border-rose-300 dark:bg-rose-950/90 dark:text-rose-200 dark:border-rose-700' 
                                     : 'bg-emerald-100 text-emerald-950 border-emerald-300 dark:bg-emerald-950/90 dark:text-emerald-200 dark:border-emerald-700'
                                 }`}>
-                                  {it.stock} {it.unit}
+                                  {(it.stock ?? 0).toLocaleString('vi-VN')} {it.unit}
                                 </span>
                               </td>
                               <td className="py-3.5 px-3 text-right">
@@ -808,27 +827,33 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
                   <div>
                     <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Giá Vốn (đ)</label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="0"
                       value={newSkuCost}
-                      onChange={(e) => setNewSkuCost(e.target.value)}
+                      onChange={(e) => setNewSkuCost(formatThousands(e.target.value))}
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                     />
                   </div>
                   <div>
                     <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Giá Buôn (đ)</label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="0"
                       value={newSkuWholesale}
-                      onChange={(e) => setNewSkuWholesale(e.target.value)}
+                      onChange={(e) => setNewSkuWholesale(formatThousands(e.target.value))}
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                     />
                   </div>
                   <div>
-                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tồn Khởi Đầu</label>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Giá Lẻ (đ)</label>
                     <input
-                      type="number"
-                      value={newSkuStock}
-                      onChange={(e) => setNewSkuStock(e.target.value)}
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={newSkuRetail}
+                      onChange={(e) => setNewSkuRetail(formatThousands(e.target.value))}
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                     />
                   </div>
@@ -836,24 +861,38 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tồn An Toàn (Safety Stock)</label>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tồn Khởi Đầu</label>
                     <input
-                      type="number"
-                      value={newSkuSafetyStock}
-                      onChange={(e) => setNewSkuSafetyStock(e.target.value)}
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={newSkuStock}
+                      onChange={(e) => setNewSkuStock(formatThousands(e.target.value))}
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                     />
                   </div>
                   <div>
-                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Nhà Cung Cấp</label>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tồn An Toàn (Safety Stock)</label>
                     <input
                       type="text"
-                      placeholder="VD: Công ty Cổ phần Cung ứng Toàn Cầu"
-                      value={newSkuSupplier}
-                      onChange={(e) => setNewSkuSupplier(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={newSkuSafetyStock}
+                      onChange={(e) => setNewSkuSafetyStock(formatThousands(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Nhà Cung Cấp</label>
+                  <input
+                    type="text"
+                    placeholder="VD: Công ty Cổ phần Cung ứng Toàn Cầu"
+                    value={newSkuSupplier}
+                    onChange={(e) => setNewSkuSupplier(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
                 </div>
 
                 <div>
@@ -1074,7 +1113,10 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
                   <input
                     type="text"
                     value={newCustLimit}
-                    onChange={(e) => setNewCustLimit(e.target.value)}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '');
+                      setNewCustLimit(digits ? `${Number(digits).toLocaleString('vi-VN')} ₫` : '');
+                    }}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
@@ -1341,9 +1383,11 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tồn Kho</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="0"
                     value={editSkuStock}
-                    onChange={(e) => setEditSkuStock(e.target.value)}
+                    onChange={(e) => setEditSkuStock(formatThousands(e.target.value))}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
@@ -1353,27 +1397,33 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Giá Vốn (đ)</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="0"
                     value={editSkuCost}
-                    onChange={(e) => setEditSkuCost(e.target.value)}
+                    onChange={(e) => setEditSkuCost(formatThousands(e.target.value))}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Giá Buôn (đ)</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="0"
                     value={editSkuWholesale}
-                    onChange={(e) => setEditSkuWholesale(e.target.value)}
+                    onChange={(e) => setEditSkuWholesale(formatThousands(e.target.value))}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Giá Lẻ (đ)</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="0"
                     value={editSkuRetail}
-                    onChange={(e) => setEditSkuRetail(e.target.value)}
+                    onChange={(e) => setEditSkuRetail(formatThousands(e.target.value))}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>

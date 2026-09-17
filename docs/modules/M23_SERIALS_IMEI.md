@@ -26,6 +26,9 @@ M23 provides item-level individual serialized tracking for high-value electronic
 - Serial code and IMEI search bar with instant validation.
 - Serial codes in `font-mono` with single-click copy capability.
 
-## 5. Feature Upgrade Readiness Checklist
-- [ ] Implement camera barcode/OCR scanner for batch serial ingestion.
-- [ ] Link warranty verification API with M15 (RMA) for instant warranty claims lookup.
+## 5. Feature Upgrade Readiness Checklist & Governance Seal
+- [x] Implement backend API endpoints (`GET /api/serials`, `POST /api/serials`, `GET /api/serials/:id/history`, `POST /api/serials/:id/actions`).
+- [x] Full Device Lifecycle Trace & 360° Serial Timeline Inspector.
+- [x] Single-Writer domain enforcement (`SerialEngine` validation for uniqueness, warehouse, location, and status transition).
+- [x] WCAG AA compliance and Rule #19 `ConfirmDialog` integration (zero `window.alert`/`window.confirm`).
+- [x] Cross-module linkage with M08 (Purchase), M13/M16 (Sales/POS), M17 (Inventory Core), M15 (RMA).

@@ -8,6 +8,7 @@ import { eq, and, desc, sql, like, or } from "drizzle-orm";
 import { accountingEngine } from "./accountingEngine";
 import { costingEngine } from "./costingEngine";
 import { InventoryService } from "./inventoryService";
+import { AuditService } from "./auditService";
 
 /**
  * MASTER EVENT ROUTER
@@ -79,7 +80,7 @@ export async function executeSubscriberHandler(consumer: string, event: any): Pr
     // 2. Dispatch to specific consumer logic
     switch (consumer) {
       case "AuditSubscriber": {
-        await db.insert(auditLogs).values({
+        await AuditService.captureAsync({
           auditCode: `AUD-EVT-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`,
           userId: parseInt(event.actorId, 10) || 1,
           username: "system_event_bus",
@@ -89,15 +90,14 @@ export async function executeSubscriberHandler(consumer: string, event: any): Pr
           entityId: String(event.aggregateId || eventId),
           module: event.source || "EVENT_BUS",
           correlationId: event.correlationId || null,
-          afterData: JSON.stringify(payload),
+          afterData: payload,
           result: "SUCCESS",
-          metadata: JSON.stringify({
+          metadata: {
             eventId: event.eventId,
             eventType: event.eventType,
             source: event.source,
             causationId: event.causationId
-          }),
-          createdAt: new Date()
+          }
         });
         break;
       }

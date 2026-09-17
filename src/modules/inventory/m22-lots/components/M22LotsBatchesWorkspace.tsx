@@ -239,10 +239,17 @@ export const M22LotsBatchesWorkspace: React.FC<M22LotsBatchesWorkspaceProps> = (
             onNotify={onNotify} 
             onSelectEntity={onSelectEntity}
             onViewTraceability={handleViewTraceability}
+            onViewDrilldown={setSelectedLotForDrilldown}
           />
         )}
         {activeTab === 'fefo' && (
-          <LotsBatchesFEFOTab lots={lots} onSelectEntity={onSelectEntity} />
+          <LotsBatchesFEFOTab 
+            lots={lots} 
+            onSelectEntity={onSelectEntity}
+            onViewDrilldown={setSelectedLotForDrilldown}
+            onViewTraceability={handleViewTraceability}
+            onNotify={onNotify}
+          />
         )}
         {activeTab === 'traceability' && (
           <LotsBatchesTraceabilityTab 
@@ -251,6 +258,10 @@ export const M22LotsBatchesWorkspace: React.FC<M22LotsBatchesWorkspaceProps> = (
             activeLotId={globalActiveLotId}
             onLotChange={setGlobalActiveLotId}
             onViewDrilldown={setSelectedLotForDrilldown}
+            onNotify={onNotify}
+            onUpdateLotStatus={(lotId, newStatus) => {
+              setLots(prev => prev.map(l => l.id === lotId ? { ...l, status: newStatus } : l));
+            }}
           />
         )}
       </div>

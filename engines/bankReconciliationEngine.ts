@@ -1,6 +1,7 @@
 import { db, client } from "../db/index";
 import * as schema from "../db/schema";
 import { eq, desc, and, like, or } from "drizzle-orm";
+import { AuditService } from "./auditService";
 
 export interface ReconciliationResult {
   matchedCount: number;
@@ -192,21 +193,19 @@ export class BankReconciliationEngine {
           createdBy: operatorUserId,
         }).run();
 
-        // Log audit log
-        await db.insert(schema.auditLogs).values({
-          auditCode: `AUD-BANK-RECON-${Date.now()}-${tx.id}`,
+        // Central Audit Gateway (M33 Bank Reconciliation)
+        await AuditService.recordAuditLog({
           userId: operatorUserId,
           username: "admin",
           role: "FINANCE_CONTROLLER",
-          module: "FINANCE",
+          module: "M33",
           action: "RECONCILE_BANK_STATEMENT",
           entityType: "BANK_TRANSACTION",
           entityId: String(tx.id),
           result: "SUCCESS",
-          beforeData: JSON.stringify({ status: "UNMATCHED" }),
-          afterData: JSON.stringify({ status: "MATCHED", invoiceId: matchedInv.id }),
-          createdAt: new Date(),
-        }).run();
+          beforeData: { status: "UNMATCHED" },
+          afterData: { status: "MATCHED", invoiceId: matchedInv.id }
+        });
 
         matchedCount++;
         totalAmountReconciled += txAmt;

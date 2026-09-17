@@ -16,6 +16,13 @@ import {
   KeyRound,
   CheckCircle2,
   Sliders,
+  Coins,
+  FileText,
+  Calendar,
+  Zap,
+  History,
+  Server,
+  FileJson,
 } from 'lucide-react';
 import { PdfPrintModal } from '../../../../components/modals/PdfPrintModal';
 import { CostingMethodSettingsView } from './costing/CostingMethodSettingsView';
@@ -24,6 +31,12 @@ import { SettingsParametersTab } from './SettingsParametersTab';
 import { SettingsBranchesTab } from './SettingsBranchesTab';
 import { SettingsProfilesTab } from './SettingsProfilesTab';
 import { SettingsDetailModal } from './SettingsDetailModal';
+import { SettingsCurrencyTaxTab } from './SettingsCurrencyTaxTab';
+import { SettingsNumberingTab } from './SettingsNumberingTab';
+import { SettingsFiscalBackupTab } from './SettingsFiscalBackupTab';
+import { SettingsFeatureFlagsTab } from './SettingsFeatureFlagsTab';
+import { SettingsAuditTab } from './SettingsAuditTab';
+import { SystemConfigBackupUtility } from './SystemConfigBackupUtility';
 import {
   SystemSettingsSubTab,
   SystemSettingsConfig,
@@ -113,6 +126,8 @@ export const SystemSettingsWorkspace: React.FC<SystemSettingsWorkspaceProps> = (
 
   const [isPdfModalOpen, setIsPdfModalOpen] = useState<boolean>(false);
   const [runningDiagnostics, setRunningDiagnostics] = useState<boolean>(false);
+  const [isBackupUtilityOpen, setIsBackupUtilityOpen] = useState<boolean>(false);
+  const [isExportingJson, setIsExportingJson] = useState<boolean>(false);
 
   // System Settings State
   const [settings, setSettings] = useState<SystemSettingsConfig>({
@@ -559,6 +574,51 @@ export const SystemSettingsWorkspace: React.FC<SystemSettingsWorkspaceProps> = (
     });
   };
 
+  // Rule #19: Export JSON Snapshot with Non-blocking Confirmation & Direct Streaming
+  const executeExportJsonSnapshot = async () => {
+    setIsExportingJson(true);
+    try {
+      const res = await fetch('/api/settings/backup/snapshot');
+      const json = await res.json();
+
+      const payload = json.data ? json : { success: true, data: json };
+      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute('href', dataStr);
+      downloadAnchor.setAttribute('download', `NexusSync_System_Config_Snapshot_${new Date().toISOString().slice(0, 10)}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      document.body.removeChild(downloadAnchor);
+
+      onNotify(
+        'success',
+        'Xuất Snapshot JSON Thành Công',
+        'Đã tải về tệp tin sao lưu toàn bộ tham số cấu hình hệ thống kèm chữ ký bảo mật SHA-256.'
+      );
+    } catch (err: any) {
+      console.error('Lỗi xuất snapshot JSON:', err);
+      onNotify('danger', 'Lỗi Xuất Snapshot JSON', err.message || 'Không thể tải bản sao lưu cấu hình.');
+    } finally {
+      setIsExportingJson(false);
+    }
+  };
+
+  const handleRequestExportJsonSnapshot = () => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Tải Về Snapshot Cấu Hình Hệ Thống (JSON)?',
+      message:
+        'Hệ thống sẽ kết xuất toàn bộ tham số hoạt động, tỷ giá tiền tệ, chuỗi số chứng từ, kỳ tài chính, mức thuế suất và cờ tính năng thành một tệp JSON tiêu chuẩn có kèm mã băm kiểm toán toàn vẹn SHA-256.',
+      variant: 'primary',
+      confirmText: 'Tải Tệp Snapshot JSON',
+      cancelText: 'Hủy Bỏ',
+      onConfirm: () => {
+        setConfirmDialog(null);
+        executeExportJsonSnapshot();
+      },
+    });
+  };
+
   // Toggle Cell Permission in Matrix with API persistence
   const handleToggleCellPermission = async (
     moduleId: string,
@@ -594,6 +654,20 @@ export const SystemSettingsWorkspace: React.FC<SystemSettingsWorkspaceProps> = (
       'Cập nhật ma trận quyền',
       `Đã thay đổi quyền [${actionKey}] cho vai trò [${roleKey.toUpperCase()}] trên phân hệ [${moduleId}].`
     );
+  };
+
+  // Harmonized Tab Notification Adapter (Supports both positional and object payload)
+  const handleTabNotify = (
+    typeOrObj: 'success' | 'danger' | 'warning' | 'info' | { type: string; title: string; message: string },
+    title?: string,
+    message?: string
+  ) => {
+    if (typeof typeOrObj === 'object' && typeOrObj !== null) {
+      const t = (typeOrObj.type === 'error' ? 'danger' : typeOrObj.type) as 'success' | 'danger' | 'warning' | 'info';
+      onNotify(t, typeOrObj.title || 'Thông báo hệ thống', typeOrObj.message || '');
+    } else {
+      onNotify(typeOrObj, title || 'Thông báo hệ thống', message || '');
+    }
   };
 
   return (
@@ -643,6 +717,25 @@ export const SystemSettingsWorkspace: React.FC<SystemSettingsWorkspaceProps> = (
           </button>
           <button
             type="button"
+            onClick={() => setIsBackupUtilityOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+            title="Mở tiện ích sao lưu cấu hình toàn diện lên máy chủ trung tâm"
+          >
+            <Server className="w-3.5 h-3.5" />
+            <span>Sao Lưu Server</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleRequestExportJsonSnapshot}
+            disabled={isExportingJson}
+            className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+            title="Tải về bản snapshot toàn bộ tham số hệ thống dạng tệp JSON có chữ ký SHA-256"
+          >
+            <FileJson className={`w-3.5 h-3.5 ${isExportingJson ? 'animate-spin' : ''}`} />
+            <span>{isExportingJson ? 'Đang Xuất...' : 'Xuất Snapshot JSON'}</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setIsPdfModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
             title="Mở bảng xem trước trực tiếp & In / Xuất PDF"
@@ -684,7 +777,63 @@ export const SystemSettingsWorkspace: React.FC<SystemSettingsWorkspaceProps> = (
             }`}
           >
             <Settings className="w-4 h-4 shrink-0" />
-            <span>1. Cấu Hình Tham Số & Vận Hành</span>
+            <span>1. Tham Số Chung & Phân Quyền</span>
+          </button>
+
+          <button
+            type="button"
+            id="tab-currency_tax"
+            onClick={() => setActiveTab('currency_tax')}
+            className={`px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+              activeTab === 'currency_tax'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Coins className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span>2. Ngoại Tệ & Thuế GTGT</span>
+          </button>
+
+          <button
+            type="button"
+            id="tab-numbering"
+            onClick={() => setActiveTab('numbering')}
+            className={`px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+              activeTab === 'numbering'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <FileText className="w-4 h-4 text-blue-500 shrink-0" />
+            <span>3. Mẫu Số Chứng Từ</span>
+          </button>
+
+          <button
+            type="button"
+            id="tab-fiscal_backup"
+            onClick={() => setActiveTab('fiscal_backup')}
+            className={`px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+              activeTab === 'fiscal_backup'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Calendar className="w-4 h-4 text-amber-500 shrink-0" />
+            <span>4. Kỳ Kế Toán & Sao Lưu</span>
+          </button>
+
+          <button
+            type="button"
+            id="tab-features_notify"
+            onClick={() => setActiveTab('features_notify')}
+            className={`px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+              activeTab === 'features_notify'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Zap className="w-4 h-4 text-indigo-500 shrink-0" />
+            <span>5. Feature Flags & Thông Báo</span>
           </button>
 
           <button
@@ -698,7 +847,7 @@ export const SystemSettingsWorkspace: React.FC<SystemSettingsWorkspaceProps> = (
             }`}
           >
             <Building2 className="w-4 h-4 text-blue-500 shrink-0" />
-            <span>2. Đơn Vị / Chi Nhánh (Branches)</span>
+            <span>6. Chi Nhánh (Branches)</span>
             <span className="ml-0.5 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-700 shrink-0">
               {BRANCHES.find((b) => b.id === currentBranch)?.code ?? currentBranch}
             </span>
@@ -715,7 +864,7 @@ export const SystemSettingsWorkspace: React.FC<SystemSettingsWorkspaceProps> = (
             }`}
           >
             <Layers className="w-4 h-4 text-purple-500 shrink-0" />
-            <span>3. Hồ Sơ Môi Trường (Profiles)</span>
+            <span>7. Hồ Sơ Môi Trường</span>
             <span className="ml-0.5 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 border border-purple-200 dark:border-purple-700 shrink-0">
               {currentProfile}
             </span>
@@ -732,10 +881,7 @@ export const SystemSettingsWorkspace: React.FC<SystemSettingsWorkspaceProps> = (
             }`}
           >
             <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
-            <span>4. Rà Soát Toàn Vẹn & Dữ Liệu Rác</span>
-            <span className="ml-0.5 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500 text-white shrink-0">
-              Công cụ M03
-            </span>
+            <span>8. Rà Soát Toàn Vẹn</span>
           </button>
 
           <button
@@ -749,10 +895,21 @@ export const SystemSettingsWorkspace: React.FC<SystemSettingsWorkspaceProps> = (
             }`}
           >
             <Sliders className="w-4 h-4 text-amber-500 shrink-0" />
-            <span>5. Phương Pháp Giá Vốn (Costing Method)</span>
-            <span className="ml-0.5 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500 text-white shrink-0">
-              M42 / CFO
-            </span>
+            <span>9. Giá Vốn M42</span>
+          </button>
+
+          <button
+            type="button"
+            id="tab-audit"
+            onClick={() => setActiveTab('audit')}
+            className={`px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+              activeTab === 'audit'
+                ? 'bg-slate-900 text-white shadow-xs ring-2 ring-slate-400/40'
+                : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <History className="w-4 h-4 text-rose-500 shrink-0" />
+            <span>10. Nhật Ký SHA-256</span>
           </button>
         </div>
 
@@ -790,6 +947,22 @@ export const SystemSettingsWorkspace: React.FC<SystemSettingsWorkspaceProps> = (
         />
       )}
 
+      {activeTab === 'currency_tax' && (
+        <SettingsCurrencyTaxTab onNotify={handleTabNotify as any} currentUser={currentUser} />
+      )}
+
+      {activeTab === 'numbering' && (
+        <SettingsNumberingTab onNotify={handleTabNotify as any} currentUser={currentUser} />
+      )}
+
+      {activeTab === 'fiscal_backup' && (
+        <SettingsFiscalBackupTab onNotify={handleTabNotify as any} currentUser={currentUser} />
+      )}
+
+      {activeTab === 'features_notify' && (
+        <SettingsFeatureFlagsTab onNotify={handleTabNotify as any} currentUser={currentUser} />
+      )}
+
       {activeTab === 'branches' && (
         <SettingsBranchesTab
           branches={BRANCHES}
@@ -825,6 +998,10 @@ export const SystemSettingsWorkspace: React.FC<SystemSettingsWorkspaceProps> = (
         </div>
       )}
 
+      {activeTab === 'audit' && (
+        <SettingsAuditTab onNotify={handleTabNotify as any} />
+      )}
+
       {/* L4: Settings Detail Inspection Modal */}
       <SettingsDetailModal
         item={detailModalItem}
@@ -850,6 +1027,14 @@ export const SystemSettingsWorkspace: React.FC<SystemSettingsWorkspaceProps> = (
         }}
         currentUser={currentUser}
         onNotify={onNotify}
+      />
+
+      {/* L4: System Configuration Backup Utility Modal */}
+      <SystemConfigBackupUtility
+        isOpen={isBackupUtilityOpen}
+        onClose={() => setIsBackupUtilityOpen(false)}
+        onNotify={onNotify}
+        currentUser={currentUser}
       />
     </div>
   );

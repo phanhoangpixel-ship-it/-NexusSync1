@@ -5,7 +5,7 @@ import {
   ArrowLeftRight, ClipboardCheck, Clock, ShieldCheck, Tag, Info, 
   Boxes, ChevronRight, X, ExternalLink, SlidersHorizontal, ArrowDownUp,
   Layers, Warehouse, MapPin, DollarSign, Activity, AlertOctagon, Printer,
-  Database
+  Database, Calendar
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SelectedEntityContext, ConfirmDialogState } from '../../../../types';
@@ -25,10 +25,13 @@ export interface WarehouseProductItem {
   aisle: string;
   rack: string;
   binLocation: string;
-  lotNo: string;
-  mfgDate: string;
-  expDate: string;
-  daysToExpiry: number;
+  lotId: string;            // Mã định danh Lô (Lot ID)
+  lotNo: string;            // Số Lô sản xuất (Batch / Lot No)
+  mfgDate: string;          // Ngày sản xuất
+  expDate: string;          // Hạn sử dụng (FEFO tracking)
+  daysToExpiry: number;     // Số ngày còn lại đến hạn
+  grnDate: string;          // Ngày nhập kho thực tế (FIFO tracking - Goods Receipt Date)
+  grnNumber: string;        // Số phiếu nhập kho (GRN Reference No)
   physicalQty: number;      // Tồn vật lý thực tế
   reservedQty: number;      // Tồn đang giữ chỗ theo SO/WO
   availableQty: number;     // Tồn khả dụng thực xuất (ATP)
@@ -46,6 +49,66 @@ export interface WarehouseProductItem {
   imageUrl?: string;
 }
 
+// FEFO & FIFO Expiry and Aging Evaluation Helper (Golden Standard)
+export const getLotFefoEvaluation = (expDateStr?: string, grnDateStr?: string) => {
+  const currentDate = new Date(2026, 8, 15); // Current system date: 15/09/2026
+
+  let daysToExpiry = 9999;
+  if (expDateStr && expDateStr !== 'Không thời hạn') {
+    const parts = expDateStr.split('/').map(Number);
+    if (parts.length === 3) {
+      const expTime = new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+      daysToExpiry = Math.ceil((expTime - currentDate.getTime()) / (1000 * 60 * 60 * 24));
+    }
+  }
+
+  let daysInStorage = 0;
+  if (grnDateStr) {
+    const parts = grnDateStr.split('/').map(Number);
+    if (parts.length === 3) {
+      const grnTime = new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+      daysInStorage = Math.max(0, Math.floor((currentDate.getTime() - grnTime) / (1000 * 60 * 60 * 24)));
+    }
+  }
+
+  if (daysToExpiry < 0) {
+    return {
+      status: 'EXPIRED' as const,
+      daysToExpiry,
+      daysInStorage,
+      label: `ĐÃ HẾT HẠN (${Math.abs(daysToExpiry)} ngày trước)`,
+      shortLabel: 'Đã hết hạn',
+      cellClass: 'bg-rose-50/80 dark:bg-rose-950/50 border-rose-300 dark:border-rose-800 ring-1 ring-rose-400/30',
+      badgeClass: 'bg-rose-600 text-white',
+      textClass: 'text-rose-600 dark:text-rose-400 font-bold',
+    };
+  }
+
+  if (daysToExpiry <= 30) {
+    return {
+      status: 'NEAR_EXPIRY' as const,
+      daysToExpiry,
+      daysInStorage,
+      label: `CẬN DATE (${daysToExpiry} ngày)`,
+      shortLabel: 'Cận hạn',
+      cellClass: 'bg-amber-50/80 dark:bg-amber-950/50 border-amber-300 dark:border-amber-700 ring-1 ring-amber-400/30',
+      badgeClass: 'bg-amber-500 text-slate-950 font-bold',
+      textClass: 'text-amber-600 dark:text-amber-400 font-bold',
+    };
+  }
+
+  return {
+    status: 'SAFE' as const,
+    daysToExpiry,
+    daysInStorage,
+    label: daysToExpiry >= 9999 ? 'Không hạn dùng' : `Đạt Chuẩn (${daysToExpiry} ngày)`,
+    shortLabel: 'Đạt chuẩn',
+    cellClass: 'bg-slate-50/80 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700',
+    badgeClass: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800',
+    textClass: 'text-emerald-600 dark:text-emerald-400 font-medium',
+  };
+};
+
 // Transform Enterprise Master Products into Full WMS Dataset
 export function mapEnterpriseProductsToWms(items: EnterpriseProduct[]): WarehouseProductItem[] {
   const warehouses = [
@@ -62,6 +125,20 @@ export function mapEnterpriseProductsToWms(items: EnterpriseProduct[]): Warehous
     'WH-COLD-03': warehouses[3],
   };
 
+  const sampleGrnDates = [
+    '05/09/2026', '01/09/2026', '28/08/2026', '22/08/2026',
+    '15/08/2026', '08/08/2026', '01/08/2026', '25/07/2026',
+    '18/07/2026', '10/07/2026', '01/07/2026', '20/06/2026',
+    '15/06/2026', '01/06/2026', '20/05/2026', '10/05/2026', '01/05/2026'
+  ];
+
+  const sampleExpiries = [
+    'Không thời hạn', 'Không thời hạn', '10/10/2026', 'Không thời hạn',
+    'Không thời hạn', '25/09/2026', '20/09/2026', '01/09/2026',
+    '15/11/2026', '05/10/2026', 'Không thời hạn', '30/12/2026',
+    'Không thời hạn', '15/10/2026', 'Không thời hạn', '01/09/2026', 'Không thời hạn'
+  ];
+
   return items.map((p, idx) => {
     const wh = (p.warehouseId && warehouseMap[p.warehouseId]) ? warehouseMap[p.warehouseId] : warehouses[idx % warehouses.length];
     const physical = p.stock || 50;
@@ -74,16 +151,19 @@ export function mapEnterpriseProductsToWms(items: EnterpriseProduct[]): Warehous
     const unitCost = p.costPrice || 100000;
     const totalValue = physical * unitCost;
 
+    const expDate = p.expDate || sampleExpiries[idx % sampleExpiries.length];
+    const fefoEval = getLotFefoEvaluation(expDate);
+    const daysToExpiry = fefoEval.daysToExpiry;
+
     let inventoryHealth: 'NORMAL' | 'LOW_STOCK' | 'OVER_STOCK' | 'NEAR_EXPIRY' | 'LOCKED' = 'NORMAL';
     if (available <= minStock) inventoryHealth = 'LOW_STOCK';
+    else if (fefoEval.status === 'EXPIRED') inventoryHealth = 'LOCKED';
+    else if (fefoEval.status === 'NEAR_EXPIRY') inventoryHealth = 'NEAR_EXPIRY';
     else if (physical >= maxStock * 0.9) inventoryHealth = 'OVER_STOCK';
-
-    const expDate = 'Không thời hạn';
-    const daysToExpiry = 9999;
 
     let packSpec = p.packSpec || 'Hộp tiêu chuẩn 1 Cái';
     let storageCondition = p.storageCondition || 'Nhiệt độ phòng 20°C - 30°C, Khô ráo';
-    const qualityStatus: 'READY' | 'INSPECTING' | 'QUARANTINED' | 'CLOSED' = 'READY';
+    const qualityStatus: 'READY' | 'INSPECTING' | 'QUARANTINED' | 'CLOSED' = fefoEval.status === 'EXPIRED' ? 'QUARANTINED' : 'READY';
 
     if (!p.packSpec) {
       if (p.category === 'Thiết bị CNTT' || p.category === 'Phụ kiện') {
@@ -98,7 +178,10 @@ export function mapEnterpriseProductsToWms(items: EnterpriseProduct[]): Warehous
     }
 
     const binLocation = p.binLocation || `${wh.binPrefix}-${String((idx % 12) + 1).padStart(2, '0')}`;
-    const lotNo = p.lotNo || `LOT-2026-${p.sku.replace(/[^a-zA-Z0-9]/g, '')}`;
+    const lotId = (p as any).lotId || p.lotNo || `LOT-2026-${p.sku.replace(/[^a-zA-Z0-9]/g, '')}`;
+    const lotNo = p.lotNo || `BATCH-2026-${String(100 + idx * 7)}`;
+    const grnDate = (p as any).grnDate || sampleGrnDates[idx % sampleGrnDates.length];
+    const grnNumber = (p as any).grnNumber || `GRN-2026-${String(4000 + (idx + 1) * 37)}`;
 
     return {
       id: `WMS-PRD-${String(idx + 1).padStart(3, '0')}`,
@@ -112,10 +195,13 @@ export function mapEnterpriseProductsToWms(items: EnterpriseProduct[]): Warehous
       aisle: wh.aisle,
       rack: wh.rack,
       binLocation,
+      lotId,
       lotNo,
       mfgDate: '15/01/2026',
       expDate,
       daysToExpiry,
+      grnDate,
+      grnNumber,
       physicalQty: physical,
       reservedQty: reserved,
       availableQty: available,
@@ -230,9 +316,12 @@ export const WarehouseProductsTab: React.FC<WarehouseProductsTabProps> = ({
         const matchBarcode = p.barcode.toLowerCase().includes(kw);
         const matchName = p.name.toLowerCase().includes(kw);
         const matchLot = p.lotNo.toLowerCase().includes(kw);
+        const matchLotId = p.lotId.toLowerCase().includes(kw);
+        const matchGrnDate = p.grnDate.toLowerCase().includes(kw);
+        const matchGrnNumber = p.grnNumber.toLowerCase().includes(kw);
         const matchBin = p.binLocation.toLowerCase().includes(kw);
         const matchWarehouse = p.warehouseName.toLowerCase().includes(kw);
-        if (!matchSku && !matchBarcode && !matchName && !matchLot && !matchBin && !matchWarehouse) {
+        if (!matchSku && !matchBarcode && !matchName && !matchLot && !matchLotId && !matchGrnDate && !matchGrnNumber && !matchBin && !matchWarehouse) {
           return false;
         }
       }
@@ -270,6 +359,14 @@ export const WarehouseProductsTab: React.FC<WarehouseProductsTabProps> = ({
         comparison = a.totalValue - b.totalValue;
       } else if (sortBy === 'expDate') {
         comparison = a.daysToExpiry - b.daysToExpiry;
+      } else if (sortBy === 'grnDate') {
+        const partsA = a.grnDate.split('/').map(Number);
+        const partsB = b.grnDate.split('/').map(Number);
+        const timeA = new Date(partsA[2] || 2026, (partsA[1] || 1) - 1, partsA[0] || 1).getTime();
+        const timeB = new Date(partsB[2] || 2026, (partsB[1] || 1) - 1, partsB[0] || 1).getTime();
+        comparison = timeA - timeB;
+      } else if (sortBy === 'lotId') {
+        comparison = a.lotId.localeCompare(b.lotId);
       }
       return sortOrder === 'asc' ? comparison : -comparison;
     });
@@ -325,9 +422,12 @@ export const WarehouseProductsTab: React.FC<WarehouseProductsTabProps> = ({
         'Dãy (Aisle)': p.aisle,
         'Giá Kệ (Rack)': p.rack,
         'Vị Trí Ô Kệ (Bin)': p.binLocation,
-        'Số Lô (Lot/Batch)': p.lotNo,
-        'Ngày Sản Xuất': p.mfgDate,
-        'Hạn Sử Dụng': p.expDate,
+        'Mã Lô Quản Lý (Lot ID)': p.lotId,
+        'Số Lô Sản Xuất (Batch No)': p.lotNo,
+        'Ngày Nhập Kho (GRN Date)': p.grnDate,
+        'Số Phiếu Nhập (GRN Ref)': p.grnNumber,
+        'Ngày Sản Xuất (MFG Date)': p.mfgDate,
+        'Hạn Sử Dụng (EXP Date - FEFO)': p.expDate,
         'Số Ngày Còn Lại': p.daysToExpiry >= 9999 ? 'Không hạn' : `${p.daysToExpiry} ngày`,
         'Tồn Vật Lý (On-Hand)': p.physicalQty,
         'Đang Giữ Chỗ (Reserved)': p.reservedQty,
@@ -352,29 +452,32 @@ export const WarehouseProductsTab: React.FC<WarehouseProductsTabProps> = ({
         { wch: 18 }, // Barcode
         { wch: 38 }, // Name
         { wch: 24 }, // Category
-        { wch: 14 }, // WH ID
-        { wch: 32 }, // WH Name
-        { wch: 22 }, // Zone
+        { wch: 14 }, // Wh ID
+        { wch: 32 }, // Wh Name
+        { wch: 28 }, // Zone
         { wch: 14 }, // Aisle
         { wch: 14 }, // Rack
-        { wch: 16 }, // Bin
-        { wch: 20 }, // Lot
-        { wch: 14 }, // MFG
-        { wch: 14 }, // EXP
+        { wch: 18 }, // Bin
+        { wch: 22 }, // Lot ID
+        { wch: 20 }, // Lot No
+        { wch: 20 }, // GRN Date
+        { wch: 20 }, // GRN Number
+        { wch: 18 }, // MFG
+        { wch: 22 }, // EXP
         { wch: 18 }, // Days left
-        { wch: 22 }, // Physical
-        { wch: 22 }, // Reserved
-        { wch: 22 }, // Available
-        { wch: 20 }, // Incoming
-        { wch: 14 }, // UoM
-        { wch: 30 }, // Pack spec
-        { wch: 18 }, // Min
-        { wch: 18 }, // Max
-        { wch: 20 }, // Unit cost
-        { wch: 24 }, // Total value
-        { wch: 36 }, // Condition
-        { wch: 20 }, // KCS
-        { wch: 24 }, // Health
+        { wch: 16 }, // Physical
+        { wch: 16 }, // Reserved
+        { wch: 16 }, // Available
+        { wch: 16 }, // Incoming
+        { wch: 12 }, // Unit
+        { wch: 30 }, // Pack Spec
+        { wch: 14 }, // Min
+        { wch: 14 }, // Max
+        { wch: 18 }, // Unit Cost
+        { wch: 22 }, // Total Value
+        { wch: 35 }, // Storage
+        { wch: 18 }, // Quality
+        { wch: 22 }, // Health
         { wch: 20 }, // Last movement
       ];
 
@@ -588,7 +691,9 @@ export const WarehouseProductsTab: React.FC<WarehouseProductsTabProps> = ({
               >
                 <option value="totalValue">Giá trị tồn kho cao nhất</option>
                 <option value="availableQty">Số lượng khả dụng</option>
-                <option value="expDate">Hạn sử dụng (FEFO)</option>
+                <option value="grnDate">Ngày nhập kho (FIFO - Nhập trước)</option>
+                <option value="expDate">Hạn sử dụng (FEFO - Hết hạn trước)</option>
+                <option value="lotId">Mã Lô (Lot ID)</option>
                 <option value="sku">Mã SKU</option>
                 <option value="name">Tên sản phẩm</option>
               </select>
@@ -640,27 +745,28 @@ export const WarehouseProductsTab: React.FC<WarehouseProductsTabProps> = ({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="inventory-table w-full text-left text-xs">
             <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-700 uppercase text-[10px] tracking-wider">
               <tr>
-                <th className="px-3.5 py-3 text-center">Hình Ảnh</th>
+                <th className="px-3 py-3 text-center">Hình Ảnh</th>
                 <th className="px-3.5 py-3">Mã SKU & Barcode</th>
-                <th className="px-3.5 py-3 min-w-[200px]">Tên Sản Phẩm & Nhóm Hàng</th>
-                <th className="px-3.5 py-3 min-w-[160px]">Cơ Sở Kho & Vị Trí Ô Kệ</th>
-                <th className="px-3.5 py-3">Số Lô & HSD (FEFO)</th>
-                <th className="px-3.5 py-3 text-center">Cảnh Báo</th>
+                <th className="px-3.5 py-3 min-w-[170px]">Tên Sản Phẩm & Nhóm</th>
+                <th className="px-3.5 py-3 min-w-[130px]">Cơ Sở Kho & Vị Trí</th>
+                <th className="px-3.5 py-3 min-w-[190px]">Mã Lô (Lot ID) & Cảnh Báo FEFO</th>
+                <th className="px-3.5 py-3 min-w-[165px]">Ngày Nhập Kho (GRN Date) & FIFO</th>
+                <th className="px-2.5 py-3 text-center">Cảnh Báo</th>
                 <th className="px-3 py-3 text-right">Tồn Vật Lý</th>
                 <th className="px-3 py-3 text-right">Giữ Chỗ</th>
                 <th className="px-3 py-3 text-right">Khả Dụng (ATP)</th>
                 <th className="px-3.5 py-3 text-right">Giá Vốn / Tổng Giá Trị</th>
-                <th className="px-3.5 py-3 text-center">Trạng Thái KCS</th>
-                <th className="px-3.5 py-3 text-center">Thao Tác Nghiệp Vụ</th>
+                <th className="px-3 py-3 text-center">KCS</th>
+                <th className="px-3.5 py-3 text-center">Thao Tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
               {filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="py-12 text-center text-slate-400 space-y-2">
+                  <td colSpan={13} className="py-12 text-center text-slate-400 space-y-2">
                     <Boxes className="w-8 h-8 text-slate-300 mx-auto" />
                     <div className="text-xs font-bold text-slate-600 dark:text-slate-300">
                       Không tìm thấy sản phẩm nào phù hợp với bộ lọc hiện tại.
@@ -672,9 +778,11 @@ export const WarehouseProductsTab: React.FC<WarehouseProductsTabProps> = ({
                 </tr>
               ) : (
                 paginatedProducts.map((p) => {
-                  const isLowStock = p.inventoryHealth === 'LOW_STOCK';
-                  const isNearExpiry = p.inventoryHealth === 'NEAR_EXPIRY';
-                  const isLocked = p.inventoryHealth === 'LOCKED' || p.qualityStatus === 'QUARANTINED';
+                  const fefo = getLotFefoEvaluation(p.expDate, p.grnDate);
+                  const isLowStock = p.physicalQty <= p.minStock;
+                  const isExpired = fefo.status === 'EXPIRED';
+                  const isNearExpiry = fefo.status === 'NEAR_EXPIRY';
+                  const isLocked = p.inventoryHealth === 'LOCKED' || p.qualityStatus === 'QUARANTINED' || isExpired;
                   const isActive = activeSkuId === p.id;
 
                   return (
@@ -693,7 +801,7 @@ export const WarehouseProductsTab: React.FC<WarehouseProductsTabProps> = ({
                     >
                       {/* Product Image */}
                       <td 
-                        className="px-3.5 py-3 text-center cursor-pointer group"
+                        className="px-3 py-3 text-center cursor-pointer group"
                         onClick={() => setQuickPreviewProduct(p)}
                         title="Nhấn để mở Quick Preview hình ảnh & thông tin kỹ thuật SKU"
                       >
@@ -745,39 +853,105 @@ export const WarehouseProductsTab: React.FC<WarehouseProductsTabProps> = ({
                         </div>
                       </td>
 
-                      {/* Lot & Expiry */}
+                      {/* Lot ID & Expiry (FEFO) */}
                       <td className="px-3.5 py-3">
-                        <div className="font-mono text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                          <span>{p.lotNo}</span>
-                          {p.daysToExpiry > 0 && p.daysToExpiry <= 30 && (
-                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 rounded text-[9px] font-bold border border-amber-300 dark:border-amber-700" title={`Cảnh báo: Sắp hết hạn trong ${p.daysToExpiry} ngày tới`}>
-                              <AlertTriangle className="w-3 h-3 text-amber-500 animate-pulse shrink-0" />
-                              <span>Cận Date ({p.daysToExpiry}d)</span>
+                        <div className={`p-2 rounded-xl border transition-all space-y-1 ${fefo.cellClass}`}>
+                          <div className="flex items-center justify-between gap-1">
+                            <div className="flex items-center gap-1 min-w-0">
+                              <Tag className="w-3 h-3 text-slate-400 shrink-0" />
+                              <span className="font-mono text-[11px] font-bold truncate text-slate-900 dark:text-slate-100" title={`Mã Lô (Lot ID): ${p.lotId}`}>
+                                {p.lotId}
+                              </span>
+                            </div>
+                            {fefo.status === 'EXPIRED' ? (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-rose-600 text-white shrink-0 shadow-2xs">
+                                <AlertOctagon className="w-2.5 h-2.5" />
+                                HẾT HẠN
+                              </span>
+                            ) : fefo.status === 'NEAR_EXPIRY' ? (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-amber-500 text-slate-950 shrink-0 animate-pulse shadow-2xs">
+                                <AlertTriangle className="w-2.5 h-2.5" />
+                                CẬN DATE
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shrink-0">
+                                <CheckCircle2 className="w-2.5 h-2.5" />
+                                Đạt Chuẩn
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center justify-between gap-1 text-[10px] font-mono border-t border-slate-200/60 dark:border-slate-700/60 pt-1">
+                            <span className="text-slate-500 dark:text-slate-400">HSD (EXP):</span>
+                            <span className={`font-bold ${fefo.textClass}`}>
+                              {p.expDate}
                             </span>
-                          )}
-                        </div>
-                        <div className="text-[10px] font-mono flex items-center gap-1 mt-0.5">
-                          <span className="text-slate-400">HSD:</span>
-                          <strong className={p.daysToExpiry <= 30 ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-slate-600 dark:text-slate-300'}>
-                            {p.expDate}
-                          </strong>
+                          </div>
+
+                          <div className="text-[9px] font-medium leading-tight text-slate-500 dark:text-slate-400">
+                            {fefo.label}
+                          </div>
                         </div>
                       </td>
 
-                      {/* Safety Stock Alert Column */}
-                      <td className="px-3.5 py-3 text-center">
-                        {p.physicalQty <= p.minStock ? (
-                          <div 
-                            className="inline-flex items-center justify-center p-1.5 bg-rose-50 dark:bg-rose-950/60 rounded-xl border border-rose-200 dark:border-rose-800 cursor-help shadow-2xs"
-                            title={`CẢNH BÁO TỒN KHO THẤP: Tồn kho thực tế (${p.physicalQty} ${p.unit}) đã chạm hoặc dưới ngưỡng Safety Stock (${p.minStock} ${p.unit})!`}
-                          >
-                            <ShieldAlert className="w-4 h-4 text-rose-600 dark:text-rose-400 animate-pulse" />
+                      {/* GRN Date & Receipt Reference (FIFO) */}
+                      <td className="px-3.5 py-3">
+                        <div className="p-2 rounded-xl bg-slate-50/80 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <div className="flex items-center gap-1 font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
+                              <Calendar className="w-3 h-3 text-indigo-500 shrink-0" />
+                              <span>{p.grnDate}</span>
+                            </div>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
+                              FIFO
+                            </span>
                           </div>
-                        ) : (
-                          <span className="text-slate-300 dark:text-slate-700 font-mono text-xs" title="Tồn kho an toàn">
-                            -
-                          </span>
-                        )}
+
+                          <div className="flex items-center justify-between gap-1 text-[10px] font-mono border-t border-slate-200/60 dark:border-slate-700/60 pt-1 text-slate-500 dark:text-slate-400">
+                            <span>Số phiếu:</span>
+                            <span className="font-semibold text-indigo-600 dark:text-indigo-400">{p.grnNumber}</span>
+                          </div>
+
+                          <div className="text-[9px] text-slate-500 dark:text-slate-400">
+                            Lưu kho: <strong className="text-indigo-600 dark:text-indigo-400 font-mono font-bold">{fefo.daysInStorage}</strong> ngày
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Safety Stock & FEFO Alert Column */}
+                      <td className="px-2.5 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          {isExpired ? (
+                            <div 
+                              className="inline-flex items-center justify-center p-1.5 bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded-xl border border-rose-300 dark:border-rose-800 cursor-help shadow-2xs"
+                              title={`CẢNH BÁO FEFO: Lô hàng đã hết hạn sử dụng (${fefo.daysToExpiry} ngày)! Cần niêm phong hoặc cách ly.`}
+                            >
+                              <AlertOctagon className="w-3.5 h-3.5" />
+                            </div>
+                          ) : isNearExpiry ? (
+                            <div 
+                              className="inline-flex items-center justify-center p-1.5 bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 rounded-xl border border-amber-300 dark:border-amber-700 cursor-help shadow-2xs animate-pulse"
+                              title={`CẢNH BÁO FEFO: Lô hàng cận hạn sử dụng (còn ${fefo.daysToExpiry} ngày)! Ưu tiên xuất kho trước.`}
+                            >
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                            </div>
+                          ) : null}
+
+                          {isLowStock ? (
+                            <div 
+                              className="inline-flex items-center justify-center p-1.5 bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-xl border border-rose-200 dark:border-rose-800 cursor-help shadow-2xs"
+                              title={`CẢNH BÁO TỒN KHO THẤP: Tồn kho thực tế (${p.physicalQty} ${p.unit}) đã chạm hoặc dưới ngưỡng Safety Stock (${p.minStock} ${p.unit})!`}
+                            >
+                              <ShieldAlert className="w-3.5 h-3.5 animate-pulse" />
+                            </div>
+                          ) : null}
+
+                          {!isExpired && !isNearExpiry && !isLowStock ? (
+                            <span className="text-slate-300 dark:text-slate-700 font-mono text-xs" title="Tồn kho an toàn">
+                              -
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
 
                       {/* Physical Qty */}
@@ -824,28 +998,28 @@ export const WarehouseProductsTab: React.FC<WarehouseProductsTabProps> = ({
                       </td>
 
                       {/* Quality & Health Status Badge */}
-                      <td className="px-3.5 py-3 text-center">
+                      <td className="px-3 py-3 text-center">
                         {p.qualityStatus === 'READY' && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/80">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/80">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1" />
-                            <span>Sẵn Sàng</span>
+                            <span>Đạt</span>
                           </span>
                         )}
                         {p.qualityStatus === 'INSPECTING' && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-700/80">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-700/80">
                             <AlertTriangle className="w-3 h-3 text-amber-600 mr-1" />
-                            <span>Kiểm Định</span>
+                            <span>KCS</span>
                           </span>
                         )}
                         {p.qualityStatus === 'QUARANTINED' && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-rose-50 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-300 dark:border-rose-700/80">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-rose-50 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-300 dark:border-rose-700/80">
                             <AlertOctagon className="w-3 h-3 text-rose-600 mr-1" />
-                            <span>Niêm Phong</span>
+                            <span>Khóa</span>
                           </span>
                         )}
                         {isLowStock && (
                           <div className="text-[9px] font-bold text-rose-600 dark:text-rose-400 mt-1 flex items-center justify-center gap-0.5">
-                            <span>Chạm đáy min</span>
+                            <span>Min</span>
                           </div>
                         )}
                       </td>
@@ -936,11 +1110,11 @@ export const WarehouseProductsTab: React.FC<WarehouseProductsTabProps> = ({
                 </div>
 
                 <div>
-                  <div className="text-[10px] text-slate-400 uppercase font-sans">Số Lô & HSD</div>
+                  <div className="text-[10px] text-slate-400 uppercase font-sans">Mã Lô & HSD (FEFO)</div>
                   <div className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">
-                    {selectedProductForCard.lotNo}
+                    {selectedProductForCard.lotId}
                   </div>
-                  <div className="text-[10px] text-slate-400">EXP: {selectedProductForCard.expDate}</div>
+                  <div className="text-[10px] text-slate-400">Số lô: {selectedProductForCard.lotNo} • EXP: {selectedProductForCard.expDate}</div>
                 </div>
 
                 <div>
@@ -1152,9 +1326,10 @@ export const WarehouseProductsTab: React.FC<WarehouseProductsTabProps> = ({
                     <span className="block font-mono text-[11px] text-indigo-600 font-bold">{quickPreviewProduct.binLocation} ({quickPreviewProduct.zone})</span>
                   </div>
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Số Lô & Hạn Sử Dụng</span>
-                    <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{quickPreviewProduct.lotNo}</span>
-                    <span className="block font-mono text-[11px] text-slate-500">{quickPreviewProduct.expDate}</span>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Thông Tin Lô & Ngày Nhập</span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{quickPreviewProduct.lotId}</span>
+                    <span className="block font-mono text-[10px] text-slate-500">GRN: {quickPreviewProduct.grnDate} ({quickPreviewProduct.grnNumber})</span>
+                    <span className="block font-mono text-[10px] text-slate-500">HSD (FEFO): {quickPreviewProduct.expDate}</span>
                   </div>
                 </div>
 

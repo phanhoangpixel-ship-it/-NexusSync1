@@ -248,8 +248,8 @@ export const ENTERPRISE_MASTER_CUSTOMERS: EnterpriseCustomer[] = [
     id: 'CUST-B2B-001',
     name: 'Công ty Cổ phần Công nghệ Vin1Tech',
     taxCode: '0314567891',
-    creditLimit: '2,000,000,000 VND',
-    outstanding: '450,000,000 VND',
+    creditLimit: '2.000.000.000 ₫',
+    outstanding: '450.000.000 ₫',
     status: 'ACTIVE',
     tier: 'VIP Gold'
   },
@@ -257,8 +257,8 @@ export const ENTERPRISE_MASTER_CUSTOMERS: EnterpriseCustomer[] = [
     id: 'CUST-B2B-002',
     name: 'Tập đoàn Sản xuất Công nghiệp Miền Nam',
     taxCode: '0301982345',
-    creditLimit: '5,000,000,000 VND',
-    outstanding: '1,820,000,000 VND',
+    creditLimit: '5.000.000.000 ₫',
+    outstanding: '1.820.000.000 ₫',
     status: 'ACTIVE',
     tier: 'Strategic'
   },
@@ -266,8 +266,8 @@ export const ENTERPRISE_MASTER_CUSTOMERS: EnterpriseCustomer[] = [
     id: 'CUST-B2B-003',
     name: 'Công ty TNHH Thương mại Quốc tế Alpha',
     taxCode: '0319884422',
-    creditLimit: '1,000,000,000 VND',
-    outstanding: '920,000,000 VND',
+    creditLimit: '1.000.000.000 ₫',
+    outstanding: '920.000.000 ₫',
     status: 'WARNING',
     tier: 'Standard'
   }

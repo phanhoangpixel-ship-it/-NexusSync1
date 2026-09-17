@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "../../db/index";
 import * as schema from "../../db/schema";
 import { eq, desc, sql, or, like, and, gte, lte } from "drizzle-orm";
+import { eventBus } from "../../engines/eventBus";
 
 export const eventsRouter = Router();
 
@@ -207,17 +208,6 @@ const INITIAL_OUTBOX_SEEDS = [
   }
 ];
 
-// Active subscribers state with live heartbeats
-let SUBSCRIBERS_STATE = [
-  { id: "sub-01", name: "InventoryReservationConsumer", topic: "erp.sales.order.*", status: "HEALTHY", lag: 0, lastHeartbeat: "Vừa xong", consumerGroup: "WMS-Consumers" },
-  { id: "sub-02", name: "GeneralLedgerDoubleEntrySync", topic: "erp.finance.*", status: "HEALTHY", lag: 2, lastHeartbeat: "Vừa xong", consumerGroup: "Finance-Consumers" },
-  { id: "sub-03", name: "AuditImmutableLedgerWriter", topic: "erp.#", status: "HEALTHY", lag: 0, lastHeartbeat: "Vừa xong", consumerGroup: "Audit-Consumers" },
-  { id: "sub-04", name: "ProcurementNotificationDispatcher", topic: "erp.manufacturing.*", status: "DEGRADED", lag: 14, lastHeartbeat: "12s trước", consumerGroup: "SCM-Consumers" },
-  { id: "sub-05", name: "ECommerceOmniChannelSync", topic: "erp.inventory.stock.*", status: "HEALTHY", lag: 1, lastHeartbeat: "Vừa xong", consumerGroup: "POS-Consumers" },
-  { id: "sub-06", name: "QualityControlQuarantineHandler", topic: "erp.quality.inspection.*", status: "HEALTHY", lag: 0, lastHeartbeat: "Vừa xong", consumerGroup: "QC-Consumers" },
-  { id: "sub-07", name: "TreasuryBankReconciliationWorker", topic: "erp.treasury.payment.*", status: "HEALTHY", lag: 0, lastHeartbeat: "Vừa xong", consumerGroup: "Treasury-Consumers" }
-];
-
 /**
  * Helper to ensure seeds exist in DB
  */
@@ -243,6 +233,22 @@ async function ensureEventSeeds() {
           lastError: (seed as any).lastError || null,
           publishedAt: seed.publishedAt,
         }).run();
+
+        // Seed DLQ table if seed is DLQ_FAILED
+        if (seed.status === "DLQ_FAILED") {
+          await db.insert(schema.dlqEvents).values({
+            eventId: seed.eventId,
+            eventType: seed.eventType,
+            consumer: "ProcurementNotificationDispatcher",
+            payload: seed.payload,
+            correlationId: seed.correlationId,
+            causationId: seed.causationId,
+            lastError: (seed as any).lastError || "Connection timeout after 3 retries",
+            status: "UNRESOLVED",
+            retryCount: 3,
+            failedAt: seed.publishedAt || new Date()
+          }).run();
+        }
       }
     }
   } catch (err) {
@@ -302,14 +308,284 @@ function mapDbEventToBusItem(dbEvt: any) {
 }
 
 /**
+ * ============================================================================
+ * SECTION 1: CORE OUTBOX MONITORING ENDPOINTS (CHECKLIST GROUP D & REQUIREMENT #9)
+ * ============================================================================
+ */
+
+/**
+ * GET /api/outbox/messages
+ * Dedicated Outbox monitoring API endpoint with advanced filtering and pagination.
+ */
+eventsRouter.get("/api/outbox/messages", async (req, res) => {
+  try {
+    await ensureEventSeeds();
+    const { 
+      status, 
+      search, 
+      source, 
+      aggregateType, 
+      aggregateId, 
+      correlationId, 
+      page = 1, 
+      limit = 50 
+    } = req.query;
+
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Math.min(200, Math.max(1, Number(limit)));
+    const offset = (pageNum - 1) * limitNum;
+
+    let conditions: any[] = [];
+
+    if (status && status !== "ALL") {
+      conditions.push(eq(schema.outboxEvents.status, String(status)));
+    }
+
+    if (source && source !== "ALL") {
+      conditions.push(eq(schema.outboxEvents.source, String(source)));
+    }
+
+    if (aggregateType) {
+      conditions.push(eq(schema.outboxEvents.aggregateType, String(aggregateType)));
+    }
+
+    if (aggregateId) {
+      conditions.push(eq(schema.outboxEvents.aggregateId, String(aggregateId)));
+    }
+
+    if (correlationId) {
+      conditions.push(eq(schema.outboxEvents.correlationId, String(correlationId)));
+    }
+
+    if (search && typeof search === "string" && search.trim() !== "") {
+      const q = `%${search.trim()}%`;
+      conditions.push(
+        or(
+          like(schema.outboxEvents.eventId, q),
+          like(schema.outboxEvents.eventType, q),
+          like(schema.outboxEvents.aggregateId, q),
+          like(schema.outboxEvents.correlationId, q),
+          like(schema.outboxEvents.source, q),
+          like(schema.outboxEvents.payload, q)
+        )
+      );
+    }
+
+    const query = db.select().from(schema.outboxEvents);
+    if (conditions.length > 0) {
+      query.where(and(...conditions));
+    }
+
+    const totalCountQuery = await db.select({ count: sql<number>`count(*)` })
+      .from(schema.outboxEvents)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+    const total = Number(totalCountQuery[0]?.count || 0);
+
+    const records = await query
+      .orderBy(desc(schema.outboxEvents.id))
+      .limit(limitNum)
+      .offset(offset)
+      .all();
+
+    res.json({
+      success: true,
+      messages: records.map(mapDbEventToBusItem),
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum)
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/outbox/dlq
+ * Dedicated Dead Letter Queue (DLQ) monitoring API endpoint.
+ */
+eventsRouter.get("/api/outbox/dlq", async (req, res) => {
+  try {
+    await ensureEventSeeds();
+    const { status, consumer, search, page = 1, limit = 50 } = req.query;
+
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Math.min(200, Math.max(1, Number(limit)));
+    const offset = (pageNum - 1) * limitNum;
+
+    let conditions: any[] = [];
+
+    if (status && status !== "ALL") {
+      conditions.push(eq(schema.dlqEvents.status, String(status)));
+    }
+
+    if (consumer && consumer !== "ALL") {
+      conditions.push(eq(schema.dlqEvents.consumer, String(consumer)));
+    }
+
+    if (search && typeof search === "string" && search.trim() !== "") {
+      const q = `%${search.trim()}%`;
+      conditions.push(
+        or(
+          like(schema.dlqEvents.eventId, q),
+          like(schema.dlqEvents.eventType, q),
+          like(schema.dlqEvents.consumer, q),
+          like(schema.dlqEvents.lastError, q)
+        )
+      );
+    }
+
+    const query = db.select().from(schema.dlqEvents);
+    if (conditions.length > 0) {
+      query.where(and(...conditions));
+    }
+
+    const totalQuery = await db.select({ count: sql<number>`count(*)` })
+      .from(schema.dlqEvents)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+    const unresolvedQuery = await db.select({ count: sql<number>`count(*)` })
+      .from(schema.dlqEvents)
+      .where(eq(schema.dlqEvents.status, "UNRESOLVED"));
+
+    const total = Number(totalQuery[0]?.count || 0);
+    const unresolvedCount = Number(unresolvedQuery[0]?.count || 0);
+
+    const records = await query
+      .orderBy(desc(schema.dlqEvents.id))
+      .limit(limitNum)
+      .offset(offset)
+      .all();
+
+    res.json({
+      success: true,
+      dlq: records,
+      total,
+      unresolvedCount,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum)
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/outbox/retry
+ * Manual DLQ Replay endpoint supporting single event, list of events, or all DLQ events.
+ * Strictly complies with Rule B.10 by writing forensic audit logs to M02.
+ */
+eventsRouter.post("/api/outbox/retry", async (req: any, res) => {
+  try {
+    const { eventId, eventIds, all } = req.body;
+    const actor = {
+      id: req.user?.id || 1,
+      username: req.user?.username || "ops_admin"
+    };
+
+    if (all === true) {
+      const result = await eventBus.retryAllDlq(actor);
+      return res.json(result);
+    }
+
+    if (eventIds && Array.isArray(eventIds) && eventIds.length > 0) {
+      let count = 0;
+      for (const id of eventIds) {
+        const r = await eventBus.retryDlqEvent(String(id), actor);
+        if (r.success) count++;
+      }
+      return res.json({
+        success: true,
+        retriedCount: count,
+        message: `Đã đưa ${count}/${eventIds.length} sự kiện từ DLQ trở lại hàng đợi Outbox.`
+      });
+    }
+
+    if (eventId) {
+      const result = await eventBus.retryDlqEvent(String(eventId), actor);
+      return res.json(result);
+    }
+
+    res.status(400).json({
+      success: false,
+      error: "Cần cung cấp eventId, danh sách eventIds hoặc cờ all: true để thực hiện retry."
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/events/subscribers
+ * Dynamic Event Subscription Management (Rule A.7).
+ */
+eventsRouter.post("/api/events/subscribers", (req, res) => {
+  try {
+    const { name, topic, consumerGroup } = req.body;
+    if (!name || !topic) {
+      return res.status(400).json({
+        success: false,
+        error: "Thiếu trường bắt buộc: name (Tên Consumer) và topic (Mẫu đăng ký sự kiện)"
+      });
+    }
+
+    const newSub = eventBus.registerSubscriber({ name, topic, consumerGroup });
+    res.json({
+      success: true,
+      subscriber: newSub,
+      message: `Đã đăng ký Consumer [${newSub.name}] theo dõi Topic [${newSub.topic}] thành công.`
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/outbox/archive
+ * Retention & Archival management for processed events (Rule B.13).
+ */
+eventsRouter.post("/api/outbox/archive", async (req, res) => {
+  try {
+    const { retentionDays = 30 } = req.body;
+    const result = await eventBus.archiveProcessedEvents(Number(retentionDays));
+    res.json({
+      success: true,
+      archivedCount: result.archivedCount,
+      message: `Đã kiểm tra và lưu trữ ${result.archivedCount} sự kiện hoàn tất quá hạn ${retentionDays} ngày.`
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/events/dispatch-pending
+ * Triggers manual immediate sweep of outbox pending events.
+ */
+eventsRouter.post("/api/events/dispatch-pending", async (req, res) => {
+  try {
+    const summary = await eventBus.dispatchPendingEvents(50);
+    res.json({
+      success: true,
+      summary,
+      message: `Quét Outbox hoàn tất: ${summary.processed} đã xử lý, ${summary.succeeded} thành công, ${summary.failed} lỗi, ${summary.dlq} chuyển DLQ.`
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * ============================================================================
+ * SECTION 2: EXISTING EVENTBUS M05 ENDPOINTS (100% BACKWARD COMPATIBILITY)
+ * ============================================================================
+ */
+
+/**
  * GET /api/events/outbox
- * Fetch events stream with rich filtering support:
- * - search: query string
- * - status: 'ALL' | 'PUBLISHED' | 'ACKNOWLEDGED' | 'DLQ_FAILED' | 'PENDING'
- * - source: 'ALL' | source string
- * - domain / eventType: string
- * - timeRange: 'all' | '15m' | '1h' | 'today' | '7d' | '30d' | 'custom'
- * - startDate / endDate: ISO date strings
+ * Fetch events stream with rich filtering support for M05 UI
  */
 eventsRouter.get("/api/events/outbox", async (req, res) => {
   try {
@@ -396,26 +672,18 @@ eventsRouter.post("/api/events/publish", async (req, res) => {
       return res.status(400).json({ success: false, error: "Missing required fields: topic, payload" });
     }
 
-    const eventId = `EVT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
     const computedEventType = eventType || topic.split(".").pop() || "CustomEvent";
-    const payloadStr = typeof payload === "string" ? payload : JSON.stringify(payload);
 
-    await db.insert(schema.outboxEvents).values({
-      eventId: eventId,
+    const eventId = await eventBus.publishTransactional(db, {
       eventType: computedEventType,
-      eventVersion: 1,
       aggregateType: aggregateType || "EventBus",
-      aggregateId: aggregateId || eventId,
+      aggregateId: aggregateId || `AGG-${Date.now()}`,
       source: sourceModule || "M05 EventBus Console",
       actorId: actorId || "super_admin",
-      correlationId: `CORR-${eventId}`,
-      causationId: "CMD-MANUAL-PUBLISH",
-      payload: payloadStr,
-      metadata: JSON.stringify({ topic, source: "M05_CONSOLE" }),
-      status: "PUBLISHED",
-      retryCount: 0,
-      publishedAt: new Date(),
-    }).run();
+      payload,
+      metadata: { topic, source: "M05_CONSOLE" },
+      eventVersion: 1
+    });
 
     res.json({
       success: true,
@@ -450,35 +718,68 @@ eventsRouter.post("/api/events/trigger-business-event", async (req, res) => {
       return res.status(400).json({ success: false, error: "Missing required fields: eventType, payload" });
     }
 
-    const eventId = `EVT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-    const payloadStr = typeof payload === "string" ? payload : JSON.stringify(payload);
-    const status = simulateFailure ? "DLQ_FAILED" : "PUBLISHED";
-    const lastError = simulateFailure ? `Simulated consumer dispatch failure on ${eventType}: Connection refused` : null;
-    const retryCount = simulateFailure ? 3 : 0;
+    if (simulateFailure) {
+      const eventId = `EVT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      const payloadStr = typeof payload === "string" ? payload : JSON.stringify(payload);
+      const lastError = `Simulated consumer dispatch failure on ${eventType}: Connection refused (DLQ Quarantined)`;
 
-    await db.insert(schema.outboxEvents).values({
-      eventId: eventId,
-      eventType: eventType,
-      eventVersion: 1,
+      await db.insert(schema.outboxEvents).values({
+        eventId: eventId,
+        eventType: eventType,
+        eventVersion: 1,
+        aggregateType: aggregateType || domain || "BusinessEntity",
+        aggregateId: aggregateId || `AGG-${Math.floor(1000 + Math.random() * 9000)}`,
+        source: sourceModule || `M05 ${domain || "ERP"} Engine`,
+        actorId: actorId || "business_actor",
+        correlationId: correlationId || `CORR-${eventId}`,
+        causationId: causationId || `CMD-${eventType.toUpperCase()}`,
+        payload: payloadStr,
+        metadata: JSON.stringify({ domain: domain || "core", triggeredAt: new Date().toISOString() }),
+        status: "DLQ_FAILED",
+        retryCount: 3,
+        lastError: lastError,
+        publishedAt: new Date(),
+      }).run();
+
+      await db.insert(schema.dlqEvents).values({
+        eventId: eventId,
+        eventType: eventType,
+        consumer: "SimulatedConsumer",
+        payload: payloadStr,
+        correlationId: correlationId || `CORR-${eventId}`,
+        causationId: causationId || null,
+        lastError: lastError,
+        status: "UNRESOLVED",
+        retryCount: 3,
+        failedAt: new Date()
+      }).run();
+
+      return res.json({
+        success: true,
+        message: `Đã kích hoạt sự kiện nghiệp vụ [${eventType}] thành công (DLQ_FAILED).`,
+        eventId: eventId,
+        status: "DLQ_FAILED"
+      });
+    }
+
+    const eventId = await eventBus.publishTransactional(db, {
+      eventType,
       aggregateType: aggregateType || domain || "BusinessEntity",
-      aggregateId: aggregateId || `AGG-${Math.floor(1000 + Math.random() * 9000)}`,
+      aggregateId: aggregateId || `AGG-${Date.now()}`,
       source: sourceModule || `M05 ${domain || "ERP"} Engine`,
       actorId: actorId || "business_actor",
-      correlationId: correlationId || `CORR-${eventId}`,
+      correlationId: correlationId || null,
       causationId: causationId || `CMD-${eventType.toUpperCase()}`,
-      payload: payloadStr,
-      metadata: JSON.stringify({ domain: domain || "core", triggeredAt: new Date().toISOString() }),
-      status: status,
-      retryCount: retryCount,
-      lastError: lastError,
-      publishedAt: new Date(),
-    }).run();
+      payload,
+      metadata: { domain: domain || "core" },
+      eventVersion: 1
+    });
 
     res.json({
       success: true,
-      message: `Đã kích hoạt sự kiện nghiệp vụ [${eventType}] thành công (${status}).`,
+      message: `Đã kích hoạt sự kiện nghiệp vụ [${eventType}] thành công.`,
       eventId: eventId,
-      status: status
+      status: "PUBLISHED"
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -487,25 +788,17 @@ eventsRouter.post("/api/events/trigger-business-event", async (req, res) => {
 
 /**
  * POST /api/events/retry/:id
- * Retry single event from DLQ
+ * Retry single event from DLQ (backward compatible route)
  */
-eventsRouter.post("/api/events/retry/:id", async (req, res) => {
+eventsRouter.post("/api/events/retry/:id", async (req: any, res) => {
   try {
     const eventId = req.params.id;
-    await db.update(schema.outboxEvents)
-      .set({
-        status: "PUBLISHED",
-        retryCount: 0,
-        lastError: null,
-        publishedAt: new Date(),
-      })
-      .where(eq(schema.outboxEvents.eventId, eventId))
-      .run();
-
-    res.json({
-      success: true,
-      message: `Đã tái phát sự kiện ${eventId} lên EventBus thành công.`
-    });
+    const actor = {
+      id: req.user?.id || 1,
+      username: req.user?.username || "ops_admin"
+    };
+    const result = await eventBus.retryDlqEvent(eventId, actor);
+    res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -513,24 +806,16 @@ eventsRouter.post("/api/events/retry/:id", async (req, res) => {
 
 /**
  * POST /api/events/retry-all-dlq
- * Bulk retry all failed DLQ events
+ * Bulk retry all failed DLQ events (backward compatible route)
  */
-eventsRouter.post("/api/events/retry-all-dlq", async (req, res) => {
+eventsRouter.post("/api/events/retry-all-dlq", async (req: any, res) => {
   try {
-    await db.update(schema.outboxEvents)
-      .set({
-        status: "PUBLISHED",
-        retryCount: 0,
-        lastError: null,
-        publishedAt: new Date(),
-      })
-      .where(eq(schema.outboxEvents.status, "DLQ_FAILED"))
-      .run();
-
-    res.json({
-      success: true,
-      message: "Toàn bộ sự kiện trong Dead Letter Queue đã được khôi phục thành công."
-    });
+    const actor = {
+      id: req.user?.id || 1,
+      username: req.user?.username || "ops_admin"
+    };
+    const result = await eventBus.retryAllDlq(actor);
+    res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -541,15 +826,10 @@ eventsRouter.post("/api/events/retry-all-dlq", async (req, res) => {
  */
 eventsRouter.post("/api/events/subscribers/:id/restart", (req, res) => {
   const subId = req.params.id;
-  const sub = SUBSCRIBERS_STATE.find(s => s.id === subId);
-  if (sub) {
-    sub.status = "HEALTHY";
-    sub.lag = 0;
-    sub.lastHeartbeat = "Vừa xong";
-  }
+  const ok = eventBus.restartSubscriber(subId);
   res.json({
     success: true,
-    message: `Đã khởi động lại Consumer [${sub ? sub.name : subId}] thành công.`
+    message: ok ? `Đã khởi động lại Consumer [${subId}] thành công.` : `Không tìm thấy Consumer ${subId}`
   });
 });
 
@@ -558,13 +838,10 @@ eventsRouter.post("/api/events/subscribers/:id/restart", (req, res) => {
  */
 eventsRouter.post("/api/events/subscribers/:id/reset-offset", (req, res) => {
   const subId = req.params.id;
-  const sub = SUBSCRIBERS_STATE.find(s => s.id === subId);
-  if (sub) {
-    sub.lag = 0;
-  }
+  const ok = eventBus.resetSubscriberOffset(subId);
   res.json({
     success: true,
-    message: `Đã đặt lại Offset về LATEST cho [${sub ? sub.name : subId}].`
+    message: ok ? `Đã đặt lại Offset về LATEST cho [${subId}].` : `Không tìm thấy Consumer ${subId}`
   });
 });
 
@@ -573,10 +850,11 @@ eventsRouter.post("/api/events/subscribers/:id/reset-offset", (req, res) => {
  * Fetch active subscribers and consumer lag
  */
 eventsRouter.get("/api/events/subscribers", (req, res) => {
+  const subscribers = eventBus.getSubscribers();
   res.json({
     success: true,
-    subscribers: SUBSCRIBERS_STATE,
-    total: SUBSCRIBERS_STATE.length
+    subscribers,
+    total: subscribers.length
   });
 });
 
@@ -603,6 +881,65 @@ eventsRouter.get("/api/events/metrics", async (req, res) => {
         avgLatencyMs: 14.8,
         uptimePct: 99.99
       }
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/event-bus/summary
+ * KPI summary for EventBus Dashboard
+ */
+eventsRouter.get("/api/event-bus/summary", async (req, res) => {
+  try {
+    const all = await db.select().from(schema.outboxEvents).all();
+    const dlq = await db.select().from(schema.dlqEvents).all();
+    const total = all.length;
+    const pending = all.filter(e => e.status === "PENDING").length;
+    const processing = all.filter(e => e.status === "PROCESSING").length;
+    const published = all.filter(e => e.status === "PUBLISHED" || e.status === "ACKNOWLEDGED").length;
+    const dlqCount = all.filter(e => e.status === "DLQ_FAILED" || e.status === "FAILED").length;
+    const unresolvedDlq = dlq.filter(d => d.status === "UNRESOLVED").length;
+
+    res.json({
+      success: true,
+      totalEvents: total,
+      pendingEvents: pending,
+      processingEvents: processing,
+      publishedEvents: published,
+      dlqEvents: dlqCount,
+      unresolvedDlq: unresolvedDlq,
+      totalProcessed: published
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/events/trace/:correlationId
+ * Correlation ID Tracing
+ */
+eventsRouter.get("/api/events/trace/:correlationId", async (req, res) => {
+  try {
+    const corrId = decodeURIComponent(req.params.correlationId);
+
+    const events = await db.select()
+      .from(schema.outboxEvents)
+      .where(eq(schema.outboxEvents.correlationId, corrId))
+      .orderBy(schema.outboxEvents.occurredAt);
+
+    const dlqs = await db.select()
+      .from(schema.dlqEvents)
+      .where(eq(schema.dlqEvents.correlationId, corrId))
+      .orderBy(schema.dlqEvents.failedAt);
+
+    res.json({
+      success: true,
+      correlationId: corrId,
+      events: events.map(mapDbEventToBusItem),
+      dlqs
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

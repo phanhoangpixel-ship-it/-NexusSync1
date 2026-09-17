@@ -85,17 +85,17 @@ This document constitutes the authoritative, evidence-grounded catalog and mappi
 - **Module ID:** `M01`
 - **Group:** 00. Core Hub (Trung Tâm Điều Phối)
 - **Workspace:** `WS01_HUB` | **Route:** `/workspace`
-- **Mounted Component:** `src/pages/WorkspaceHub.tsx`
+- **Mounted Component:** `src/modules/admin/m01-workspace-hub/components/WorkspaceHub.tsx`
 - **Domain Authority:** Authoritative for session navigation, WorkQueue SLA orchestration, and cross-module workspace aggregation.
-- **Read API:** `GET /api/workspace/summary`
+- **Read API:** `GET /api/workspace/summary`, `GET /api/workspace/work-items`
 
 ### M02: Audit Compliance & SHA-256 Chain
 - **Module ID:** `M02`
 - **Group:** 06. Quản Trị & Hệ Thống
 - **Workspace:** `WS28_DMS` | **Route:** `/audit`
-- **Mounted Component:** `src/pages/AuditLog.tsx`
-- **Domain Authority:** Exclusive Single-Writer for Immutable Audit Records and cryptographic Hash Checksums.
-- **Read API:** `GET /api/audit/logs`
+- **Mounted Component:** `src/modules/governance/m02-audit/components/AuditComplianceWorkspace.tsx`
+- **Domain Authority:** Exclusive Single-Writer (`AuditService.recordAuditLog` / `AuditService.captureAsync`) for Immutable Audit Records with SHA-256 Cryptographic Hash Chaining.
+- **Read API:** `GET /api/audit/logs`, `GET /api/audit/verify-chain`, `POST /api/audit/verify-chain`
 
 ### M03: System Settings & Parameters
 - **Module ID:** `M03`
@@ -118,8 +118,8 @@ This document constitutes the authoritative, evidence-grounded catalog and mappi
 - **Group:** 06. Quản Trị & Hệ Thống
 - **Workspace:** `WS26_SERVICEDESK` | **Route:** `/event-bus`
 - **Mounted Component:** `src/modules/governance/m05-eventbus/components/M05EventBusWorkspace.tsx`
-- **Domain Authority:** EventBroker Dispatch, Outbox Relays, Idempotent Processing, and DLQ Quarantine.
-- **Read API:** `GET /api/events/outbox`
+- **Domain Authority:** EventBroker Dispatch, Transactional Outbox Relays, Idempotent Processing, Dynamic Consumers, and DLQ Quarantine.
+- **Read & Ops APIs:** `GET /api/events/outbox`, `GET /api/outbox/messages`, `GET /api/outbox/dlq`, `POST /api/outbox/retry`, `POST /api/events/subscribers`, `POST /api/events/dispatch-pending`, `POST /api/outbox/archive`
 
 ### M06: Innovation R&D & Formulation
 - **Module ID:** `M06`
@@ -131,25 +131,28 @@ This document constitutes the authoritative, evidence-grounded catalog and mappi
 
 ### M07: Enterprise Master Data (Items & Customers)
 - **Module ID:** `M07`
-- **Group:** 01. Thương Mại & Bán Hàng
-- **Workspace:** `WS02_CRM` | **Route:** `/customers`
-- **Mounted Component:** `src/pages/Customers.tsx`
-- **Domain Authority:** Shared Enterprise Master Data (SKU Master, Units of Measure, Customer Profiles & Credit Limits).
-- **Read API:** `GET /api/customers`
+- **Group:** 01. Thương Mại & Bán Hàng (và Khối Dữ Liệu Chủ Doanh Nghiệp)
+- **Workspace:** `WS02_CRM` | **Route:** `/customers` & `/inventory`
+- **Mounted Component:** `/src/modules/master-data/m07-customers-item-master/components/M07CustomersItemMasterWorkspace.tsx` (`src/pages/Customers.tsx`, `src/pages/Inventory.tsx`)
+- **Domain Authority:** Sole Single Source of Truth (SSOT) for canonical Item Master (SKUs, Barcodes, Multi-level UOM hierarchy, Packaging specs) and B2B Customer Profiles (Legal profile, Multi Ship-to/Bill-to, Credit Limits & Usage).
+- **Read API:** `GET /api/customers`, `GET /api/products`, `POST /api/uom/convert`, `GET /api/categories`
+- **Status:** **ACCEPTANCE SEAL: SIGNED & COMPLETED** (Refer to `/docs/design-specs/M07_ARCHITECTURE_POST_SYNC.md`)
 
 ### M08: Purchase Orders (P2P Procurement)
 - **Module ID:** `M08`
 - **Group:** 02. Mua Sắm & Cung Ứng
 - **Workspace:** `WS04_PURCHASE` | **Route:** `/purchase`
 - **Mounted Component:** `src/pages/Purchase.tsx`
-- **Domain Authority:** Exclusive Authority for Purchase Orders, 3-Way Matching, and Inbound ASN commitments.
-- **Read API:** `GET /api/purchase/orders`
+- **Domain Authority:** Exclusive Authority for Purchase Orders (`purchase_orders`), Goods Receipt execution with Single-Writer Inventory delegation (`goods_receipts` via `InventoryService.postTransaction()`), 3-Way Matching (PO ↔ GR ↔ AP Invoice), and Inbound ASN commitments.
+- **Read APIs:** `GET /api/purchase-orders`, `GET /api/purchase-orders/:id`, `GET /api/purchase-orders/:id/items`, `GET /api/goods-receipts`, `GET /api/purchase/matching-cases`, `GET /api/purchase/contracts`
+- **Write APIs:** `POST /api/purchase-orders`, `POST /api/purchase-orders/:id/submit-approval`, `POST /api/purchase-orders/:id/approve`, `POST /api/purchase-orders/:id/reject`, `POST /api/goods-receipts`, `POST /api/purchase/matching-cases/:id/resolve`, `POST /api/purchase/contracts`
+- **Cross-Module Integrations:** M02 (Central Audit Trail), M07 (UOM Conversion & Product Master), M09 (Vendor Master & Credit Terms), M10 (Sourcing Award Delegation), M17 (Single-Writer Inventory Postings on Goods Receipt), M28 (Multi-tier Approval Matrix), M30 (Cost Center Budget Guard), M31 (AP Invoice 3-Way Matching).
 
 ### M09: Suppliers SRM Profiles & Terms
 - **Module ID:** `M09`
 - **Group:** 02. Mua Sắm & Cung Ứng
 - **Workspace:** `WS04_PURCHASE` | **Route:** `/suppliers`
-- **Mounted Component:** `src/pages/Suppliers.tsx`
+- **Mounted Component:** `src/modules/purchase/m09-suppliers/components/M09SuppliersSRMWorkspace.tsx`
 - **Domain Authority:** Exclusive Authority for Vendor Master Data, Supplier Banking Details & Credit Terms.
 - **Read API:** `GET /api/suppliers`
 
@@ -157,9 +160,11 @@ This document constitutes the authoritative, evidence-grounded catalog and mappi
 - **Module ID:** `M10`
 - **Group:** 02. Mua Sắm & Cung Ứng
 - **Workspace:** `WS24_SOURCING` | **Route:** `/strategic-sourcing`
-- **Mounted Component:** `src/pages/StrategicSourcing.tsx`
-- **Domain Authority:** Exclusive Authority for Sourcing RFP Packages, Supplier Bid Matrix & Tender Awards.
-- **Read API:** `GET /api/sourcing/rfqs`
+- **Mounted Component:** `src/modules/purchase/m10-strategic-sourcing/components/M10StrategicSourcingWorkspace.tsx`
+- **Domain Authority:** Exclusive Authority for Sourcing Packages (`sourcing_packages`), RFQ Bidding Events (`srm_rfqs`), Reverse Auction Rounds (`srm_auction_rounds`), Multi-criteria Consensus Evaluations (`sourcing_evaluations`), and Tender Awards (`sourcing_awards`). Downstream PO generation is delegated strictly to M08 Purchase Orders (`POST /api/purchase/orders` / `POST /api/purchase-orders`) via the M08 Single-Writer Authority.
+- **Read APIs:** `GET /api/sourcing/packages`, `GET /api/sourcing/packages/:id`, `GET /api/sourcing/rfqs`, `GET /api/sourcing/rfqs/:id`, `GET /api/sourcing/rfqs/:id/bids`, `GET /api/sourcing/rfqs/:id/comparison`, `GET /api/sourcing/evaluations`, `GET /api/sourcing/awards`
+- **Write APIs:** `POST /api/sourcing/packages`, `PUT /api/sourcing/packages/:id`, `POST /api/sourcing/packages/:id/cancel`, `POST /api/sourcing/rfqs`, `POST /api/sourcing/rfqs/:id/invite`, `POST /api/sourcing/rfqs/:id/close`, `POST /api/sourcing/rfqs/:id/bids`, `POST /api/sourcing/bids`, `POST /api/sourcing/rfqs/:id/reverse-auction/round`, `POST /api/sourcing/rfqs/:id/consensus-evaluation`, `POST /api/sourcing/evaluations`, `POST /api/sourcing/awards`, `POST /api/sourcing/awards/:id/generate-po`, `POST /api/sourcing/awards/:id/seal-dms`
+- **Cross-Module Integrations:** M08 (Single-Writer PO Generation), M09 (Vendor Eligibility Guard & BPA Price Ceilings), M11 (SRM Quality & OTIF Scorecards), M28 (Multi-tier Approval Matrix), M29 (DMS Secure Vault SHA-256), M30 (Cost Center Budget Guard).
 
 ### M11: SRM Supplier Performance & Scorecards
 - **Module ID:** `M11`
@@ -167,7 +172,8 @@ This document constitutes the authoritative, evidence-grounded catalog and mappi
 - **Workspace:** `WS25_SRM` | **Route:** `/srm`
 - **Mounted Component:** `src/pages/SRM.tsx`
 - **Domain Authority:** Exclusive Authority for Vendor Performance Metrics, Scorecards, and Tiering.
-- **Read API:** `GET /api/srm/scorecards`
+- **Read APIs:** `GET /api/srm/scorecards`, `GET /api/srm/scoring-config`
+- **Write APIs:** `PUT /api/srm/scoring-config`, `POST /api/suppliers/:id/scorecards`
 
 ### M12: CRM Leads & Opportunity Funnel
 - **Module ID:** `M12`
@@ -213,9 +219,9 @@ This document constitutes the authoritative, evidence-grounded catalog and mappi
 - **Module ID:** `M17`
 - **Group:** 03. Kho Vận & Hậu Cần
 - **Workspace:** `WS05_MASTER_WMS` | **Route:** `/inventory`
-- **Mounted Component:** `src/pages/Inventory.tsx`
+- **Mounted Component:** `src/modules/inventory/m17-master-wms/components/MasterWmsWorkspace.tsx`
 - **Domain Authority:** **Exclusive Single-Writer for Physical, Available, and Allocated Stock Balances (`InventoryService.postTransaction()`).**
-- **Read API:** `GET /api/products`, `GET /api/inventory/balances`
+- **Read API:** `GET /api/inventory/balances`, `GET /api/inventory/ledger`
 
 ### M18: Warehouse Structure & Bin/Rack Ops
 - **Module ID:** `M18`
@@ -424,15 +430,15 @@ This document constitutes the authoritative, evidence-grounded catalog and mappi
 | Module ID | Module Canonical Name | Primary Route | Workspace ID | Mounted Component | Primary API Endpoint | Status |
 | :---: | :--- | :--- | :--- | :--- | :--- | :---: |
 | **M01** | Workspace Hub | `/workspace` | `WS01_HUB` | `<WorkspaceHub />` | `/api/workspace/summary` | **CERTIFIED** |
-| **M02** | Audit Compliance | `/audit` | `WS28_DMS` | `<AuditLog />` | `/api/audit/logs` | **CERTIFIED** |
+| **M02** | Audit Compliance | `/audit` | `WS28_DMS` | `<AuditComplianceWorkspace />` | `/api/audit/logs` | **CERTIFIED** |
 | **M03** | System Settings | `/system-settings` | `WS01_HUB` | `<SystemSettings />` | `/api/settings` | **CERTIFIED** |
 | **M04** | SuperAdmin RBAC Portal | `/super-admin` | `WS01_HUB` | `<SuperAdminPortal />` | `/api/rbac/roles` | **CERTIFIED** |
 | **M05** | EventBus & EDA | `/event-bus` | `WS26_SERVICEDESK`| `<M05EventBusWorkspace />` | `/api/events/outbox` | **CERTIFIED** |
 | **M06** | Innovation R&D | `/rd` | `WS05_INVENTORY` | `<RDManagement />` | `/api/rd/projects` | **CERTIFIED** |
 | **M07** | Enterprise Master Data | `/customers` | `WS02_CRM` | `<Customers />` | `/api/customers` | **CERTIFIED** |
-| **M08** | Purchase Orders (P2P) | `/purchase` | `WS04_PURCHASE` | `<Purchase />` | `/api/purchase/orders` | **CERTIFIED** |
+| **M08** | Purchase Orders (P2P) | `/purchase` | `WS04_PURCHASE` | `<Purchase />` | `/api/purchase-orders` | **CERTIFIED** |
 | **M09** | Suppliers SRM | `/suppliers` | `WS04_PURCHASE` | `<Suppliers />` | `/api/suppliers` | **CERTIFIED** |
-| **M10** | Strategic Sourcing | `/strategic-sourcing`| `WS24_SOURCING` | `<StrategicSourcing />` | `/api/sourcing/rfqs` | **CERTIFIED** |
+| **M10** | Strategic Sourcing | `/strategic-sourcing`| `WS24_SOURCING` | `<M10StrategicSourcingWorkspace />` | `/api/sourcing/rfqs` | **CERTIFIED** |
 | **M11** | SRM Supplier Mgmt | `/srm` | `WS25_SRM` | `<SRM />` | `/api/srm/scorecards` | **CERTIFIED** |
 | **M12** | CRM / Khách hàng tiềm năng | `/crm` | `WS02_CRM` | `<CRM />` | `/api/crm/leads` | **CERTIFIED** |
 | **M13** | Sales Orders (O2C) | `/sales` | `WS03_SALES` | `<SalesOrders />` | `/api/sales/orders` | **CERTIFIED** |

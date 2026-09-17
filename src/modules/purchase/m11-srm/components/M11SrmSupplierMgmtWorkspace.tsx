@@ -34,6 +34,7 @@ import { M11NewScorecardModal } from './M11NewScorecardModal';
 import { M11NewAuditModal } from './M11NewAuditModal';
 import { M11RenewContractModal } from './M11RenewContractModal';
 import { M11NewContractModal } from './M11NewContractModal';
+import { M11ScoringConfigModal } from './M11ScoringConfigModal';
 
 interface M11SrmSupplierMgmtWorkspaceProps {
   onSelectEntity: (entity: SelectedEntityContext) => void;
@@ -119,6 +120,7 @@ export const M11SrmSupplierMgmtWorkspace: React.FC<M11SrmSupplierMgmtWorkspacePr
   const [isNewScModalOpen, setIsNewScModalOpen] = useState<boolean>(false);
   const [preSelectedSupplierId, setPreSelectedSupplierId] = useState<number | undefined>(undefined);
   const [isNewAuditModalOpen, setIsNewAuditModalOpen] = useState<boolean>(false);
+  const [isScoringConfigOpen, setIsScoringConfigOpen] = useState<boolean>(false);
 
   // Contract Modals state
   const [selectedContractForRenew, setSelectedContractForRenew] = useState<FrameworkContractItem | null>(null);
@@ -364,6 +366,7 @@ export const M11SrmSupplierMgmtWorkspace: React.FC<M11SrmSupplierMgmtWorkspacePr
           setIsNewScModalOpen(true);
         }}
         onOpenNewAudit={() => setIsNewAuditModalOpen(true)}
+        onOpenScoringConfig={() => setIsScoringConfigOpen(true)}
         onNavigateToM09={() => {
           window.dispatchEvent(new CustomEvent('nexus-navigate', { detail: { route: '/suppliers', moduleId: 'M09' } }));
           onNotify('info', 'Chuyển Hướng', 'Đang mở Phân hệ M09 Danh mục Nhà cung cấp & Điều khoản.');
@@ -509,6 +512,13 @@ export const M11SrmSupplierMgmtWorkspace: React.FC<M11SrmSupplierMgmtWorkspacePr
         suppliers={suppliers}
         onSuccess={fetchContracts}
         onNotify={onNotify}
+      />
+
+      <M11ScoringConfigModal
+        isOpen={isScoringConfigOpen}
+        onClose={() => setIsScoringConfigOpen(false)}
+        onNotify={onNotify}
+        onRefresh={fetchSuppliers}
       />
 
       {/* 8. Confirm Dialog */}

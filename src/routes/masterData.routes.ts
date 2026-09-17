@@ -7,11 +7,12 @@ import { InventoryService } from "../../engines/inventoryService";
 import { accountingEngine } from "../../engines/accountingEngine";
 import { UnifiedPipelineEngine } from "../../engines/unifiedPipelineEngine";
 import { BankReconciliationEngine } from "../../engines/bankReconciliationEngine";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
 import * as crypto from "crypto";
 import { requireRole } from "../middleware/auth.middleware";
 import { masterDataCache } from "../services/masterDataCache";
+import { AuditService } from "../../engines/auditService";
 
 const router = Router();
 
@@ -89,6 +90,35 @@ router.get("/api/product-uoms", async (req, res) => {
       res.status(500).json({ error: err.message });
     }
   });
+
+router.post("/api/uom/convert", async (req, res) => {
+  try {
+    const { productId, fromUomId, toUomId, quantity } = req.body;
+    const qty = Number(quantity) || 1;
+    const uoms = await db.select().from(schema.productUoms).where(eq(schema.productUoms.productId, Number(productId))).all();
+    const fromUom = uoms.find(u => u.id === Number(fromUomId) || u.unitName === fromUomId);
+    const toUom = uoms.find(u => u.id === Number(toUomId) || u.unitName === toUomId);
+
+    const fromFactor = fromUom ? Number(fromUom.conversionFactor) : 1;
+    const toFactor = toUom ? Number(toUom.conversionFactor) : 1;
+
+    const baseQuantity = qty * fromFactor;
+    const convertedQuantity = baseQuantity / toFactor;
+
+    res.json({
+      success: true,
+      productId: Number(productId),
+      quantity: qty,
+      fromUom: fromUom ? fromUom.unitName : 'BASE',
+      toUom: toUom ? toUom.unitName : 'BASE',
+      conversionFactor: fromFactor / toFactor,
+      baseQuantity,
+      convertedQuantity
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 router.get("/api/customers", async (req, res) => {
     try {
@@ -527,6 +557,258 @@ router.post("/api/suppliers/:id/evaluations", requireRole('SUPER_ADMIN', 'MANAGE
         scorecards
       }
     });
+  } catch (err: any) {
+    res.status(500).json({ error: "INTERNAL_ERROR", message: err.message });
+  }
+});
+
+// ==========================================
+// M11 SRM: GET SCORECARDS ENDPOINT
+// ==========================================
+router.get("/api/srm/scorecards", requireRole('SUPER_ADMIN', 'MANAGER', 'PROCUREMENT_MANAGER', 'PURCHASING', 'ADMIN'), async (req, res) => {
+  try {
+    const { supplierId } = req.query;
+    const allSuppliers = await db.select().from(schema.suppliers);
+    const result: any[] = [];
+
+    const parsePercent = (val: any, defaultVal: number) => {
+      if (typeof val === 'number') return val;
+      if (typeof val === 'string') {
+        const n = parseFloat(val.replace('%', ''));
+        return isNaN(n) ? defaultVal : n;
+      }
+      return defaultVal;
+    };
+
+    for (const supp of allSuppliers) {
+      if (supplierId && String(supp.id) !== String(supplierId)) {
+        continue;
+      }
+      let scorecards: any[] = [];
+      if (supp.notes) {
+        try {
+          const parsed = JSON.parse(supp.notes);
+          if (parsed && Array.isArray(parsed.scorecards)) {
+            scorecards = parsed.scorecards;
+          }
+        } catch (e) {}
+      }
+
+      const score = supp.compositeScore || 85;
+      const otifRate = scorecards.length > 0 && scorecards[0].otifRate ? scorecards[0].otifRate : (score >= 90 ? '98.5%' : score >= 80 ? '95.2%' : '88.0%');
+      const qualityScore = scorecards.length > 0 && scorecards[0].qualityScore ? scorecards[0].qualityScore : (score >= 90 ? '99.2%' : score >= 80 ? '96.5%' : '90.0%');
+      const complianceScore = scorecards.length > 0 && scorecards[0].complianceScore ? scorecards[0].complianceScore : (score >= 90 ? '100%' : '98%');
+
+      if (scorecards.length > 0) {
+        scorecards.forEach((sc, idx) => {
+          result.push({
+            id: sc.id || `SC-${supp.id}-${idx + 1}`,
+            supplierId: supp.id,
+            supplierName: supp.name,
+            supplierCode: supp.code,
+            period: sc.period || '2026-Q1',
+            otifRate: sc.otifRate || otifRate,
+            otifRateNumeric: parsePercent(sc.otifRate || otifRate, 95.0),
+            qualityScore: sc.qualityScore || qualityScore,
+            qualityScoreNumeric: parsePercent(sc.qualityScore || qualityScore, 96.0),
+            complianceScore: sc.complianceScore || complianceScore,
+            complianceScoreNumeric: parsePercent(sc.complianceScore || complianceScore, 98.0),
+            compositeScore: sc.compositeScore || supp.compositeScore || 85,
+            performanceTier: sc.performanceTier || supp.performanceTier || 'TIER_2_PREFERRED',
+            overallRating: sc.overallRating || ((supp.compositeScore || 85) / 20).toFixed(1),
+            status: supp.status,
+            evaluationDate: sc.evaluationDate || new Date().toISOString()
+          });
+        });
+      } else {
+        result.push({
+          id: `SC-${supp.id}-AUTO`,
+          supplierId: supp.id,
+          supplierName: supp.name,
+          supplierCode: supp.code,
+          period: '2026-Q1',
+          otifRate,
+          otifRateNumeric: parsePercent(otifRate, 95.0),
+          qualityScore,
+          qualityScoreNumeric: parsePercent(qualityScore, 96.0),
+          complianceScore,
+          complianceScoreNumeric: parsePercent(complianceScore, 98.0),
+          compositeScore: supp.compositeScore || 85,
+          performanceTier: supp.performanceTier || 'TIER_2_PREFERRED',
+          overallRating: ((supp.compositeScore || 85) / 20).toFixed(1),
+          status: supp.status,
+          evaluationDate: new Date().toISOString()
+        });
+      }
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: "INTERNAL_ERROR", message: err.message });
+  }
+});
+
+// ==========================================
+// M11 SRM: SCORING CONFIGURATION & SCORECARDS
+// ==========================================
+router.get("/api/srm/scoring-config", requireRole('SUPER_ADMIN', 'MANAGER', 'PROCUREMENT_MANAGER', 'PURCHASING', 'ADMIN'), async (req, res) => {
+  try {
+    const configs = await db.select().from(schema.scoringConfig).limit(1);
+    if (configs.length > 0) {
+      return res.json({ success: true, data: configs[0] });
+    }
+    const defaultConfig = {
+      otifWeight: 40.0,
+      qualityWeight: 40.0,
+      priceWeight: 10.0,
+      complianceWeight: 10.0,
+      gracePeriodDays: 2,
+      tier1Threshold: 90.0,
+      tier2Threshold: 75.0,
+      tier3Threshold: 60.0
+    };
+    res.json({ success: true, data: defaultConfig });
+  } catch (err: any) {
+    res.status(500).json({ error: "INTERNAL_ERROR", message: err.message });
+  }
+});
+
+router.put("/api/srm/scoring-config", requireRole('SUPER_ADMIN', 'MANAGER', 'PROCUREMENT_MANAGER'), async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { otifWeight, qualityWeight, priceWeight, complianceWeight, gracePeriodDays, tier1Threshold, tier2Threshold, tier3Threshold } = req.body;
+    
+    const totalWeight = Number(otifWeight || 40) + Number(qualityWeight || 40) + Number(priceWeight || 10) + Number(complianceWeight || 10);
+    if (Math.abs(totalWeight - 100) > 0.1) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", message: "Tổng trọng số (OTIF + Chất lượng + Giá + Tuân thủ) phải bằng 100%." });
+    }
+
+    const existing = await db.select().from(schema.scoringConfig).limit(1);
+    let updated;
+    if (existing.length > 0) {
+      const resUpdate = await db.update(schema.scoringConfig)
+        .set({
+          otifWeight: Number(otifWeight),
+          qualityWeight: Number(qualityWeight),
+          priceWeight: Number(priceWeight),
+          complianceWeight: Number(complianceWeight),
+          gracePeriodDays: Number(gracePeriodDays || 2),
+          tier1Threshold: Number(tier1Threshold || 90),
+          tier2Threshold: Number(tier2Threshold || 75),
+          tier3Threshold: Number(tier3Threshold || 60),
+          updatedBy: user?.username || user?.name || 'Admin',
+          updatedAt: new Date()
+        })
+        .where(eq(schema.scoringConfig.id, existing[0].id))
+        .returning();
+      updated = resUpdate[0];
+    } else {
+      const resIns = await db.insert(schema.scoringConfig).values({
+        otifWeight: Number(otifWeight || 40),
+        qualityWeight: Number(qualityWeight || 40),
+        priceWeight: Number(priceWeight || 10),
+        complianceWeight: Number(complianceWeight || 10),
+        gracePeriodDays: Number(gracePeriodDays || 2),
+        tier1Threshold: Number(tier1Threshold || 90),
+        tier2Threshold: Number(tier2Threshold || 75),
+        tier3Threshold: Number(tier3Threshold || 60),
+        updatedBy: user?.username || user?.name || 'Admin',
+      }).returning();
+      updated = resIns[0];
+    }
+
+    await AuditService.recordAuditLog({
+      module: 'M11_SRM',
+      action: 'UPDATE_SCORING_CONFIG',
+      entityType: 'scoring_config',
+      entityId: String(updated.id),
+      actorId: String(user?.id || 1),
+      actorName: user?.username || user?.name || 'Admin',
+      details: `Đã cập nhật trọng số chấm điểm M11: OTIF ${otifWeight}%, Chất lượng ${qualityWeight}%, Giá ${priceWeight}%, Tuân thủ ${complianceWeight}%`,
+      ipAddress: req.ip || '127.0.0.1'
+    });
+
+    res.json({ success: true, message: "Đã cập nhật cấu hình trọng số SRM thành công", data: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: "INTERNAL_ERROR", message: err.message });
+  }
+});
+
+router.post("/api/suppliers/:id/scorecards", requireRole('SUPER_ADMIN', 'MANAGER', 'PROCUREMENT_MANAGER', 'PURCHASING'), async (req, res) => {
+  try {
+    const supplierId = Number(req.params.id);
+    const { period, otifRate, qualityScore, complianceScore, compositeScore, performanceTier, notes } = req.body;
+
+    const parsePercent = (val: any, defaultVal: number) => {
+      if (typeof val === 'number') return val;
+      if (typeof val === 'string') {
+        const n = parseFloat(val.replace('%', ''));
+        return isNaN(n) ? defaultVal : n;
+      }
+      return defaultVal;
+    };
+
+    const otifNum = parsePercent(otifRate, 95);
+    const qualNum = parsePercent(qualityScore, 96);
+    const compNum = parsePercent(complianceScore, 98);
+    const finalComposite = compositeScore ? Number(compositeScore) : Math.round((otifNum * 0.4) + (qualNum * 0.4) + (compNum * 0.2));
+    const tier = performanceTier || (finalComposite >= 90 ? 'TIER_1_STRATEGIC' : finalComposite >= 75 ? 'TIER_2_PREFERRED' : finalComposite >= 60 ? 'TIER_3_APPROVED' : 'TIER_4_PROBATION');
+
+    const existingPeriod = await db.select().from(schema.vendorScorecards)
+      .where(and(eq(schema.vendorScorecards.supplierId, supplierId), eq(schema.vendorScorecards.period, period || '2026-Q3')))
+      .limit(1);
+
+    if (existingPeriod.length > 0 && existingPeriod[0].isClosed) {
+      return res.status(400).json({ error: "IMMUTABILITY_VIOLATION", message: `Kỳ đánh giá ${period} đã bị đóng sổ (Closed). Không được phép chỉnh sửa hoặc tính lại số liệu kỳ này.` });
+    }
+
+    let savedRecord;
+    if (existingPeriod.length > 0) {
+      const updated = await db.update(schema.vendorScorecards)
+        .set({
+          otifRate: String(otifRate || '95.0%'),
+          otifRateNumeric: otifNum,
+          qualityScore: String(qualityScore || '96.0%'),
+          qualityScoreNumeric: qualNum,
+          complianceScore: String(complianceScore || '98.0%'),
+          complianceScoreNumeric: compNum,
+          compositeScore: finalComposite,
+          performanceTier: tier,
+          overallRating: (finalComposite / 20).toFixed(1),
+          evaluationDate: new Date().toISOString(),
+          breakdownJson: JSON.stringify({ notes: notes || 'Đánh giá thủ công từ hội đồng SRM' })
+        })
+        .where(eq(schema.vendorScorecards.id, existingPeriod[0].id))
+        .returning();
+      savedRecord = updated[0];
+    } else {
+      const inserted = await db.insert(schema.vendorScorecards).values({
+        supplierId,
+        period: period || '2026-Q3',
+        otifRate: String(otifRate || '95.0%'),
+        otifRateNumeric: otifNum,
+        qualityScore: String(qualityScore || '96.0%'),
+        qualityScoreNumeric: qualNum,
+        complianceScore: String(complianceScore || '98.0%'),
+        complianceScoreNumeric: compNum,
+        compositeScore: finalComposite,
+        performanceTier: tier,
+        overallRating: (finalComposite / 20).toFixed(1),
+        evaluationDate: new Date().toISOString(),
+        breakdownJson: JSON.stringify({ notes: notes || 'Đánh giá tự động / thủ công từ hệ thống' })
+      }).returning();
+      savedRecord = inserted[0];
+    }
+
+    await db.update(schema.suppliers)
+      .set({
+        compositeScore: finalComposite,
+        performanceTier: tier,
+        updatedAt: new Date()
+      })
+      .where(eq(schema.suppliers.id, supplierId));
+
+    res.json({ success: true, message: "Đã lưu và ban hành Thẻ điểm SRM thành công", data: savedRecord });
   } catch (err: any) {
     res.status(500).json({ error: "INTERNAL_ERROR", message: err.message });
   }

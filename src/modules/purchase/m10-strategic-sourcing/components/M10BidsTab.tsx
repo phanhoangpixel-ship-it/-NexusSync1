@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { BidItem, RFQItem, MasterSupplierOption } from './m10Types';
-import { ShieldCheck, Search, Filter, RefreshCw, Send, DollarSign, Clock, Building } from 'lucide-react';
+import { ShieldCheck, Search, Filter, RefreshCw, Send, DollarSign, Clock, Building, Zap, TrendingDown } from 'lucide-react';
 import { PaginationControl } from '../../../../components/common/PaginationControl';
 
 interface M10BidsTabProps {
@@ -11,6 +11,7 @@ interface M10BidsTabProps {
   isSubmitting: boolean;
   onRefresh: () => void;
   onCreateBid: (e: React.FormEvent) => void;
+  onOpenReverseAuction?: (rfq: RFQItem) => void;
   bidRfqId: string;
   setBidRfqId: (val: string) => void;
   bidSupplierId: string;
@@ -21,6 +22,8 @@ interface M10BidsTabProps {
   setBidQuantity: (val: string) => void;
   bidLeadTime: string;
   setBidLeadTime: (val: string) => void;
+  bidRoundNumber?: string;
+  setBidRoundNumber?: (val: string) => void;
 }
 
 export const M10BidsTab: React.FC<M10BidsTabProps> = ({
@@ -31,6 +34,7 @@ export const M10BidsTab: React.FC<M10BidsTabProps> = ({
   isSubmitting,
   onRefresh,
   onCreateBid,
+  onOpenReverseAuction,
   bidRfqId,
   setBidRfqId,
   bidSupplierId,
@@ -41,11 +45,17 @@ export const M10BidsTab: React.FC<M10BidsTabProps> = ({
   setBidQuantity,
   bidLeadTime,
   setBidLeadTime,
+  bidRoundNumber,
+  setBidRoundNumber,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  const selectedRfq = useMemo(() => {
+    return rfqs.find(r => String(r.dbId || r.id) === String(bidRfqId) || r.id === `RFQ-${bidRfqId}`);
+  }, [rfqs, bidRfqId]);
 
   const filteredBids = useMemo(() => {
     return bids.filter(b => {
@@ -77,7 +87,7 @@ export const M10BidsTab: React.FC<M10BidsTabProps> = ({
                   Hồ sơ Chào giá Nhà cung cấp (Supplier Bids)
                 </h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Hiển thị {filteredBids.length} / {bids.length} hồ sơ chào thầu
+                  Hiển thị {filteredBids.length} / {bids.length} hồ sơ chào thầu qua các vòng
                 </p>
               </div>
             </div>
@@ -103,16 +113,29 @@ export const M10BidsTab: React.FC<M10BidsTabProps> = ({
                 >
                   <option value="ALL">Tất cả trạng thái</option>
                   <option value="SUBMITTED">Đã nộp hồ sơ</option>
+                  <option value="REVISED">Đã điều chỉnh (Vòng trước)</option>
                   <option value="ACCEPTED">Chấp thuận</option>
                   <option value="REJECTED">Từ chối</option>
                 </select>
               </div>
 
+              {onOpenReverseAuction && selectedRfq && (
+                <button
+                  type="button"
+                  onClick={() => onOpenReverseAuction(selectedRfq)}
+                  className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:hover:bg-amber-900/80 dark:text-amber-200 rounded-lg text-xs font-bold transition-all border border-amber-300 dark:border-amber-700 inline-flex items-center gap-1 cursor-pointer"
+                  title="Mở bảng điều khiển Đấu Thầu Ngược Đa Vòng"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <span>Đấu Thầu Ngược ({selectedRfq.id})</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={onRefresh}
                 disabled={loading}
-                className="p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300"
+                className="p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 cursor-pointer"
                 title="Làm mới bảng"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -126,7 +149,7 @@ export const M10BidsTab: React.FC<M10BidsTabProps> = ({
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-300 font-bold">
                   <th className="p-3">ID Bid</th>
-                  <th className="p-3">RFQ ID</th>
+                  <th className="p-3">RFQ & Vòng</th>
                   <th className="p-3">Nhà cung cấp</th>
                   <th className="p-3 text-right">Tổng giá trị</th>
                   <th className="p-3 text-center">Thời gian GH</th>
@@ -141,41 +164,64 @@ export const M10BidsTab: React.FC<M10BidsTabProps> = ({
                     </td>
                   </tr>
                 ) : (
-                  paginatedBids.map(b => (
-                    <tr
-                      key={b.id}
-                      className="hover:bg-slate-100/80 dark:hover:bg-slate-700/60 transition-colors duration-150 border-l-4 border-l-emerald-500"
-                    >
-                      <td className="p-3 font-mono tabular-nums font-bold text-purple-700 dark:text-purple-400">
-                        BID-{b.id}
-                      </td>
-                      <td className="p-3 font-mono tabular-nums text-slate-600 dark:text-slate-400">
-                        <span className="bg-slate-100 dark:bg-slate-700/60 px-2 py-0.5 rounded text-[11px] font-bold">
-                          RFQ-{b.rfqId}
-                        </span>
-                      </td>
-                      <td className="p-3 font-bold text-slate-900 dark:text-white">
-                        <div className="flex items-center gap-1.5">
-                          <Building className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{b.supplierName || `Supplier #${b.supplierId}`}</span>
-                        </div>
-                      </td>
-                      <td className="p-3 font-mono tabular-nums text-right font-bold text-emerald-700 dark:text-emerald-400">
-                        {Number(b.totalValue ?? 0).toLocaleString()} VND
-                      </td>
-                      <td className="p-3 text-center font-mono tabular-nums text-slate-600 dark:text-slate-400">
-                        <span className="inline-flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-slate-400" />
-                          {b.leadTimeDays ? `${b.leadTimeDays} ngày` : '3 ngày'}
-                        </span>
-                      </td>
-                      <td className="p-3 whitespace-nowrap">
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-mono tabular-nums font-bold bg-emerald-100 text-emerald-950 border border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-200 dark:border-emerald-700">
-                          {b.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
+                  paginatedBids.map(b => {
+                    const roundNum = b.roundNumber || 1;
+                    const hasReduction = b.priceReductionPercent && b.priceReductionPercent > 0;
+                    return (
+                      <tr
+                        key={b.id}
+                        className="hover:bg-slate-100/80 dark:hover:bg-slate-700/60 transition-colors duration-150 border-l-4 border-l-emerald-500"
+                      >
+                        <td className="p-3 font-mono tabular-nums font-bold text-purple-700 dark:text-purple-400">
+                          BID-{b.id}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-1.5 flex-wrap font-mono tabular-nums">
+                            <span className="bg-slate-100 dark:bg-slate-700/60 px-2 py-0.5 rounded text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                              RFQ-{b.rfqId}
+                            </span>
+                            <span className="bg-purple-100 dark:bg-purple-950/70 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                              Vòng {roundNum}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="p-3 font-bold text-slate-900 dark:text-white">
+                          <div className="flex items-center gap-1.5">
+                            <Building className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{b.supplierName || `Supplier #${b.supplierId}`}</span>
+                          </div>
+                        </td>
+                        <td className="p-3 font-mono tabular-nums text-right">
+                          <div className="font-bold text-emerald-700 dark:text-emerald-400">
+                            {Number(b.totalValue ?? 0).toLocaleString('vi-VN')} VND
+                          </div>
+                          {hasReduction && (
+                            <div className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-1 rounded">
+                              <TrendingDown className="w-3 h-3 text-emerald-600" />
+                              <span>-{b.priceReductionPercent}% (so với Vòng {roundNum - 1})</span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3 text-center font-mono tabular-nums text-slate-600 dark:text-slate-400">
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            {b.leadTimeDays ? `${b.leadTimeDays} ngày` : '3 ngày'}
+                          </span>
+                        </td>
+                        <td className="p-3 whitespace-nowrap">
+                          {b.status === 'REVISED' ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono tabular-nums font-bold bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/80 dark:text-amber-200 dark:border-amber-700">
+                              ĐÃ ĐIỀU CHỈNH
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-mono tabular-nums font-bold bg-emerald-100 text-emerald-950 border border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-200 dark:border-emerald-700">
+                              {b.status}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -213,9 +259,16 @@ export const M10BidsTab: React.FC<M10BidsTabProps> = ({
 
           <form onSubmit={onCreateBid} className="space-y-3.5">
             <div className="space-y-1">
-              <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase">
-                Chọn Gói thầu (RFQ) <span className="text-rose-500">*</span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase">
+                  Chọn Gói thầu (RFQ) <span className="text-rose-500">*</span>
+                </label>
+                {selectedRfq && (
+                  <span className="text-[10px] font-mono font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                    Đang mở Vòng {selectedRfq.currentRound || 1}
+                  </span>
+                )}
+              </div>
               {rfqs.length > 0 ? (
                 <select
                   value={bidRfqId}
@@ -226,7 +279,7 @@ export const M10BidsTab: React.FC<M10BidsTabProps> = ({
                   <option value="">-- Chọn Gói thầu RFQ --</option>
                   {rfqs.map(r => (
                     <option key={r.id} value={r.dbId || r.id.replace('RFQ-', '')}>
-                      {r.id} - {r.title}
+                      {r.id} - {r.title} (Vòng {r.currentRound || 1})
                     </option>
                   ))}
                 </select>
@@ -271,6 +324,23 @@ export const M10BidsTab: React.FC<M10BidsTabProps> = ({
                 />
               )}
             </div>
+
+            {/* Target Round selection if needed */}
+            {setBidRoundNumber && (
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase">
+                  Vòng Đấu Thầu (Round Number)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={bidRoundNumber || (selectedRfq?.currentRound || 1)}
+                  onChange={e => setBidRoundNumber(e.target.value)}
+                  className="w-full text-xs font-mono tabular-nums bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 outline-none focus:border-emerald-400 focus:bg-white dark:focus:bg-slate-900 text-slate-900 dark:text-white transition-all shadow-inner"
+                  placeholder="1"
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">

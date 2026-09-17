@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { ConfirmDialogState } from '../../types';
 import { AlertCircle, AlertTriangle, HelpCircle, X } from 'lucide-react';
 
-interface ConfirmDialogProps {
+export interface ConfirmDialogProps {
   dialog?: ConfirmDialogState | null;
   dialogState?: ConfirmDialogState | null;
   state?: ConfirmDialogState | null;
@@ -125,3 +125,5 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = (props) => {
     </div>
   );
 };
+
+export default ConfirmDialog;

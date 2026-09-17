@@ -76,6 +76,7 @@ const M37BiAnalyticsWorkspace = lazyWithRetry(() => import('./modules/governance
 const SuperAdminRBACWorkspace = lazyWithRetry(() => import('./modules/admin/m04-super-admin/components/SuperAdminRBACWorkspace'), 'SuperAdminRBACWorkspace');
 const SupplyChainWorkspace = lazyWithRetry(() => import('./modules/manufacturing/m26-scp/components/SupplyChainWorkspace'), 'SupplyChainWorkspace');
 const M42CostAllocationWorkspace = lazyWithRetry(() => import('./modules/finance/m42-cost-allocation/components/M42CostAllocationWorkspace'), 'M42CostAllocationWorkspace');
+const IndustryProfileWorkspace = lazyWithRetry(() => import('./modules/master-data/industry-profiles/components/IndustryProfileWorkspace'), 'IndustryProfileWorkspace');
 const M34FinancialConsolidationWorkspace = lazyWithRetry(() => import('./modules/finance/m34-consolidation/components/M34FinancialConsolidationWorkspace'), 'M34FinancialConsolidationWorkspace');
 const M32PaymentsTreasuryWorkspace = lazyWithRetry(() => import('./modules/finance/m32-payments/components/M32PaymentsTreasuryWorkspace'), 'M32PaymentsTreasuryWorkspace');
 const M30GeneralLedgerWorkspace = lazyWithRetry(() => import('./modules/finance/m30-gl/components/M30GeneralLedgerWorkspace'), 'M30GeneralLedgerWorkspace');
@@ -101,7 +102,7 @@ const DEDICATED_WORKSPACE_MODULE_IDS = new Set([
   'M11', 'M12', 'M13', 'M14', 'M15', 'M16', 'M17', 'M18', 'M19', 'M20',
   'M21', 'M22', 'M23', 'M24', 'M25', 'M26', 'M27', 'M28', 'M29', 'M30',
   'M31', 'M32', 'M33', 'M34', 'M35', 'M36', 'M37', 'M38', 'M39', 'M40',
-  'M41', 'M42',
+  'M41', 'M42', 'M43',
 ]);
 
 /**
@@ -341,11 +342,14 @@ if (found) return found;
 
   const handleSelectEntity = (entity: SelectedEntityContext | null) => {
     setSelectedEntity(entity);
+    if (entity) {
+      setIsContextRailOpen(true);
+      addToast('info', 'Đã Đồng Bộ Khung Ngữ Cảnh', `Đã nạp đối tượng [${entity.code || entity.id}] vào Thanh Ngữ Cảnh 360°.`);
+    }
     if (entity && entity.type === 'WMS_WAREHOUSE_MAPPING') {
       const m17 = MODULE_REGISTRY.find((m) => m.moduleId === 'M17');
       if (m17) {
         setCurrentModule(m17);
-        addToast('info', 'Trung Tâm Vận Hành Kho & WMS', `Đã định vị sơ đồ kho WMS cho đơn hàng ${entity.code || entity.id}`);
       }
     }
   };
@@ -1425,7 +1429,7 @@ density={systemPreferences.density}
         )}
         {currentModule.moduleId === 'M22' && (
           <M22LotsBatchesWorkspace
-  onSelectEntity={setSelectedEntity}
+  onSelectEntity={handleSelectEntity}
   onNotify={handleNotify}
 />
         )}
@@ -1434,6 +1438,7 @@ density={systemPreferences.density}
   <M23SerialsWorkspace
     onSelectEntity={setSelectedEntity}
     onNotify={handleNotify}
+    onNavigate={handleNavigateByRoute}
   />
         )}
 
@@ -1694,6 +1699,10 @@ density={systemPreferences.density}
   onNotify={addToast}
   currentUser={currentUser}
 />
+        )}
+
+  {currentModule.moduleId === 'M43' && (
+<IndustryProfileWorkspace />
         )}
 
   {!DEDICATED_WORKSPACE_MODULE_IDS.has(currentModule.moduleId) && (

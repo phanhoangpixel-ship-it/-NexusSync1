@@ -9,7 +9,8 @@ import {
   Server,
   ShieldCheck,
   RefreshCw,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Play
 } from 'lucide-react';
 import { M05SubTab, EventBusItem, EventSubscriber } from './types';
 import { EventStreamTab } from './EventStreamTab';
@@ -262,6 +263,24 @@ export const M05EventBusWorkspace: React.FC<M05EventBusWorkspaceProps> = ({
     notifyAdapter('info', 'Đã đặt lại Offset', `Offset của Consumer ${consumerId} đã được đồng bộ về mốc LATEST.`);
   };
 
+  // 11. Kích hoạt quét Outbox thủ công (Rule A.2)
+  const handleManualSweep = async () => {
+    try {
+      notifyAdapter('info', 'Đang quét Outbox...', 'Hệ thống đang kiểm tra và giải phóng hàng đợi Outbox.');
+      const res = await fetch('/api/events/dispatch-pending', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        notifyAdapter('success', 'Quét hoàn tất', data.message);
+        await fetchEvents();
+        await fetchSubscribers();
+      } else {
+        notifyAdapter('danger', 'Lỗi', data.error || 'Không thể quét Outbox.');
+      }
+    } catch (err: any) {
+      notifyAdapter('danger', 'Lỗi kết nối', err.message);
+    }
+  };
+
   // Đếm số lượng DLQ để hiển thị badge cảnh báo trên tab
   const dlqCount = events.filter((e) => e.status === 'DLQ_FAILED').length;
 
@@ -290,8 +309,17 @@ export const M05EventBusWorkspace: React.FC<M05EventBusWorkspaceProps> = ({
           </div>
         </div>
 
-        {/* Global Broker Status */}
-        <div className="flex items-center gap-2">
+        {/* Global Broker Status & Manual Sweep */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handleManualSweep}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/80 dark:text-blue-300 dark:hover:bg-blue-900 border border-blue-200 dark:border-blue-800 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+            title="Kích hoạt quét hàng đợi Outbox và đẩy tin tới các Consumer ngay lập tức"
+          >
+            <Play className="w-3.5 h-3.5 fill-current" />
+            <span>Quét Outbox Ngay</span>
+          </button>
+
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-950 dark:bg-emerald-950/80 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 text-xs font-bold">
             <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             <span>Broker: KẾT NỐI TOÀN VẸN</span>

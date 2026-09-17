@@ -8,6 +8,7 @@ import { CashMovementService } from "../../engines/CashMovementService";
 import { accountingEngine } from "../../engines/accountingEngine";
 import { costingEngine } from "../../engines/costingEngine";
 import { CostingShadowRunner } from "../../engines/costingShadowRunner";
+import { AuditService } from "../../engines/auditService";
 
 export interface SalesOrderRequest {
   channel: "POS" | "B2B" | "ONLINE" | "MARKETPLACE" | "SALES_REP" | "STORE_PICKUP" | string;
@@ -385,9 +386,8 @@ export class SalesEngine {
         }
       }
 
-      // 8. Audit
-      await tx.insert(schema.auditLogs).values({
-        auditCode: `AUD-${channel}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      // 8. Central Audit Gateway (Asynchronous Hash Chaining)
+      AuditService.captureAsync({
         userId: req.userId,
         username: "sales_engine",
         userName: "Unified Sales Engine",
@@ -397,17 +397,16 @@ export class SalesEngine {
         action: "CREATE",
         entityType: "SALES_ORDER",
         entityId: orderRef,
-        module: "SALES",
+        module: "M12",
         result: "SUCCESS",
-        metadata: JSON.stringify({
+        metadata: {
           channel,
           source,
           externalOrderId,
           idempotencyKey,
           grandTotal,
           orderStatus
-        }),
-        createdAt: new Date()
+        }
       });
 
       return {

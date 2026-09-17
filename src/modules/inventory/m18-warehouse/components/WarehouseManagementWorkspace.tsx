@@ -27,23 +27,23 @@ export const WarehouseManagementWorkspace: React.FC<WarehouseManagementWorkspace
   const [activeGroup, setActiveGroup] = useWorkspaceSessionTab('M18', 'setup');
 
   return (
-    <div className="p-6 space-y-6 bg-slate-50 dark:bg-slate-900 min-h-screen">
+    <div className="space-y-4 w-full max-w-full pb-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-2xs flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-1 text-xs font-mono tabular-nums font-semibold bg-blue-100 text-blue-900 dark:bg-blue-900/60 dark:text-blue-200 rounded-md">
               WMS-MASTER-05 (M18)
             </span>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
               Warehouse Management Hub (Quản Lý Kho Vận Tổng Hợp)
             </h1>
           </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
             Trung tâm điều hành kho vận toàn diện: 7 nhóm nghiệp vụ từ Warehouse Setup, Inbound, Outbound đến Traceability &amp; Analytics theo Golden Standard L0 - L4.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <button 
             onClick={() => onNotify('success', 'Đồng bộ Inventory Core', 'Toàn bộ trạng thái WMS đã đồng bộ với Inventory Core thành công.')}
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
@@ -55,10 +55,10 @@ export const WarehouseManagementWorkspace: React.FC<WarehouseManagementWorkspace
       </div>
 
       {/* 7 Functional Groups Navigation Tabs (A through G) */}
-      <div className="bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs flex flex-wrap gap-2">
+      <div className="bg-white dark:bg-slate-800 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs flex flex-wrap gap-1.5">
         <button
           onClick={() => setActiveGroup('setup')}
-          className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+          className={`px-3.5 py-2 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
             activeGroup === 'setup' 
               ? 'bg-blue-600 text-white shadow-xs' 
               : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -69,7 +69,7 @@ export const WarehouseManagementWorkspace: React.FC<WarehouseManagementWorkspace
         </button>
         <button
           onClick={() => setActiveGroup('inbound')}
-          className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+          className={`px-3.5 py-2 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
             activeGroup === 'inbound' 
               ? 'bg-blue-600 text-white shadow-xs' 
               : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -80,7 +80,7 @@ export const WarehouseManagementWorkspace: React.FC<WarehouseManagementWorkspace
         </button>
         <button
           onClick={() => setActiveGroup('outbound')}
-          className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+          className={`px-3.5 py-2 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
             activeGroup === 'outbound' 
               ? 'bg-blue-600 text-white shadow-xs' 
               : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -91,7 +91,7 @@ export const WarehouseManagementWorkspace: React.FC<WarehouseManagementWorkspace
         </button>
         <button
           onClick={() => setActiveGroup('internal')}
-          className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+          className={`px-3.5 py-2 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
             activeGroup === 'internal' 
               ? 'bg-blue-600 text-white shadow-xs' 
               : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -102,7 +102,7 @@ export const WarehouseManagementWorkspace: React.FC<WarehouseManagementWorkspace
         </button>
         <button
           onClick={() => setActiveGroup('control')}
-          className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+          className={`px-3.5 py-2 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
             activeGroup === 'control' 
               ? 'bg-blue-600 text-white shadow-xs' 
               : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -113,7 +113,7 @@ export const WarehouseManagementWorkspace: React.FC<WarehouseManagementWorkspace
         </button>
         <button
           onClick={() => setActiveGroup('traceability')}
-          className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+          className={`px-3.5 py-2 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
             activeGroup === 'traceability' 
               ? 'bg-blue-600 text-white shadow-xs' 
               : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -124,7 +124,7 @@ export const WarehouseManagementWorkspace: React.FC<WarehouseManagementWorkspace
         </button>
         <button
           onClick={() => setActiveGroup('analytics')}
-          className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+          className={`px-3.5 py-2 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
             activeGroup === 'analytics' 
               ? 'bg-blue-600 text-white shadow-xs' 
               : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'

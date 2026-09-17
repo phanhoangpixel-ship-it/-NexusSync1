@@ -129,25 +129,25 @@ export const CommandOmnibarModal: React.FC<CommandOmnibarModalProps> = ({
       <div
         id="command-omnibar-modal"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[80vh] animate-in fade-in zoom-in-95 duration-150 cursor-default select-text"
+        className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[80vh] animate-in fade-in zoom-in-95 duration-150 cursor-default select-text"
       >
-        <div className="flex items-center px-4 border-b border-slate-200 bg-slate-50/50">
+        <div className="flex items-center px-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/90">
           <Search className="w-5 h-5 text-slate-400 shrink-0" />
           <input
             ref={inputRef}
             type="text"
-            placeholder="Tìm kiếm phân hệ M01-M40, chứng từ PO/SO/ADJ, mã SKU sản phẩm..."
+            placeholder="Tìm kiếm phân hệ M01-M43, chứng từ PO/SO/ADJ, mã SKU sản phẩm..."
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
               setSelectedIndex(0);
             }}
-            className="w-full py-4 px-3 text-sm text-slate-900 placeholder:text-slate-400 bg-transparent outline-none"
+            className="w-full py-4 px-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 bg-transparent outline-none"
           />
           {query && (
             <button
               onClick={() => setQuery('')}
-              className="text-slate-400 hover:text-slate-600 p-1 rounded-md cursor-pointer mr-1"
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-md cursor-pointer mr-1"
               title="Xóa tìm kiếm"
             >
               <X className="w-4 h-4" />
@@ -156,7 +156,7 @@ export const CommandOmnibarModal: React.FC<CommandOmnibarModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="hidden sm:flex items-center gap-1 text-[11px] font-mono text-slate-400 hover:text-slate-700 bg-slate-200/60 hover:bg-slate-200 px-2 py-0.5 rounded ml-2 transition-colors cursor-pointer"
+            className="hidden sm:flex items-center gap-1 text-[11px] font-mono text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 bg-slate-200/60 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-2 py-0.5 rounded ml-2 transition-colors cursor-pointer"
             title="Đóng tìm kiếm (ESC hoặc nhấp ra ngoài)"
           >
             <span>ESC</span>
@@ -164,9 +164,9 @@ export const CommandOmnibarModal: React.FC<CommandOmnibarModalProps> = ({
           </button>
         </div>
 
-        <div className="overflow-y-auto p-2 divide-y divide-slate-100 flex-1">
+        <div className="overflow-y-auto p-2 divide-y divide-slate-100 dark:divide-slate-800/80 flex-1">
           {allItems.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 text-sm">
+            <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-sm">
               Không tìm thấy kết quả phù hợp với từ khóa "{query}"
             </div>
           ) : (
@@ -182,13 +182,13 @@ export const CommandOmnibarModal: React.FC<CommandOmnibarModalProps> = ({
                   }}
                   onMouseEnter={() => setSelectedIndex(index)}
                   className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all ${
-                    isSelected ? 'bg-blue-50 text-blue-900' : 'hover:bg-slate-50 text-slate-700'
+                    isSelected ? 'bg-blue-50 dark:bg-blue-950/70 text-blue-900 dark:text-blue-200' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
                   }`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div
                       className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                        isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'
+                        isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
                       }`}
                     >
                       <Icon className="w-4 h-4" />
@@ -199,20 +199,20 @@ export const CommandOmnibarModal: React.FC<CommandOmnibarModalProps> = ({
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded font-mono ${
                             isSelected
-                              ? 'bg-blue-200/60 text-blue-800'
-                              : 'bg-slate-100 text-slate-600'
+                              ? 'bg-blue-200/60 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                           }`}
                         >
                           {item.tag}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-500 truncate mt-0.5">{item.subtitle}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">{item.subtitle}</p>
                     </div>
                   </div>
 
                   <ArrowRight
                     className={`w-4 h-4 shrink-0 transition-transform ${
-                      isSelected ? 'text-blue-600 translate-x-0.5' : 'text-slate-300'
+                      isSelected ? 'text-blue-600 dark:text-blue-400 translate-x-0.5' : 'text-slate-300 dark:text-slate-600'
                     }`}
                   />
                 </div>
@@ -221,20 +221,20 @@ export const CommandOmnibarModal: React.FC<CommandOmnibarModalProps> = ({
           )}
         </div>
 
-        <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-mono">
+        <div className="p-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-mono">
           <div className="flex items-center gap-3">
             <span>↑↓ Di chuyển</span>
             <span>↵ Chọn</span>
             <button
               type="button"
               onClick={onClose}
-              className="hover:text-slate-800 hover:underline cursor-pointer transition-colors"
+              className="hover:text-slate-800 dark:hover:text-slate-200 hover:underline cursor-pointer transition-colors"
               title="Đóng cửa sổ tìm kiếm"
             >
               ESC Đóng
             </button>
           </div>
-          <div className="flex items-center gap-1.5 text-slate-400">
+          <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
             <Command className="w-3.5 h-3.5" />
             <span>Nexus Omnibar v1.0</span>
           </div>

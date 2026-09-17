@@ -1,8 +1,10 @@
 import { Router } from "express";
+import crypto from "crypto";
 import { client, db, recreateDatabaseClient } from "../../db/index";
 import * as schema from "../../db/schema";
 import { eq, desc } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
+import { AuditService } from "../../engines/auditService";
 
 const router = Router();
 
@@ -62,6 +64,100 @@ router.post("/api/dms/documents", async (req, res) => {
     res.status(201).json(parseDoc(inserted[0] || newDoc));
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Lỗi tạo tài liệu' });
+  }
+});
+
+// POST /api/dms/vault & /api/dms/vault/seal - Secure Vault Archiving with SHA-256 seal & Audit Log (M29 & M02 Integration)
+router.post(["/api/dms/vault", "/api/dms/vault/seal"], async (req, res) => {
+  try {
+    const { 
+      title, 
+      category, 
+      categoryName, 
+      fileSize, 
+      format, 
+      linkedModule, 
+      refDocNo, 
+      securityLevel, 
+      storageTier, 
+      metadata, 
+      contentDigest,
+      sealedBy 
+    } = req.body;
+    const user = (req as any).user;
+    const totalDocs = await db.select().from(schema.dmsDocuments).all();
+    const docCode = `DMS-${(category || 'VAULT').toUpperCase().slice(0, 3)}-2026-${String(totalDocs.length + 1).padStart(3, '0')}`;
+    
+    // Compute cryptographic SHA-256 seal for the archived dossier
+    const sha256Hash = crypto.createHash('sha256')
+      .update(JSON.stringify({ docCode, title, refDocNo, metadata, contentDigest, timestamp: Date.now() }))
+      .digest('hex');
+
+    const signedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const signer = sealedBy || (user ? `${user.username || 'Admin'} (${user.role || 'Procurement'})` : 'Hệ thống Quản trị Tài liệu M29 & Niêm phong CA');
+
+    const newDoc = {
+      docCode,
+      title: title || 'Hồ Sơ Niêm Phong Số Hóa M29 Vault',
+      category: category || 'TENDER_DOSSIER',
+      categoryName: categoryName || 'Hồ sơ Đấu thầu & Mua sắm Chiến lược',
+      version: 'v1.0-FINAL',
+      fileSize: fileSize || '2.4 MB',
+      format: format || 'PDF-A/XML',
+      status: 'SIGNED',
+      securityLevel: securityLevel || 'CONFIDENTIAL',
+      sha256Hash,
+      signedBy: signer,
+      signedAt,
+      linkedModule: linkedModule || 'M10 Strategic Sourcing',
+      refDocNo: refDocNo || 'REF-VAULT-001',
+      storageTier: storageTier || 'COLD_GLACIER',
+      retentionYears: 10,
+      expireDate: '2036-12-31',
+      workflowStage: 3,
+      workflowSteps: JSON.stringify([
+        { step: 1, name: 'Khởi tạo & Đóng gói Hồ sơ', role: 'SOURCING_LEAD', status: 'COMPLETED', user: signer, signedAt },
+        { step: 2, name: 'Thẩm tra Pháp lý & Bảo mật', role: 'COMPLIANCE', status: 'COMPLETED', user: 'Hệ thống Tuân thủ ISO 27001', signedAt },
+        { step: 3, name: 'Niêm phong Điện tử HSM/CA', role: 'DMS_VAULT', status: 'COMPLETED', user: 'M29 Secure Vault Engine', signedAt },
+      ]),
+    };
+
+    const inserted = await db.insert(schema.dmsDocuments).values(newDoc as any).returning();
+    const savedDoc = parseDoc(inserted[0] || newDoc);
+
+    // Audit Trail M02
+    try {
+      await AuditService.recordAuditLog({
+        module: 'M29',
+        action: 'ARCHIVE_VAULT',
+        entityType: 'DMS_DOCUMENT',
+        entityId: savedDoc.id || docCode,
+        userId: user?.id || 1,
+        username: user?.username || 'system',
+        result: 'SUCCESS',
+        metadata: {
+          docCode,
+          refDocNo,
+          linkedModule: newDoc.linkedModule,
+          sha256Hash,
+          storageTier: newDoc.storageTier,
+          retentionYears: newDoc.retentionYears,
+          vaultDigest: sha256Hash.slice(0, 16)
+        }
+      });
+    } catch (auditErr) {
+      console.warn('AuditService warning during vault archival:', auditErr);
+    }
+
+    res.status(201).json({
+      success: true,
+      document: savedDoc,
+      sha256Hash,
+      vaultTier: newDoc.storageTier,
+      message: `Đã niêm phong số và lưu trữ bảo mật hồ sơ ${refDocNo} vào Kho tài liệu M29 Vault (Mã băm: ${sha256Hash.slice(0, 16)}...).`
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Lỗi lưu trữ hồ sơ bảo mật vào DMS Vault' });
   }
 });
 

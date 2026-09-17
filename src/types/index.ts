@@ -77,6 +77,83 @@ export interface SelectedEntityContext {
   glEntries?: LedgerPreviewEntry[];
 }
 
+export type TransferVarianceReason = 'DAMAGE_IN_TRANSIT' | 'LOST_IN_TRANSIT' | 'COUNTING_ERROR' | 'THEFT' | 'EXCESS';
+
+export type TransferApprovalStatus = 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+
+export interface TransferPartialReceiptItem {
+  itemId: number | string;
+  receivedQty: number;
+  varianceReason?: TransferVarianceReason;
+  notes?: string;
+  serialNumbers?: string[];
+}
+
+export interface TransferPartialReceiptPayload {
+  transferId: number | string;
+  receivedItems: TransferPartialReceiptItem[];
+  receiverId: number | string;
+  notes?: string;
+}
+
+export interface TransferVarianceItem {
+  itemId: number | string;
+  varianceQty: number;
+  varianceReason: TransferVarianceReason;
+  adjustmentType: string;
+  notes?: string;
+}
+
+export interface TransferVarianceReconciliationPayload {
+  transferId: number | string;
+  reconciliationItems: TransferVarianceItem[];
+  userId: number | string;
+}
+
+export interface TransferApproveVariancePayload {
+  transferId: number | string;
+  approvalStatus: TransferApprovalStatus;
+  approverId: number | string;
+  approvalNotes?: string;
+}
+
+export interface StocktakeCyclePlanPayload {
+  warehouseId: number | string;
+  abcClass?: 'A' | 'B' | 'C' | 'ALL';
+  scheduledDate?: string;
+  assigneeId?: number | string;
+}
+
+export type StocktakeEscalationStatus = 'NORMAL' | 'RECOUNT_REQUIRED' | 'ESCALATED_MANAGER';
+
+export interface StocktakeItemExtension {
+  id?: number | string;
+  stocktakeId: number | string;
+  productId: number | string;
+  systemQuantity: number;
+  countQuantity?: number;
+  variance?: number;
+  abcClass?: 'A' | 'B' | 'C';
+  recountCount?: number;
+  escalationStatus?: StocktakeEscalationStatus;
+  serialNumber?: string;
+  lotNumber?: string;
+}
+
+export interface StocktakeVarianceSummaryReport {
+  stocktakeId: number | string;
+  code: string;
+  warehouseId: number | string;
+  totalItems: number;
+  varianceItemsCount: number;
+  totalVarianceValue: number;
+  abcBreakdown: {
+    A: { count: number; varianceValue: number };
+    B: { count: number; varianceValue: number };
+    C: { count: number; varianceValue: number };
+  };
+}
+
 export type { ModuleDefinition, EnvironmentProfile } from '../config/moduleRegistry';
 export * from './workspace';
 export * from './salesOrderIntegration';

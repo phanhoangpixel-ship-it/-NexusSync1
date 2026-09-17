@@ -18,9 +18,13 @@ import {
   INITIAL_SOD_RULES,
 } from './mockData';
 import { RbacRolesTab } from './RbacRolesTab';
+import { RbacMatrixTab } from './RbacMatrixTab';
 import { RbacPermissionsTab } from './RbacPermissionsTab';
 import { RbacUsersTab } from './RbacUsersTab';
+import { RbacSessionsTab } from './RbacSessionsTab';
+import { RbacTenantRlsTab } from './RbacTenantRlsTab';
 import { RbacDiagnosticsTab } from './RbacDiagnosticsTab';
+import { RbacAuditTab } from './RbacAuditTab';
 import { SuperAdminDetailModal } from './SuperAdminDetailModal';
 import {
   Shield,
@@ -31,6 +35,10 @@ import {
   Download,
   Printer,
   CheckCircle2,
+  Grid,
+  Smartphone,
+  Building2,
+  History,
 } from 'lucide-react';
 
 interface SuperAdminRBACWorkspaceProps {
@@ -64,6 +72,7 @@ export const SuperAdminRBACWorkspace: React.FC<SuperAdminRBACWorkspaceProps> = (
 
   const [loading, setLoading] = useState<boolean>(false);
   const [runningDiagnostics, setRunningDiagnostics] = useState<boolean>(false);
+  const [selectedMatrixRoleId, setSelectedMatrixRoleId] = useState<number>(1);
 
   // Fetch / Sync Data via API Endpoints
   const fetchData = async () => {
@@ -472,15 +481,15 @@ export const SuperAdminRBACWorkspace: React.FC<SuperAdminRBACWorkspaceProps> = (
           <button
             type="button"
             onClick={() => setActiveTab('roles')}
-            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+            className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer shrink-0 select-none ${
               activeTab === 'roles'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <Shield className="w-4 h-4 shrink-0" />
-            <span>1. Danh Sách Vai Trò &amp; Ma Trận</span>
-            <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold shrink-0 ${
+            <span>1. Vai Trò</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[11px] font-mono font-bold shrink-0 ${
               activeTab === 'roles' ? 'bg-blue-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
             }`}>
               {roles.length}
@@ -489,16 +498,34 @@ export const SuperAdminRBACWorkspace: React.FC<SuperAdminRBACWorkspaceProps> = (
 
           <button
             type="button"
+            onClick={() => setActiveTab('matrix')}
+            className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+              activeTab === 'matrix'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Grid className="w-4 h-4 shrink-0" />
+            <span>2. Ma Trận 42 Phân Hệ</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[11px] font-mono font-bold shrink-0 ${
+              activeTab === 'matrix' ? 'bg-blue-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+            }`}>
+              42
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab('permissions')}
-            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+            className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer shrink-0 select-none ${
               activeTab === 'permissions'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <Key className="w-4 h-4 shrink-0" />
-            <span>2. Đặc Quyền Hạt Nhân</span>
-            <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold shrink-0 ${
+            <span>3. Quyền Hạt Nhân</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[11px] font-mono font-bold shrink-0 ${
               activeTab === 'permissions' ? 'bg-blue-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
             }`}>
               {permissions.length}
@@ -508,15 +535,15 @@ export const SuperAdminRBACWorkspace: React.FC<SuperAdminRBACWorkspaceProps> = (
           <button
             type="button"
             onClick={() => setActiveTab('users')}
-            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+            className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer shrink-0 select-none ${
               activeTab === 'users'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <Users className="w-4 h-4 shrink-0" />
-            <span>3. Phân Bổ Người Dùng</span>
-            <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold shrink-0 ${
+            <span>4. Người Dùng IAM</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[11px] font-mono font-bold shrink-0 ${
               activeTab === 'users' ? 'bg-blue-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
             }`}>
               {users.length}
@@ -525,20 +552,59 @@ export const SuperAdminRBACWorkspace: React.FC<SuperAdminRBACWorkspaceProps> = (
 
           <button
             type="button"
+            onClick={() => setActiveTab('sessions')}
+            className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+              activeTab === 'sessions'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Smartphone className="w-4 h-4 shrink-0" />
+            <span>5. Phiên &amp; Mật Khẩu</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('rls_tenant')}
+            className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+              activeTab === 'rls_tenant'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Building2 className="w-4 h-4 shrink-0" />
+            <span>6. Chi Nhánh &amp; RLS</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab('diagnostics')}
-            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+            className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer shrink-0 select-none ${
               activeTab === 'diagnostics'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <ShieldCheck className="w-4 h-4 shrink-0" />
-            <span>4. Chẩn Đoán SoD &amp; An Ninh</span>
-            <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold shrink-0 ${
+            <span>7. Chẩn Đoán SoD</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[11px] font-mono font-bold shrink-0 ${
               activeTab === 'diagnostics' ? 'bg-blue-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
             }`}>
               {sodRules.length}
             </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('audit')}
+            className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+              activeTab === 'audit'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <History className="w-4 h-4 shrink-0" />
+            <span>8. Sổ Kiểm Toán</span>
           </button>
         </div>
 
@@ -568,6 +634,16 @@ export const SuperAdminRBACWorkspace: React.FC<SuperAdminRBACWorkspaceProps> = (
         />
       )}
 
+      {activeTab === 'matrix' && (
+        <RbacMatrixTab
+          roles={roles}
+          selectedRoleId={selectedMatrixRoleId}
+          onSelectRoleId={(id) => setSelectedMatrixRoleId(id)}
+          onNotify={onNotify}
+          setConfirmDialog={setConfirmDialog}
+        />
+      )}
+
       {activeTab === 'permissions' && (
         <RbacPermissionsTab
           permissions={permissions}
@@ -589,6 +665,20 @@ export const SuperAdminRBACWorkspace: React.FC<SuperAdminRBACWorkspaceProps> = (
         />
       )}
 
+      {activeTab === 'sessions' && (
+        <RbacSessionsTab
+          onNotify={onNotify}
+          setConfirmDialog={setConfirmDialog}
+        />
+      )}
+
+      {activeTab === 'rls_tenant' && (
+        <RbacTenantRlsTab
+          onNotify={onNotify}
+          setConfirmDialog={setConfirmDialog}
+        />
+      )}
+
       {activeTab === 'diagnostics' && (
         <RbacDiagnosticsTab
           sodRules={sodRules}
@@ -597,6 +687,12 @@ export const SuperAdminRBACWorkspace: React.FC<SuperAdminRBACWorkspaceProps> = (
           onExportAuditReport={handleExportCSV}
           onViewDetail={(item) => setDetailModalItem(item)}
           setConfirmDialog={setConfirmDialog}
+        />
+      )}
+
+      {activeTab === 'audit' && (
+        <RbacAuditTab
+          onNotify={onNotify}
         />
       )}
 

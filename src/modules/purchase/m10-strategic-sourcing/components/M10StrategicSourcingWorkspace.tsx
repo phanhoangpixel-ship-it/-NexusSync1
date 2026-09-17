@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { SelectedEntityContext } from '../../../../types';
 import { useWorkspaceSessionTab } from '../../../../hooks/useWorkspaceSessionTab';
 import {
+  Layers,
   FileText,
   DollarSign,
   ShieldCheck,
@@ -10,10 +11,11 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
-import { RFQItem, BidItem, EvaluationItem, ComparisonItem, AwardItem, MasterSupplierOption, MasterProductOption } from './m10Types';
+import { RFQItem, BidItem, EvaluationItem, ComparisonItem, AwardItem, MasterSupplierOption, MasterProductOption, SourcingPackageItem, CostCenter } from './m10Types';
 import { M10WorkspaceHeader } from './M10WorkspaceHeader';
 import { M10LifecyclePipeline } from './M10LifecyclePipeline';
 import { M10MetricCards } from './M10MetricCards';
+import { M10PackageTab } from './M10PackageTab';
 import { M10RfqTab } from './M10RfqTab';
 import { M10BidsTab } from './M10BidsTab';
 import { M10EvaluationTab } from './M10EvaluationTab';
@@ -21,6 +23,7 @@ import { M10ComparisonTab } from './M10ComparisonTab';
 import { M10AwardsTab } from './M10AwardsTab';
 import { M10AnalyticsTab } from './M10AnalyticsTab';
 import { M10RfqDetailModal } from './M10RfqDetailModal';
+import { M10ReverseAuctionModal } from './M10ReverseAuctionModal';
 
 interface M10StrategicSourcingWorkspaceProps {
   currentUser?: any;
@@ -34,24 +37,36 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
 }) => {
   const [loading, setLoading] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useWorkspaceSessionTab<'rfqs' | 'bids' | 'evaluation' | 'comparison' | 'awards' | 'analytics'>('M10', 'rfqs');
+  const [activeTab, setActiveTab] = useWorkspaceSessionTab<'packages' | 'rfqs' | 'bids' | 'evaluation' | 'comparison' | 'awards' | 'analytics'>('M10', 'rfqs');
 
+  const [packages, setPackages] = useState<SourcingPackageItem[]>([]);
   const [rfqs, setRfqs] = useState<RFQItem[]>([]);
   const [bids, setBids] = useState<BidItem[]>([]);
   const [evaluations, setEvaluations] = useState<EvaluationItem[]>([]);
   const [comparisonData, setComparisonData] = useState<ComparisonItem[]>([]);
   const [awards, setAwards] = useState<AwardItem[]>([]);
+  const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
   const [products, setProducts] = useState<MasterProductOption[]>([]);
   const [suppliers, setSuppliers] = useState<MasterSupplierOption[]>([]);
 
   // Selected Filter RFQ for comparison / bids
   const [selectedRfqId, setSelectedRfqId] = useState<string>('');
 
+  // Create Package Form State
+  const [pkgTitle, setPkgTitle] = useState('');
+  const [pkgCategory, setPkgCategory] = useState('Direct Materials');
+  const [pkgBudget, setPkgBudget] = useState('');
+  const [pkgCostCenter, setPkgCostCenter] = useState('CC-PROCUREMENT');
+  const [pkgDeadline, setPkgDeadline] = useState('');
+  const [pkgDescription, setPkgDescription] = useState('');
+
   // Create RFQ Form State
   const [newRfqTitle, setNewRfqTitle] = useState('');
+  const [newRfqPackageId, setNewRfqPackageId] = useState('');
   const [newRfqDeadline, setNewRfqDeadline] = useState('');
   const [newRfqProductId, setNewRfqProductId] = useState('');
   const [newRfqQuantity, setNewRfqQuantity] = useState('');
+  const [selectedSuppliersToInvite, setSelectedSuppliersToInvite] = useState<number[]>([]);
 
   // Create Bid Form State
   const [bidRfqId, setBidRfqId] = useState('');
@@ -73,11 +88,21 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
   const [awardBidId, setAwardBidId] = useState('');
   const [awardSupplierId, setAwardSupplierId] = useState('');
 
+  // Reverse Auction State (Phase 4)
+  const [reverseAuctionRfq, setReverseAuctionRfq] = useState<RFQItem | null>(null);
+  const [isReverseAuctionOpen, setIsReverseAuctionOpen] = useState<boolean>(false);
+  const [bidRoundNumber, setBidRoundNumber] = useState<string>('');
+
   // Selected RFQ Detail Modal State
   const [selectedRfqForModal, setSelectedRfqForModal] = useState<RFQItem | null>(null);
 
   // Confirm Dialog State (Rule #19)
   const [confirmDialog, setConfirmDialog] = useState<any>(null);
+
+  const handleOpenReverseAuction = (rfq: RFQItem) => {
+    setReverseAuctionRfq(rfq);
+    setIsReverseAuctionOpen(true);
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -85,15 +110,20 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
       const token = localStorage.getItem('erp_token');
       const headers = { 'Authorization': `Bearer ${token}` };
 
-      const [rfqRes, bidsRes, evalRes, awardRes, prodRes, supRes] = await Promise.all([
+      const [pkgRes, rfqRes, bidsRes, evalRes, awardRes, ccRes, prodRes, supRes] = await Promise.all([
+        fetch('/api/sourcing/packages', { headers }),
         fetch('/api/sourcing/rfqs', { headers }),
         fetch('/api/sourcing/bids', { headers }),
         fetch('/api/sourcing/evaluations', { headers }),
         fetch('/api/sourcing/awards', { headers }),
+        fetch('/api/org/cost-centers', { headers }),
         fetch('/api/products', { headers }),
         fetch('/api/suppliers', { headers }),
       ]);
 
+      if (pkgRes.ok) {
+        setPackages(await pkgRes.json());
+      }
       if (rfqRes.ok) {
         const rfqData = await rfqRes.json();
         setRfqs(rfqData);
@@ -105,13 +135,37 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
       if (bidsRes.ok) setBids(await bidsRes.json());
       if (evalRes.ok) setEvaluations(await evalRes.json());
       if (awardRes.ok) setAwards(await awardRes.json());
+      if (ccRes.ok) {
+        const ccData = await ccRes.json();
+        setCostCenters(ccData.data || ccData);
+      }
       if (prodRes.ok) {
         const prodData = await prodRes.json();
         setProducts(prodData.map((p: any) => ({ id: p.id, code: p.code || p.sku, name: p.name, category: p.category })));
       }
       if (supRes.ok) {
         const supData = await supRes.json();
-        setSuppliers(supData.map((s: any) => ({ id: s.id, code: s.code, name: s.name })));
+        setSuppliers(supData.map((s: any) => {
+          const statusUpper = (s.status || '').toUpperCase().trim();
+          const isEligible = !['INACTIVE', 'BLACKLISTED', 'BLOCKED', 'ARCHIVED', 'PENDING', 'PENDING_APPROVAL', 'PENDING_QUALIFICATION', 'UNQUALIFIED'].includes(statusUpper) && (s.compositeScore === undefined || s.compositeScore === null || s.compositeScore >= 50);
+          let ineligibilityReason = '';
+          if (statusUpper === 'INACTIVE') ineligibilityReason = 'Đang ngưng hoạt động (INACTIVE)';
+          else if (['BLACKLISTED', 'BLOCKED'].includes(statusUpper)) ineligibilityReason = 'Danh sách đen cấm thầu (BLACKLISTED)';
+          else if (statusUpper === 'ARCHIVED') ineligibilityReason = 'Đã lưu trữ (ARCHIVED)';
+          else if (['PENDING', 'PENDING_APPROVAL', 'PENDING_QUALIFICATION', 'UNQUALIFIED'].includes(statusUpper)) ineligibilityReason = 'Chưa qua phê duyệt thẩm định năng lực M09/M11';
+          else if (s.compositeScore !== undefined && s.compositeScore !== null && s.compositeScore < 50) ineligibilityReason = `Điểm năng lực thấp (${s.compositeScore}/100 < 50)`;
+
+          return {
+            id: s.id,
+            code: s.code,
+            name: s.name,
+            status: s.status,
+            performanceTier: s.performanceTier,
+            compositeScore: s.compositeScore,
+            isEligible,
+            ineligibilityReason
+          };
+        }));
       }
 
     } catch (err: any) {
@@ -126,7 +180,7 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
   }, [fetchData]);
 
   // Fetch comparison when selectedRfqId changes
-  useEffect(() => {
+  const fetchComparison = useCallback(() => {
     if (selectedRfqId) {
       const token = localStorage.getItem('erp_token');
       fetch(`/api/sourcing/comparison?rfqId=${selectedRfqId}`, {
@@ -138,6 +192,53 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
     }
   }, [selectedRfqId]);
 
+  useEffect(() => {
+    fetchComparison();
+  }, [fetchComparison]);
+
+  const handleCreatePackage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pkgTitle) return;
+
+    setIsSubmitting(true);
+    try {
+      const token = localStorage.getItem('erp_token');
+      const payload = {
+        title: pkgTitle,
+        category: pkgCategory,
+        estimatedBudget: Number(pkgBudget) || 0,
+        costCenter: pkgCostCenter,
+        submissionDeadline: pkgDeadline || undefined,
+        description: pkgDescription || undefined,
+        idempotencyKey: `pkg-create-${Date.now()}`
+      };
+
+      const res = await fetch('/api/sourcing/packages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || data.error || 'Lỗi khởi tạo gói thầu');
+      }
+
+      onNotify('success', 'Khởi Tạo Gói Thầu Thành Công', `Mã gói thầu: ${data.code}`);
+      setPkgTitle('');
+      setPkgBudget('');
+      setPkgDescription('');
+      await fetchData();
+    } catch (err: any) {
+      onNotify('danger', 'Lỗi tạo gói thầu', err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleCreateRfq = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRfqTitle) return;
@@ -147,9 +248,11 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
       const token = localStorage.getItem('erp_token');
       const payload = {
         title: newRfqTitle,
+        packageId: newRfqPackageId ? Number(newRfqPackageId) : undefined,
         deadline: newRfqDeadline || undefined,
         productId: newRfqProductId ? Number(newRfqProductId) : undefined,
         targetQuantity: newRfqQuantity ? Number(newRfqQuantity) : undefined,
+        invitedSupplierIds: selectedSuppliersToInvite.length > 0 ? selectedSuppliersToInvite : undefined,
         idempotencyKey: `rfq-create-${Date.now()}`
       };
 
@@ -164,15 +267,17 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.error || 'Lỗi hệ thống');
+        throw new Error(errData.message || errData.error || 'Lỗi hệ thống');
       }
 
       const data = await res.json();
-      onNotify('success', 'Tạo Gói Thầu Thành Công', `Mã RFQ: ${data.code || data.id || 'Thành công'}`);
+      onNotify('success', 'Tạo Yêu Cầu Báo Giá Thành Công', `Mã RFQ: ${data.code || data.id || 'Thành công'}`);
       setNewRfqTitle('');
+      setNewRfqPackageId('');
       setNewRfqDeadline('');
       setNewRfqProductId('');
       setNewRfqQuantity('');
+      setSelectedSuppliersToInvite([]);
       await fetchData();
     } catch (err: any) {
       onNotify('danger', 'Lỗi tạo RFQ', err.message);
@@ -191,11 +296,12 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
       const payload = {
         rfqId: Number(bidRfqId),
         supplierId: Number(bidSupplierId),
+        roundNumber: bidRoundNumber ? Number(bidRoundNumber) : undefined,
         items: [{
           rfqItemId: 1,
           unitPrice: Number(bidUnitPrice),
           offeredQuantity: Number(bidQuantity),
-          leadTimeDays: Number(bidLeadTime)
+          leadTimeDays: Number(bidLeadTime) || 3
         }],
         idempotencyKey: `bid-create-${Date.now()}`
       };
@@ -209,12 +315,20 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
         body: JSON.stringify(payload)
       });
 
+      const resData = await res.json();
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Lỗi nộp hồ sơ bid');
+        throw new Error(resData.error || resData.message || 'Lỗi nộp hồ sơ bid');
       }
 
-      onNotify('success', 'Nộp Hồ Sơ Chào Giá Thành Công', 'Hồ sơ bid đã được niêm phong vào hệ thống đối soát.');
+      const reductionMsg = resData.priceReductionPercent && resData.priceReductionPercent > 0
+        ? ` Đã ghi nhận mức giảm ${resData.priceReductionPercent}% so với vòng trước!`
+        : '';
+
+      onNotify(
+        'success',
+        'Nộp Hồ Sơ Chào Giá Thành Công',
+        `Hồ sơ bid Vòng ${resData.roundNumber || 1} đã được niêm phong vào hệ thống đối soát.${reductionMsg}`
+      );
       setBidUnitPrice('');
       setBidQuantity('');
       await fetchData();
@@ -269,49 +383,80 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
     }
   };
 
-  const handleCreateAward = async (e: React.FormEvent) => {
+  const handleCreateAward = async (e: React.FormEvent, overrideJustification?: string) => {
     e.preventDefault();
     if (!awardRfqId || !awardBidId || !awardSupplierId) return;
 
-    setIsSubmitting(true);
-    try {
-      const token = localStorage.getItem('erp_token');
-      const payload = {
-        rfqId: Number(awardRfqId),
-        bidId: Number(awardBidId),
-        supplierId: Number(awardSupplierId),
-        evaluationId: null,
-        items: [{
-          rfqLineId: 1,
-          bidLineId: 1,
-          awardedQuantity: 100,
-          awardedUnitPrice: 100000
-        }],
-        idempotencyKey: `award-${Date.now()}`
-      };
+    const executeAwardCreation = async () => {
+      setIsSubmitting(true);
+      try {
+        const token = localStorage.getItem('erp_token');
 
-      const res = await fetch('/api/sourcing/awards', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
+        // Find matching bid for real item numbers
+        const selectedBid = bids.find(b => String(b.id) === String(awardBidId));
+        const rfqItem = rfqs.find(r => String(r.dbId || r.id.replace('RFQ-', '')) === String(awardRfqId));
+        const targetQty = Number(selectedBid?.offeredQuantity || rfqItem?.targetQuantity || 100);
+        const unitPr = Number(selectedBid?.unitPrice || (selectedBid?.totalValue ? selectedBid.totalValue / targetQty : 100000));
 
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Lỗi phê duyệt trúng thầu');
+        const payload = {
+          rfqId: Number(awardRfqId),
+          bidId: Number(awardBidId),
+          supplierId: Number(awardSupplierId),
+          evaluationId: null,
+          items: [{
+            rfqLineId: 1,
+            bidLineId: 1,
+            awardedQuantity: targetQty,
+            awardedUnitPrice: unitPr
+          }],
+          budgetOverrideJustification: overrideJustification || undefined,
+          idempotencyKey: `award-${Date.now()}`
+        };
+
+        const res = await fetch('/api/sourcing/awards', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          if (data.error === 'BUDGET_GUARD_EXCEEDED') {
+            onNotify('danger', 'Chặn Ngân Sách M30', data.message || 'Vượt hạn mức ngân sách khả dụng của Cost Center');
+            return;
+          }
+          throw new Error(data.error || 'Lỗi phê duyệt trúng thầu');
+        }
+
+        if (data.workflowMatrix?.requiresMultiTier) {
+          onNotify('info', 'Chuyển Duyệt Đa Cấp M28', data.message || `Đã chuyển sang luồng duyệt đa cấp (CPO/CFO) cho Quyết định ${data.awardNo}`);
+        } else {
+          onNotify('success', 'Phê Duyệt Trao Thầu Thành Công', data.message || `Mã Quyết định: ${data.awardNo} - Đã phê duyệt và khởi tạo biên bản M10 → M08 PO Boundary`);
+        }
+        await fetchData();
+      } catch (err: any) {
+        onNotify('danger', 'Lỗi phê duyệt', err.message);
+      } finally {
+        setIsSubmitting(false);
       }
+    };
 
-      const data = await res.json();
-      onNotify('success', 'Phê Duyệt Trao Thầu Thành Công', `Mã Quyết định: ${data.awardNo} - Đã khởi tạo biên bản M10 → M08 PO Boundary`);
-      await fetchData();
-    } catch (err: any) {
-      onNotify('danger', 'Lỗi phê duyệt', err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Xác Nhận Quyết Định Trao Thầu',
+      message: `Bạn có chắc chắn muốn phê duyệt trao thầu cho Gói RFQ-${awardRfqId} và Nhà cung cấp #${awardSupplierId}? Hành động này sẽ khóa hồ sơ thầu và lập cam kết ngân sách M30.`,
+      confirmText: 'Xác nhận Trao thầu',
+      cancelText: 'Quay lại',
+      variant: 'primary',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        await executeAwardCreation();
+      },
+      onCancel: () => setConfirmDialog(null)
+    });
   };
 
   const handleGeneratePoFromAward = async (awardId: number) => {
@@ -347,6 +492,80 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
           await fetchData();
         } catch (err: any) {
           onNotify('danger', 'Lỗi khởi tạo PO', err.message);
+        } finally {
+          setIsSubmitting(false);
+        }
+      },
+      onCancel: () => setConfirmDialog(null)
+    });
+  };
+
+  const handleSealAwardDms = async (awardId: number) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Niêm Phong Hồ Sơ Số Vào M29 Secure Vault',
+      message: `Bạn có chắc chắn muốn niêm phong số hồ sơ trao thầu #${awardId}? Hồ sơ sẽ được băm SHA-256 bất biến và lưu trữ dài hạn tại kho chứng từ số M29.`,
+      confirmText: 'Niêm phong ngay',
+      cancelText: 'Hủy',
+      variant: 'primary',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        setIsSubmitting(true);
+        try {
+          const token = localStorage.getItem('erp_token');
+          const res = await fetch(`/api/sourcing/awards/${awardId}/seal-dms`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || 'Lỗi niêm phong số vào M29 Vault');
+          }
+          const data = await res.json();
+          onNotify('success', 'Niêm Phong M29 Vault Thành Công', `Hồ sơ ${data.docCode} đã được lưu trữ vĩnh viễn với mã băm SHA-256: ${data.sha256Hash.substring(0, 16)}...`);
+          await fetchData();
+        } catch (err: any) {
+          onNotify('danger', 'Lỗi niêm phong M29', err.message);
+        } finally {
+          setIsSubmitting(false);
+        }
+      },
+      onCancel: () => setConfirmDialog(null)
+    });
+  };
+
+  const handleSealComparisonDms = async (rfqId: string) => {
+    const rawId = rfqId.replace('RFQ-', '');
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Niêm Phong Ma Trận Báo Giá Vào M29 Vault',
+      message: `Bạn có muốn tạo bản ghi chứng thực số cho toàn bộ ma trận so sánh chào giá của gói thầu RFQ-${rawId} vào kho tài liệu M29?`,
+      confirmText: 'Niêm phong ma trận',
+      cancelText: 'Hủy',
+      variant: 'primary',
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        setIsSubmitting(true);
+        try {
+          const token = localStorage.getItem('erp_token');
+          const res = await fetch(`/api/sourcing/comparison/${rawId}/seal-dms`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || 'Lỗi niêm phong ma trận chào giá vào M29 Vault');
+          }
+          const data = await res.json();
+          onNotify('success', 'Niêm Phong M29 Vault Thành Công', `Bảng so sánh báo giá ${data.docCode} đã được niêm phong với SHA-256: ${data.sha256Hash.substring(0, 16)}...`);
+        } catch (err: any) {
+          onNotify('danger', 'Lỗi niêm phong M29', err.message);
         } finally {
           setIsSubmitting(false);
         }
@@ -434,8 +653,15 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
   const handleSelectForAward = (comparisonItem: ComparisonItem) => {
     setAwardRfqId(selectedRfqId);
     setAwardBidId(String(comparisonItem.bidId));
+    if (comparisonItem.supplierId) {
+      setAwardSupplierId(String(comparisonItem.supplierId));
+    }
     setActiveTab('awards');
-    onNotify('info', 'Chuyển sang Trao Thầu', `Đã chọn Bid #${comparisonItem.bidId} (${comparisonItem.supplierName}) cho gói thầu RFQ #${selectedRfqId}.`);
+    if (comparisonItem.bpaBenchmark?.isExceedingLimit) {
+      onNotify('warning', 'Hồ Sơ Vượt Khung Giá BPA (>10%)', `Bid #${comparisonItem.bidId} (${comparisonItem.supplierName}) vượt trần thỏa thuận khung M09 +${comparisonItem.bpaBenchmark.variancePercent}%. Vui lòng bổ sung giải trình khi duyệt.`);
+    } else {
+      onNotify('info', 'Chuyển sang Trao Thầu', `Đã chọn Bid #${comparisonItem.bidId} (${comparisonItem.supplierName}) cho gói thầu RFQ #${selectedRfqId}.`);
+    }
   };
 
   const handleExportCSV = () => {
@@ -462,6 +688,7 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
   const totalAwardValue = useMemo(() => awards.reduce((acc, a) => acc + (Number(a.totalAmount) || 0), 0), [awards]);
 
   const tabsConfig = [
+    { id: 'packages', label: '10.0 Gói thầu Mua sắm (PKG)', count: packages.length, icon: <Layers className="w-4 h-4" /> },
     { id: 'rfqs', label: '10.1 Quản trị RFQ', count: rfqs.length, icon: <FileText className="w-4 h-4" /> },
     { id: 'bids', label: '10.2 Hồ sơ Chào giá (Bids)', count: bids.length, icon: <ShieldCheck className="w-4 h-4" /> },
     { id: 'evaluation', label: '10.3 Chấm điểm & Đánh giá', count: evaluations.length, icon: <Award className="w-4 h-4" /> },
@@ -488,6 +715,7 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
       <M10LifecyclePipeline
         activeTab={activeTab}
         onSelectTab={(tab) => setActiveTab(tab)}
+        packagesCount={packages.length}
         rfqsCount={rfqs.length}
         bidsCount={bids.length}
         evaluationsCount={evaluations.length}
@@ -556,24 +784,59 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
       {/* ========================================================================= */}
       {/* TAB CONTENTS                                                              */}
       {/* ========================================================================= */}
+      {activeTab === 'packages' && (
+        <M10PackageTab
+          packages={packages}
+          loading={loading}
+          isSubmitting={isSubmitting}
+          onRefresh={fetchData}
+          onCreatePackage={handleCreatePackage}
+          pkgTitle={pkgTitle}
+          setPkgTitle={setPkgTitle}
+          pkgCategory={pkgCategory}
+          setPkgCategory={setPkgCategory}
+          pkgBudget={pkgBudget}
+          setPkgBudget={setPkgBudget}
+          pkgCostCenter={pkgCostCenter}
+          setPkgCostCenter={setPkgCostCenter}
+          pkgDeadline={pkgDeadline}
+          setPkgDeadline={setPkgDeadline}
+          pkgDescription={pkgDescription}
+          setPkgDescription={setPkgDescription}
+          onSelectPackageForRfq={(pkg) => {
+            setNewRfqPackageId(String(pkg.id));
+            setNewRfqTitle(`RFQ cho ${pkg.title}`);
+            setActiveTab('rfqs');
+            onNotify('info', 'Liên kết gói thầu', `Đã chọn gói thầu ${pkg.packageCode} để phát hành RFQ.`);
+          }}
+        />
+      )}
+
       {activeTab === 'rfqs' && (
         <M10RfqTab
           rfqs={rfqs}
           products={products}
+          packages={packages}
+          suppliers={suppliers}
           loading={loading}
           isSubmitting={isSubmitting}
           onRefresh={fetchData}
           onSelectRfq={handleSelectRfq}
           onCancelRfq={cancelRfq}
+          onOpenReverseAuction={handleOpenReverseAuction}
           onCreateRfq={handleCreateRfq}
           newRfqTitle={newRfqTitle}
           setNewRfqTitle={setNewRfqTitle}
+          newRfqPackageId={newRfqPackageId}
+          setNewRfqPackageId={setNewRfqPackageId}
           newRfqDeadline={newRfqDeadline}
           setNewRfqDeadline={setNewRfqDeadline}
           newRfqProductId={newRfqProductId}
           setNewRfqProductId={setNewRfqProductId}
           newRfqQuantity={newRfqQuantity}
           setNewRfqQuantity={setNewRfqQuantity}
+          selectedSuppliersToInvite={selectedSuppliersToInvite}
+          setSelectedSuppliersToInvite={setSelectedSuppliersToInvite}
         />
       )}
 
@@ -586,6 +849,7 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
           isSubmitting={isSubmitting}
           onRefresh={fetchData}
           onCreateBid={handleCreateBid}
+          onOpenReverseAuction={handleOpenReverseAuction}
           bidRfqId={bidRfqId}
           setBidRfqId={setBidRfqId}
           bidSupplierId={bidSupplierId}
@@ -596,6 +860,8 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
           setBidQuantity={setBidQuantity}
           bidLeadTime={bidLeadTime}
           setBidLeadTime={setBidLeadTime}
+          bidRoundNumber={bidRoundNumber}
+          setBidRoundNumber={setBidRoundNumber}
         />
       )}
 
@@ -620,6 +886,7 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
           setScoreDelivery={setScoreDelivery}
           scoreWarranty={scoreWarranty}
           setScoreWarranty={setScoreWarranty}
+          onNotify={onNotify}
         />
       )}
 
@@ -631,6 +898,11 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
           rfqs={rfqs}
           onSelectForAward={handleSelectForAward}
           onNotify={onNotify}
+          onSealComparisonDms={handleSealComparisonDms}
+          onRefresh={() => {
+            fetchComparison();
+            fetchData();
+          }}
         />
       )}
 
@@ -639,12 +911,15 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
           awards={awards}
           rfqs={rfqs}
           bids={bids}
+          packages={packages}
+          costCenters={costCenters}
           suppliers={suppliers}
           loading={loading}
           isSubmitting={isSubmitting}
           onRefresh={fetchData}
           onCreateAward={handleCreateAward}
           onGeneratePo={handleGeneratePoFromAward}
+          onSealDms={handleSealAwardDms}
           awardRfqId={awardRfqId}
           setAwardRfqId={setAwardRfqId}
           awardBidId={awardBidId}
@@ -672,6 +947,7 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
         suppliers={suppliers}
         onClose={() => setSelectedRfqForModal(null)}
         onUpdateStatus={handleUpdateRfqStatus}
+        onOpenReverseAuction={handleOpenReverseAuction}
         onNavigateToTab={(tab, targetRfqId) => {
           if (targetRfqId) {
             setSelectedRfqId(targetRfqId);
@@ -683,6 +959,21 @@ export const M10StrategicSourcingWorkspace: React.FC<M10StrategicSourcingWorkspa
         }}
         onNotify={onNotify}
       />
+
+      {/* ========================================================================= */}
+      {/* PHASE 4: MULTI-ROUND REVERSE AUCTION MODAL                                */}
+      {/* ========================================================================= */}
+      {isReverseAuctionOpen && (
+        <M10ReverseAuctionModal
+          rfq={reverseAuctionRfq}
+          onClose={() => {
+            setIsReverseAuctionOpen(false);
+            setReverseAuctionRfq(null);
+          }}
+          onNotify={onNotify}
+          onRoundOpened={fetchData}
+        />
+      )}
 
       {/* ========================================================================= */}
       {/* RULE #19: ENTERPRISE CONFIRM DIALOG                                       */}

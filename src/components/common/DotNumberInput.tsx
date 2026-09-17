@@ -78,7 +78,18 @@ export const DotNumberInput: React.FC<DotNumberInputProps> = ({
       parsed = max;
     }
 
-    const newFormatted = formatNumber(parsed);
+    let newFormatted = formatNumber(parsed);
+    if (rawInput.endsWith(',')) {
+      if (!newFormatted.includes(',')) {
+        newFormatted = newFormatted + ',';
+      }
+    } else if (rawInput.includes(',')) {
+      const parts = rawInput.split(',');
+      const decimalDigits = parts[1].replace(/[^0-9]/g, '');
+      if (decimalDigits.length > 0) {
+        newFormatted = formatNumber(parsed, { minimumFractionDigits: decimalDigits.length, maximumFractionDigits: 4 });
+      }
+    }
     setDisplayValue(newFormatted);
 
     // Track new cursor position

@@ -11,13 +11,37 @@ This document defines the strict business rules, workflows, and constraints of t
 
 ## 1. Procurement & Inventory (P2P Flow)
 
-**Workflow:** `Purchase Order (PO) -> Goods Receipt (GR) -> Idempotency Check -> InventoryService -> Stock Ledger + Stock Balance`
+**Workflow:** `Purchase Requisition / Sourcing Award (M10) -> Purchase Order (PO - M08) -> Approval Matrix (M28) -> Cost Center Budget Check (M30) -> Goods Receipt (GR - M08/M17) -> Single-Writer InventoryService -> 3-Way Matching -> AP Invoice (M31)`
 
 **Rules:**
 - **PO does NOT increase stock:** A Purchase Order is merely an intent to buy. It does not alter physical or available stock balances.
-- **GR increases stock:** A Goods Receipt represents the physical arrival of items. It triggers the `InventoryService` to append to the `stock_ledger` and update `stock_balances`.
-- **Idempotency is Mandatory:** A GR transaction might fail mid-way (e.g., DB lock) and be retried. The system MUST ensure that a single GR does not increase inventory twice.
-- **Unit of Measure (UOM) Conversion:** Inventory is ALWAYS tracked in the `baseUnit`. If a PO/GR is created in a different UOM (e.g., Box), it must be converted to the `baseUnit` (e.g., Piece) using the `product_uoms.conversionFactor` before updating the ledger.
+- **GR increases stock via Single-Writer Authority:** A Goods Receipt represents physical arrival of goods. It triggers `InventoryService.postTransaction()` (M17 SSOT) to append to `stock_ledger` and update `stock_balances`. M08 NEVER writes to `stock_balances` directly.
+- **Multi-tier Financial Approval Matrix (M28 Governance):**
+  - $\le 500.000.000$ VNĐ: Level 1 (Procurement Manager).
+  - $> 500.000.000$ VNĐ: Level 2 (Procurement Manager + CPO / Procurement Director).
+  - $> 2.000.000.000$ VNĐ: Level 3 (Procurement Manager + CPO + CFO / Executive Board).
+  - State machine: `DRAFT` $\rightarrow$ `PENDING_APPROVAL` $\rightarrow$ `APPROVED` (or `REJECTED`).
+- **Cost Center Budget Guard (M30 Integration):**
+  - Every PO must reference an active Cost Center.
+  - The system evaluates available budget (`budgetAllocated - budgetSpent - budgetCommitted`) prior to approval.
+  - POs exceeding budget are blocked with `BUDGET_GUARD_EXCEEDED` unless authorized with explicit override justification.
+- **3-Way Matching Engine (PO ↔ GR ↔ AP Invoice):**
+  - Compares: 1) PO Ordered Qty & Unit Price, 2) GR Received Qty, 3) AP Invoice Billed Qty & Price.
+  - Tolerance threshold: Configurable `matchTolerancePercent` (default 2% or 50.000 VNĐ).
+  - If discrepancy exceeds tolerance, `matchingStatus` is flagged as `DISCREPANCY` / `MISMATCH`, and payment voucher posting is blocked until resolved via M28 Dispute Workflow.
+- **Idempotency is Mandatory:**
+  - Both `POST /api/purchase-orders` and `POST /api/goods-receipts` require an `idempotencyKey` header/body parameter.
+  - Retries return cached responses from `outbox_events` and NEVER create duplicate documents or double-post stock ledger transactions.
+- **Unit of Measure (UOM) Conversion Guard (M07 SSOT):**
+  - Inventory is ALWAYS tracked in `baseUnit`.
+  - When receiving items in an alternate UOM (e.g., Box, Pallet, Carton), the system resolves conversion via `product_uoms.conversionFactor` (`baseQuantity = quantity * factor`) before invoking `InventoryService.postTransaction()`.
+- **Partial & Over-Receipt Guard:**
+  - Supports phased/partial receipts across multiple GR deliveries, tracking cumulative `receivedQuantity`.
+  - Blocks over-receipts exceeding the purchase order remaining balance plus allowable `overReceiptTolerancePercent` (default 0% - 5%).
+- **Strategic Sourcing Traceability (M10 Link):**
+  - POs generated from tender awards preserve `sourceType: 'SOURCING_AWARD'` and `sourceId` for end-to-end auditability.
+- **Centralized Tamper-Evident Audit (M02 SSOT):**
+  - All lifecycle state transitions (`CREATE`, `SUBMIT`, `APPROVE`, `REJECT`, `RECEIVE`, `MATCH_RESOLVE`) are recorded via `AuditService.recordAuditLog()` with SHA-256 integrity hashing.
 
 ## 2. Invoicing & Payments (O2C Flow)
 
@@ -457,5 +481,52 @@ Product
    - **Phê duyệt Đợt quyết toán (Accrual)**: Tự động ghi nhận trích trước chi phí hoa hồng: **Nợ TK 6418 (Chi phí bán hàng) / Có TK 3388 (Phải trả khác - Hoa hồng)**.
    - **Chi trả Quyết toán (Payment)**: Tự động ghi nhận thanh toán tiền: **Nợ TK 3388 (Phải trả khác) / Có TK 1121 (Tiền gửi ngân hàng) hoặc TK 1111 (Tiền mặt)**.
    - Chuyển trạng thái toàn bộ các bản ghi `commission_calculations` liên quan sang `SETTLED`.
+
+## 9. WMS Extended Rules (M24: Wave Picking, LPN, Dock Scheduling)
+
+### 9.1. Non-Single-Writer Rule & Inventory Integration (M17 Authority)
+- **Single-Writer Protection**: M24 (WMS Extended) is NOT a single-writer authority for stock balances or physical ledgers.
+- All physical picking confirmations (`/api/wms/wave-picks/:id/confirm`) and LPN bulk putaway/movements (`/api/wms/lpn/move`) MUST route strictly through `InventoryService.postTransaction()` (M17).
+- Direct SQL mutation (`UPDATE stock_balances` or direct insert into `stock_ledger`) from WMS controllers or UI is strictly forbidden.
+- **Idempotency Execution**: Every state-mutating WMS extended action (like Wave Confirm or LPN Move) MUST submit and enforce a unique `idempotencyKey` to prevent double-writes and race conditions, honoring the architecture's concurrent ledger guards.
+
+### 9.2. LPN (License Plate Number) Palletization & Atomic Movements
+- **Pallet/LPN Integrity**: An LPN bundles items across SKU, Lot, and Serial dimensions.
+- **Atomic Stock Transfer**: Moving an LPN from one bin/location to another must comply with Invariant 5.5 (`TRANSFER_OUT` + `TRANSFER_IN` with shared `referenceNo` and `transactionGroupId` within an atomic transaction).
+- **Split & Merge Traceability**: Whenever an LPN is split or merged, genealogy must be preserved via `SerialEngine` (`GET /api/serial/trace`) to prevent breaking the Lot/Serial provenance tree.
+- **Immutability of Closed Waves & Shipped LPNs**: Once an LPN is marked `SHIPPED` or a Wave is `CLOSED`, it becomes read-only. Physical variances must be resolved via M20 Stock Adjustment documents.
+
+### 9.3. Dock Scheduling & Capacity Guards
+- **Capacity Verification**: Before booking a dock appointment (`POST /api/wms/docks`), the system must verify dock bay and warehouse staging zone limits via M06 Zone Capacity Rules (`PUT /api/warehouses/capacity`). No standalone capacity tables are allowed.
+- **Auto-Link Execution**:
+  - Inbound Dock Check-in links directly to Goods Receipt (`POST /api/inventory/receipts` in M08/M17).
+  - Outbound Dock Check-in links to Pick-Pack-Ship (`POST /api/sales/shipments` in M21/M13).
+- **Idle Dock SLA Alert**: Dock idle time tracking follows the SLA state machine pattern defined in M36 Service Desk (`GET /api/service-desk/sla`).
+
+### 9.4. Centralized Audit Trail (M02 Compliance)
+- All lifecycle events (`CREATE_WAVE`, `ASSIGN_PICKER`, `CONFIRM_PICK`, `CLOSE_WAVE`, `PACK_LPN`, `MOVE_LPN`, `DOCK_CHECKIN`, `DOCK_CHECKOUT`) must be forwarded to `AuditService.recordAuditLog()` (M02). Standalone audit log tables are forbidden.
+
+## 10. Quality Control & Quarantine Management Rules (M39 QMS)
+
+### 10.1. Inspection Plans & AQL Sampling Invariants
+- **Inspection Categories**: M39 supports IQC (Incoming Quality Control), PQC (In-Process Quality Control), and OQC (Outgoing Quality Control).
+- **ISO 2859-1 AQL Integration**: Sampling sizes (`sampleQuantity`) must be automatically calculated based on lot lot-sizes using standard AQL Level II tables (e.g. Normal Inspection, Tightened Inspection, Reduced Inspection).
+- **Automated Pass/Fail Evaluation**: Technical criteria checks (`qcInspectionResults`) compare measured values against `minLimit`, `maxLimit`, and `nominalValue`. Any failure exceeding allowable defect limits (`maxAllowableDefects`) automatically flags the inspection as `FAIL`.
+
+### 10.2. Quarantine Isolation & Inventory Authority (M17 SSOT)
+- **Automatic Quarantine Hold**: When an IQC inspection is triggered upon Goods Receipt (M08 P2P), received stock is immediately placed into quarantine storage via `InventoryService.holdInQuarantine()` or specialized inventory transaction types (`QUARANTINE_HOLD`).
+- **Single-Writer Enforcement**: M39 QMS does NOT directly mutate physical stock balances. All stock release (`QUARANTINE_RELEASE`), scrap/rejection (`QUARANTINE_REJECT`), or return-to-vendor actions must route through `InventoryService.postTransaction()` (M17 SSOT).
+- **Available Stock Protection**: Quarantined stock is excluded from `availableQuantity` to prevent allocation to sales orders or manufacturing consumption until QA approval is certified.
+
+### 10.3. NCR, CAPA & Supplier Quality Scoring (M11 SRM Integration)
+- **Non-Conformance Reporting (NCR)**: Failed inspections automatically generate an NCR ticket categorizing severity (`CRITICAL`, `MAJOR`, `MINOR`).
+- **Corrective & Preventive Action (CAPA)**: Critical and Major NCRs require a CAPA workflow covering root-cause analysis, containment actions, and verification.
+- **Supplier Rating Impact**: NCR counts, defect rates, and CAPA resolution performance directly feed into the M11 Supplier Quality Scorecard to determine vendor classification (Tier A to D).
+
+### 10.4. Electronic COA & DMS Vault Archiving (M28 / M29 Integration)
+- **SHA-256 Seal**: Approved batch releases and Certificate of Analysis (COA) documents are cryptographically sealed with SHA-256 hashes.
+- **DMS Vault Storage**: Final QA certificates and inspection dossiers are permanently archived into the M29 DMS vault under strict read-only immutability.
+- **Multi-Step Approval Workflow**: All batch release certificates require sign-off through M28 multi-tier approval matrices prior to physical warehouse dispatch.
+
 
 

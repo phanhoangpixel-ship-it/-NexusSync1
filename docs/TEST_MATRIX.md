@@ -67,13 +67,22 @@ This master matrix establishes the authoritative mapping of all 160 features acr
 | M07-F03 | Safety Stock Alerts | `/inventory` | `InventoryDashboard.tsx` | Monitor | `/api/inventory/alerts` | GET | InventoryService | alert_log | Alerts Generated | PASS | Inventory | BUSINESS-CRITICAL |
 | M07-F04 | Inventory Valuation | `/inventory` | `InventoryDashboard.tsx` | Calculate | `/api/inventory/valuation` | GET | CostingEngine | stock_valuation | Valuation Total Computed | PASS | Inventory + Costing | CORE-CRITICAL |
 
-### M08 — Inventory Transactions
+### M08 — Purchase Orders (P2P Procurement)
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M08-F01 | Goods Receipt | `/inventory` | `InventoryDashboard.tsx` | Receive Stock | `/api/inventory/receipts` | POST | InventoryService | stock_ledger | Stock Increased, Ledger Written | PASS | Inventory + P2P | CORE-CRITICAL |
-| M08-F02 | Goods Issue | `/inventory` | `InventoryDashboard.tsx` | Issue Stock | `/api/inventory/issues` | POST | InventoryService | stock_ledger | Stock Decreased, Ledger Written | PASS | Inventory + O2C | CORE-CRITICAL |
-| M08-F03 | Material Transfer | `/inventory` | `InventoryDashboard.tsx` | Transfer | `/api/inventory/transfers` | POST | InventoryService | stock_ledger | Inter-WH Balance Updated | PASS | Inventory | CORE-CRITICAL |
-| M08-F04 | Transaction Reversal | `/inventory` | `InventoryDashboard.tsx` | Reverse | `/api/inventory/reverse` | POST | InventoryService | stock_ledger | Contra Ledger Posted | PASS | Inventory | CORE-CRITICAL |
+| M08-F01 | Purchase Order Creation | `/purchase` | `M08PurchaseOrdersWorkspace.tsx` | Create PO | `/api/purchase-orders` | POST | ProcurementService | `purchase_orders`, `purchase_order_items` | PO Draft/Pending Created | PASS | Purchase + P2P | CORE-CRITICAL |
+| M08-F02 | Multi-tier Approval Matrix | `/purchase` | `M08PurchaseOrdersWorkspace.tsx` | Evaluate Tier | `/api/workflow/matrix` | POST | WorkflowMatrixEngine (M28) | `workflow_instances` | Approval Tier Determined | PASS | Purchase + M28 Workflow | CORE-CRITICAL |
+| M08-F03 | Submit PO for Approval | `/purchase` | `M08PurchaseOrdersWorkspace.tsx` | Submit Approval | `/api/purchase-orders/:id/submit-approval` | POST | ProcurementService | `purchase_orders.status` | State → PENDING_APPROVAL | PASS | Purchase + Governance | BUSINESS-CRITICAL |
+| M08-F04 | Authoritative PO Approval | `/purchase` | `M08PurchaseOrdersWorkspace.tsx` | Approve PO | `/api/purchase-orders/:id/approve` | POST | ProcurementService | `purchase_orders.status` | State → APPROVED & Budget Committed | PASS | Purchase + Governance | CORE-CRITICAL |
+| M08-F05 | Reject / Cancel Purchase Order | `/purchase` | `M08PurchaseOrdersWorkspace.tsx` | Reject PO | `/api/purchase-orders/:id/reject` | POST | ProcurementService | `purchase_orders.status` | State → REJECTED with Justification | PASS | Purchase Governance | BUSINESS-CRITICAL |
+| M08-F06 | Cost Center Budget Guard | `/purchase` | `M08PurchaseOrdersWorkspace.tsx` | Validate Budget | `/api/org/cost-centers/check-budget` | POST | OrgBudgetService (M30) | `cost_centers` | Blocks PO Exceeding Available Budget | PASS | Purchase + Finance GL | CORE-CRITICAL |
+| M08-F07 | Goods Receipt Inbound Posting | `/purchase` | `M08PurchaseOrdersWorkspace.tsx` | Receive Stock | `/api/goods-receipts` | POST | InventoryService (M17) | `stock_ledger`, `goods_receipts` | Stock Increased via Inventory Authority | PASS | Purchase + M17 Inventory | CORE-CRITICAL |
+| M08-F08 | Multi-UOM Conversion Guard | `/purchase` | `M08PurchaseOrdersWorkspace.tsx` | Convert UOM | `/api/goods-receipts` | POST | InventoryService (M17) | `goods_receipt_items.baseQuantity` | Base Unit Calculated Accurately | PASS | Purchase + M07 MasterData | CORE-CRITICAL |
+| M08-F09 | Partial & Over-Receipt Guard | `/purchase` | `M08PurchaseOrdersWorkspace.tsx` | Inspect Delivery | `/api/goods-receipts` | POST | ProcurementService | `purchase_order_items.receivedQuantity` | Blocks Over-Delivery > 100% | PASS | Purchase + Inventory | CORE-CRITICAL |
+| M08-F10 | 3-Way Matching Engine | `/purchase` | `M08PurchaseOrdersWorkspace.tsx` | Run Match | `/api/purchase/matching-cases` | GET | ProcurementService | `matching_cases` | PO ↔ GR ↔ AP Reconciliation | PASS | Purchase + Finance AP | CORE-CRITICAL |
+| M08-F11 | Discrepancy Resolution | `/purchase` | `M08PurchaseOrdersWorkspace.tsx` | Resolve Case | `/api/purchase/matching-cases/:id/resolve` | POST | ProcurementService | `matching_resolutions` | Variance Resolved with Audit Record | PASS | Purchase + Finance AP | BUSINESS-CRITICAL |
+| M08-F12 | Framework BPA Contracts | `/purchase` | `M08PurchaseOrdersWorkspace.tsx` | Manage BPA | `/api/purchase/contracts` | GET/POST | ProcurementService | `bpa_contracts` | Long-term Price Locks Active | PASS | Purchase + Sourcing | BUSINESS-CRITICAL |
+| M08-F13 | Centralized SHA-256 Audit Log | `/purchase` | `M08PurchaseOrdersWorkspace.tsx` | Capture Audit | `/api/audit/logs` | POST | AuditService (M02) | `audit_logs` | Tamper-evident Audit Ledger | PASS | Purchase + M02 Audit | CORE-CRITICAL |
 
 ### M09 — Stock Transfer
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
@@ -83,21 +92,54 @@ This master matrix establishes the authoritative mapping of all 160 features acr
 | M09-F03 | Receipt Confirmation | `/stock-transfer` | `SupplyChainWorkspace.tsx` | Confirm Receipt | `/api/transfers/:id/receive` | POST | InventoryService | stock_balances | Dest WH Stock Increased | PASS | Transfer + Inventory | CORE-CRITICAL |
 | M09-F04 | Transfer Variance Log | `/stock-transfer` | `SupplyChainWorkspace.tsx` | Inspect | `/api/transfers/variance` | GET | InventoryService | transfer_variance | Variance Recorded | PASS | Transfer | BUSINESS |
 
-### M10 — Stock Adjustment
+### M10 — Strategic Sourcing & RFQ
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M10-F01 | Create Adjustment | `/stock-adjustment` | `StockAdjustmentWorkspace.tsx` | Create Draft | `/api/stock-adjustments` | POST | StockAdjustmentService | adjustment_draft | Draft Saved | PASS | Stock Adjustment | CORE-CRITICAL |
-| M10-F02 | Approve Stock Adjustment | `/stock-adjustment` | `StockAdjustmentWorkspace.tsx` | Approve | `/api/stock-adjustments/:id/approve` | POST | StockAdjustmentService | stock_ledger & GL | Stock Updated & GL Posted | PASS | Stock Adjustment + Inventory + GL | CORE-CRITICAL |
-| M10-F03 | Reject Adjustment | `/stock-adjustment` | `StockAdjustmentWorkspace.tsx` | Reject | `/api/stock-adjustments/:id/reject` | POST | StockAdjustmentService | adjustment_status | Status Rejected | PASS | Stock Adjustment | BUSINESS-CRITICAL |
-| M10-F04 | Audit Adjustment Log | `/stock-adjustment` | `StockAdjustmentWorkspace.tsx` | View History | `/api/stock-adjustments/audit` | GET | StockAdjustmentService | audit_trail | Complete Audit Trail | PASS | Stock Adjustment | CORE-CRITICAL |
+| M10-F01 | Create Sourcing Package | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | Create Package | `/api/sourcing/packages` | POST | SourcingService | `sourcing_packages` | Tender Package Draft Created | PASS | Sourcing + CostCenter | CORE-CRITICAL |
+| M10-F02 | Invite Suppliers to Tender | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | Invite Vendor | `/api/sourcing/rfqs/:id/invite` | POST | SourcingService | `srm_rfq_suppliers` | Vendor Invited & Notification Sent | PASS | Sourcing + M09 SRM | BUSINESS-CRITICAL |
+| M10-F03 | Issue Multi-Supplier RFQ | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | Publish RFQ | `/api/sourcing/rfqs` | POST | SourcingService | `srm_rfqs` | RFQ Published (OPEN_BIDDING) | PASS | Sourcing Core | CORE-CRITICAL |
+| M10-F04 | Receive Quotation / Bid | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | Submit Bid | `/api/sourcing/bids` | POST | SourcingService | `srm_bids`, `srm_bid_items` | Bid Recorded & Timestamped | PASS | Sourcing Core | CORE-CRITICAL |
+| M10-F05 | Bid Comparison Matrix | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | Compare Bids | `/api/sourcing/rfqs/:id/comparison` | GET | SourcingService | normalized_bids | Side-by-side Comparative View | PASS | Sourcing Analysis | BUSINESS-CRITICAL |
+| M10-F06 | Bid Scoring & Evaluation | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | Submit Score | `/api/sourcing/evaluations` | POST | SourcingService | `sourcing_evaluations` | Evaluation Consensus Computed | PASS | Sourcing Evaluation | CORE-CRITICAL |
+| M10-F07 | Award Tender Proposal | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | Approve Award | `/api/sourcing/awards` | POST | SourcingService | `sourcing_awards` | Winner Selected & Award Created | PASS | Sourcing Award | CORE-CRITICAL |
+| M10-F08 | Convert Award to PO | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | Generate PO | `/api/sourcing/awards/:id/generate-po` | POST | SourcingService → M08 | `purchase_orders` | PO Generated via M08 Delegation | PASS | Sourcing + M08 P2P | CORE-CRITICAL |
+| M10-F09 | Cancel Tender / RFQ | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | Cancel Tender | `/api/sourcing/packages/:id/cancel` | POST | SourcingService | `sourcing_packages` | Tender Cancelled with Audit Reason | PASS | Sourcing Governance | BUSINESS-CRITICAL |
+| M10-F10 | Tender Lifecycle History | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | View Timeline | `/api/sourcing/rfqs/:id` | GET | SourcingService | `outbox_events` | Complete Sourcing Event Timeline | PASS | Sourcing Traceability | BUSINESS |
+| M10-F11 | Multi-Round Reverse Auction | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | Start Next Round | `/api/sourcing/rfqs/:id/reverse-auction/round` | POST | SourcingService | `srm_bids.round_number` | Auction Round Incremented | PASS | Sourcing Reverse Auction | CORE-CRITICAL |
+| M10-F12 | Vendor Scorecard Weighting | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | Fetch Scorecards | `/api/srm/scorecards` | GET | SourcingService ← M11 | weighted_score | Historical OTIF & Quality Weighted | PASS | Sourcing + M11 SRM | BUSINESS-CRITICAL |
+| M10-F13 | Supplier Eligibility Guard | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | Check Status | `/api/suppliers/:id` | GET | SourcingService ← M09 | supplier_status | Blocks Inactive / Blacklisted Vendors | PASS | Sourcing + M09 MasterData | CORE-CRITICAL |
+| M10-F14 | Price Agreement Benchmark | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | Benchmark Price | `/api/purchase/contracts` | GET | SourcingService ← M09 | price_variance | Flags >10% Price Inflation vs BPA | PASS | Sourcing + M09 Contracts | BUSINESS-CRITICAL |
+| M10-F15 | Cost Center Budget Guard | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | Verify Budget | `/api/org/cost-centers` | GET | SourcingService ← M30 | budget_check | Blocks Award Exceeding Budget Limit | PASS | Sourcing + Finance GL | CORE-CRITICAL |
+| M10-F16 | DMS Secure Vault Archival | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | Archive Dossier | `/api/sourcing/awards/:id/dms-vault` | POST | SourcingService → M29 | `dms_documents` | Dossier Sealed & Checksummed | PASS | Sourcing + M29 DMS | CORE-CRITICAL |
+| M10-F17 | Multi-tier Approval Matrix | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | Request Approval | `/api/workflow/matrix` | POST | SourcingService → M28 | `workflow_instances` | Multi-tier Approval Triggered | PASS | Sourcing + M28 Workflow | CORE-CRITICAL |
+| M10-F18 | Central Sourcing Audit Log | `/strategic-sourcing` | `M10StrategicSourcingWorkspace.tsx` | Log Action | `/api/audit/logs` | POST | AuditService (M02) | `audit_logs` | Immutable Audit Trail Captured | PASS | Sourcing + M02 Audit | CORE-CRITICAL |
 
-### M11 — Stocktake
+### M20-ADJ — Stock Adjustment & Inventory Reconciliation (Migrated from legacy M10 slot)
+| Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| M20-ADJ-01 | Create Adjustment | `/stock-adjustment` | `StockAdjustmentWorkspace.tsx` | Create Draft | `/api/stock-adjustments` | POST | StockAdjustmentService | adjustment_draft | Draft Saved | PASS | Stock Adjustment | CORE-CRITICAL |
+| M20-ADJ-02 | Approve Stock Adjustment | `/stock-adjustment` | `StockAdjustmentWorkspace.tsx` | Approve | `/api/stock-adjustments/:id/approve` | POST | StockAdjustmentService | stock_ledger & GL | Stock Updated & GL Posted | PASS | Stock Adjustment + Inventory + GL | CORE-CRITICAL |
+| M20-ADJ-03 | Reject Adjustment | `/stock-adjustment` | `StockAdjustmentWorkspace.tsx` | Reject | `/api/stock-adjustments/:id/reject` | POST | StockAdjustmentService | adjustment_status | Status Rejected | PASS | Stock Adjustment | BUSINESS-CRITICAL |
+| M20-ADJ-04 | Audit Adjustment Log | `/stock-adjustment` | `StockAdjustmentWorkspace.tsx` | View History | `/api/stock-adjustments/audit` | GET | StockAdjustmentService | audit_trail | Complete Audit Trail | PASS | Stock Adjustment | CORE-CRITICAL |
+
+### M11 — SRM Supplier Performance & Scorecards
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M11-F01 | Cycle Count Plan | `/stocktake` | `InventoryDashboard.tsx` | Schedule Count | `/api/stocktake/plans` | POST | InventoryService | stocktake_plans | Plan Created | PASS | Stocktake | BUSINESS-CRITICAL |
-| M11-F02 | Blind Count Entry | `/stocktake` | `InventoryDashboard.tsx` | Enter Counts | `/api/stocktake/counts` | POST | InventoryService | count_entries | Counts Recorded | PASS | Stocktake | CORE-CRITICAL |
-| M11-F03 | Variance Reconciliation | `/stocktake` | `InventoryDashboard.tsx` | Reconcile | `/api/stocktake/reconcile` | POST | InventoryService | variance_report | Variances Computed | PASS | Stocktake + Inventory | CORE-CRITICAL |
-| M11-F04 | Final Stocktake Posting | `/stocktake` | `InventoryDashboard.tsx` | Post Counts | `/api/stocktake/post` | POST | InventoryService | stock_balances & GL | Balances Adjusted & Posted | PASS | Stocktake + Inventory + GL | CORE-CRITICAL |
+| M11-F01 | Scorecard Engine (OTD, Quality, Price) | `/srm` | `M11SrmSupplierMgmtWorkspace.tsx` | Compute Score | `/api/srm/scorecards` | GET | SupplierService | supplier_scorecards | Metrics Computed from M08/M39/M09 | PASS | SRM + P2P + QMS | CORE-CRITICAL |
+| M11-F02 | Scoring Weight & Tier Config | `/srm` | `M11SrmSupplierMgmtWorkspace.tsx` | Update Weights | `/api/srm/scoring-config` | PUT | SupplierService | scoring_config | Weights & Tier Thresholds Saved | PASS | SRM + Audit (M02) | BUSINESS-CRITICAL |
+| M11-F03 | Historical Period Scorecards | `/srm` | `M11SrmSupplierMgmtWorkspace.tsx` | View History | `/api/srm/scorecards` | GET | SupplierService | scorecard_history | Historical Immutability Enforced | PASS | SRM | BUSINESS-CRITICAL |
+| M11-F04 | Event-Driven Recalculation | `/srm` | `M11SrmSupplierMgmtWorkspace.tsx` | Event Trigger | `/api/events/publish` | POST | EventBus (M05) | outbox_events | Auto Recalculate on GR/NCR Event | PASS | SRM + EventBus (M05) | CORE-CRITICAL |
+| M11-F05 | OTD Breakdown Transparency | `/srm` | `M11SrmSupplierMgmtWorkspace.tsx` | Inspect GRs | `/api/goods-receipts` | GET | InventoryService (M08) | gr_details | Grace Period & OTIF Calculation Shown | PASS | SRM + M08 P2P | BUSINESS-CRITICAL |
+| M11-F06 | Quality% Direct QMS Read | `/srm` | `M11SrmSupplierMgmtWorkspace.tsx` | Read Quality | `/api/quality/inspections` | GET | QualityService (M39) | qc_inspections | Direct AQL Pass Rate Read | PASS | SRM + M39 QMS | CORE-CRITICAL |
+| M11-F07 | Price Variance BPA Audit | `/srm` | `M11SrmSupplierMgmtWorkspace.tsx` | Compare BPA | `/api/purchase/contracts` | GET | ProcurementService (M09) | bpa_contracts | Price Variance Checked vs Contract | PASS | SRM + M09 Sourcing | BUSINESS-CRITICAL |
+| M11-F08 | Tier Escalation Alert Dispatch | `/srm` | `M11SrmSupplierMgmtWorkspace.tsx` | Dispatch Alert | `/api/notifications/dispatch` | POST | EventRouter (M29) | outbox_notifications | Tier C/D Escalation Alert Sent | PASS | SRM + M29 Notifications | BUSINESS-CRITICAL |
+| M11-F09 | M10 Sourcing 2-Way Sync | `/strategic-sourcing` | `M10EvaluationTab.tsx` | Read Scorecard | `/api/srm/scorecards` | GET | SourcingService (M10) | weighted_score | M10 Reads Real M11 Tier & Score | PASS | Sourcing + M11 SRM | CORE-CRITICAL |
+| M11-F10 | M39 QMS SRM Connector Verification | `/quality` | `M39QualityControlWorkspace.tsx` | Verify Score | `/api/quality/suppliers/scorecards` | GET | QualityService (M39) | qms_scorecard | M39 Connector Reads Real Scorecard | PASS | QMS + M11 SRM | CORE-CRITICAL |
+| M11-F11 | Config Audit Trail Logging | `/srm` | `M11SrmSupplierMgmtWorkspace.tsx` | Record Audit | `/api/audit/logs` | POST | AuditService (M02) | audit_logs | Config Changes Logged via SHA-256 | PASS | SRM + M02 Audit | CORE-CRITICAL |
+| M11-F12 | Closed Period Immutability Guard | `/srm` | `M11SrmSupplierMgmtWorkspace.tsx` | Block Recalc | `/api/srm/scorecards` | PUT | SupplierService | frozen_scorecard | Immutable History Guard Enforced | PASS | SRM | CORE-CRITICAL |
+| M11-F13 | SRM Excel & PDF Reporting | `/srm` | `M11SrmSupplierMgmtWorkspace.tsx` | Export Report | `/api/srm/scorecards` | GET | ExportService | file_download | Report Exported with Compliance Data | PASS | SRM | SUPPORTING |
+| M11-F14 | RBAC Permission Enforcement | `/srm` | `M11SrmSupplierMgmtWorkspace.tsx` | Check Rights | `/api/auth/permissions` | GET | AuthorityManager (M04) | rls_policy | `srm.config.manage` Enforced | PASS | SRM + RBAC (M04) | CORE-CRITICAL |
+| M11-F15 | End-to-End P2P-SRM-QMS Regression | `/srm` | `M11SrmSupplierMgmtWorkspace.tsx` | Run E2E Test | `/api/srm/scorecards` | GET | UnifiedPipelineEngine | integration_test | Full Chain Verified without Mocks | PASS | Full ERP Pipeline | CORE-CRITICAL |
 
 ### M12 — Lot / Serial / FEFO-FIFO
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
@@ -195,13 +237,32 @@ This master matrix establishes the authoritative mapping of all 160 features acr
 | M23-F03 | P&L Statement | `/finance` | `GenericModuleWorkspace.tsx` | View P&L | `/api/finance/pnl` | GET | FinanceEngine | pnl_statement | Revenue & Expenses Shown | PASS | Finance | CORE-CRITICAL |
 | M23-F04 | Period Close | `/finance` | `GenericModuleWorkspace.tsx` | Close Period | `/api/finance/close` | POST | FinanceEngine | period_status | Period Locked | PASS | Finance | CORE-CRITICAL |
 
-### M24 — Accounts Payable / Receivable
+### M24 — WMS Extended (Wave Picking, LPN & Dock Appointments)
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M24-F01 | Vendor Invoices (AP) | `/ap-ar` | `GenericModuleWorkspace.tsx` | Enter AP Invoice | `/api/finance/ap` | POST | FinanceEngine | ap_ledger | AP Balance Updated | PASS | AP + Finance | CORE-CRITICAL |
-| M24-F02 | Customer Collections (AR) | `/ap-ar` | `GenericModuleWorkspace.tsx` | Record Payment | `/api/finance/ar` | POST | FinanceEngine | ar_ledger | AR Balance Settled | PASS | AR + Finance | CORE-CRITICAL |
-| M24-F03 | Aging Ledger | `/ap-ar` | `GenericModuleWorkspace.tsx` | View Aging | `/api/finance/aging` | GET | FinanceEngine | aging_report | Aging Buckets Shown | PASS | AP/AR | BUSINESS-CRITICAL |
-| M24-F04 | Payment Reconciliation | `/ap-ar` | `GenericModuleWorkspace.tsx` | Reconcile | `/api/finance/reconcile` | POST | FinanceEngine | bank_recon | Bank Statement Matched | PASS | Finance | CORE-CRITICAL |
+| M24-F01 | Wave Picking Plan | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Create Wave | `/api/wms/wave-picks` | POST | InventoryService | wave_picks | Wave Created & Assigned | PASS | WMS + Inventory | CORE-CRITICAL |
+| M24-F02 | Wave Pick Confirm | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Confirm Pick | `/api/wms/wave-picks/:id/confirm` | POST | InventoryService | stock_ledger | Stock Mutated via M17 | PASS | WMS + M17 | CORE-CRITICAL |
+| M24-F03 | Replenishment Task | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Run Replenish | `/api/wms/replenish` | POST | InventoryService | stock_transfers | Bin Replenished | PASS | WMS | BUSINESS-CRITICAL |
+| M24-F04 | Dynamic Bin Allocation | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Auto-Allocate | `/api/wms/allocation` | POST | InventoryService | bin_allocation | Optimal Bin Assigned | PASS | WMS | BUSINESS-CRITICAL |
+| M24-F05 | LPN Pallet Packing | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Pack LPN | `/api/wms/lpn` | POST | InventoryService | lpn_table | LPN Carton Sealed | PASS | WMS + Shipping | CORE-CRITICAL |
+| M24-F06 | LPN Putaway & Move | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Move LPN | `/api/wms/lpn/move` | POST | InventoryService | location_update | LPN Location Updated | PASS | WMS | CORE-CRITICAL |
+| M24-F07 | Dock Appointment Scheduling| `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Schedule Dock | `/api/wms/docks` | POST | LogisticsService | dock_appointments | Slot Reserved | PASS | WMS + TMS | BUSINESS-CRITICAL |
+| M24-F08 | Truck Check-in & Loading | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Check-in Truck | `/api/wms/docks/:id/checkin` | POST | LogisticsService | dock_status | Status Advanced | PASS | WMS + TMS | CORE-CRITICAL |
+| M24-F09 | Carrier Freight Booking | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Book Freight | `/api/wms/freight` | POST | LogisticsService | freight_ledger | Waybill Generated | PASS | Logistics | BUSINESS |
+| M24-F10 | FEFO/FIFO Expiry Guard | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Validate Expiry | `/api/wms/expiry-check` | GET | SerialEngine | expiry_guard | Expiry Rule Enforced | PASS | Serial + WMS | CORE-CRITICAL |
+| M24-F11 | Lot Genealogy Trace | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Trace Genealogy | `/api/wms/genealogy` | GET | SerialEngine | lot_genealogy | Trace Tree Rendered | PASS | Serial + WMS | CORE-CRITICAL |
+| M24-F12 | Warehouse Capacity Guard | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Check Weight/Vol | `/api/wms/capacity-guard` | GET | InventoryService | zone_limits | Capacity Enforced | PASS | Warehouse + WMS | CORE-CRITICAL |
+| M24-F13 | SLA Alert Monitor | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Monitor SLA | `/api/wms/sla-alerts` | GET | TaskManager | sla_metrics | SLA Breach Alerted | PASS | Service Desk + WMS | BUSINESS-CRITICAL |
+| M24-F14 | WMS Audit Logging | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Audit Trail | `/api/wms/audit` | GET | AuditService | audit_logs | Immutable Log Shown | PASS | Audit + WMS | CORE-CRITICAL |
+| M24-F15 | Route Optimization | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Optimize | `/api/wms/route-opt` | POST | ProjectService | route_plan | Optimal Path Generated | PASS | WMS + TMS | BUSINESS |
+| M24-F16 | Batch Auto-Link | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Link Orders | `/api/wms/auto-link` | POST | InventoryService | batch_links | Orders Batched | PASS | WMS | BUSINESS-CRITICAL |
+| M24-F17 | Zone Velocity Profiling | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Profile ABC | `/api/wms/velocity` | GET | InventoryService | abc_profile | Velocity Assessed | PASS | WMS | BUSINESS |
+| M24-F18 | Return Putaway Routing | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Return Route | `/api/wms/returns-putaway` | POST | InventoryService | return_bin | Quarantine/Stock Routed | PASS | WMS + RMA | CORE-CRITICAL |
+| M24-F19 | Cross-Docking Execution | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Cross-Dock | `/api/wms/cross-dock` | POST | InventoryService | cross_dock_ledger | Direct Receipt to Ship | PASS | WMS + P2P + O2C | CORE-CRITICAL |
+| M24-F20 | Hazardous Material Guard | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Hazmat Check | `/api/wms/hazmat` | GET | InventoryService | hazmat_rules | Safety Rule Enforced | PASS | WMS + EHS | CORE-CRITICAL |
+| M24-F21 | WMS Performance Dashboard | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | View KPIs | `/api/wms/dashboard` | GET | WorkspaceAggregationService | wms_kpis | KPIs Rendered | PASS | WMS + BI | BUSINESS-CRITICAL |
+| M24-F22 | Wave Picker Assignment | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Assign Picker | `/api/wms/wave-picks/:id/assign` | POST | InventoryService | wave_picks | Picker Assigned | PASS | WMS | BUSINESS-CRITICAL |
+| M24-F23 | Wave Batch Closure | `/wms-extended` | `M24WMSExtendedWorkspace.tsx` | Close Wave | `/api/wms/wave-picks/:id/close` | POST | InventoryService | wave_picks | Wave Status Closed | PASS | WMS | CORE-CRITICAL |
 
 ### M25 — EHS / Safety
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
@@ -315,13 +376,21 @@ This master matrix establishes the authoritative mapping of all 160 features acr
 | M38-F03 | E-Signature | `/digital-dms` | `DMSWorkspace.tsx` | Sign Document | `/api/dms/sign` | POST | TaskManager | e_signatures | Signature Validated | PASS | DMS | CORE-CRITICAL |
 | M38-F04 | Audit Archiving | `/digital-dms` | `DMSWorkspace.tsx` | Archive | `/api/dms/archive` | POST | TaskManager | archive_ledger | Moved to Deep Archive | PASS | DMS | BUSINESS |
 
-### M39 — Project / Job Costing (Ext)
+### M35-Ext — Projects & WBS: Advanced Job Costing (Ext)
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M39-F01 | Advanced EVM (Earned Value) | `/ext-job-cost` | `GenericModuleWorkspace.tsx` | Calculate EVM | `/api/ext-job-cost/evm` | GET | CostingEngine | evm_metrics | CPI & SPI Computed | PASS | Job Costing + Costing | CORE-CRITICAL |
-| M39-F02 | Cost Variance Analysis | `/ext-job-cost` | `GenericModuleWorkspace.tsx` | Run Analysis | `/api/ext-job-cost/variance` | GET | CostingEngine | variance_report | Variances Detailed | PASS | Job Costing | BUSINESS-CRITICAL |
-| M39-F03 | Milestone Billing Plan | `/ext-job-cost` | `GenericModuleWorkspace.tsx` | Set Billing | `/api/ext-job-cost/billing` | POST | FinanceEngine | billing_schedule | Schedule Created | PASS | Job Costing + O2C | CORE-CRITICAL |
-| M39-F04 | Subcontractor Costing | `/ext-job-cost` | `GenericModuleWorkspace.tsx` | Log SubCost | `/api/ext-job-cost/subcontract` | POST | SubcontractingService | sub_ledger | Subcontract Expenses Logged | PASS | Job Costing + SCM | CORE-CRITICAL |
+| M35-F05 | Advanced EVM (Earned Value) | `/ext-job-cost` | `GenericModuleWorkspace.tsx` | Calculate EVM | `/api/ext-job-cost/evm` | GET | CostingEngine | evm_metrics | CPI & SPI Computed | PASS | Job Costing + Costing | CORE-CRITICAL |
+| M35-F06 | Cost Variance Analysis | `/ext-job-cost` | `GenericModuleWorkspace.tsx` | Run Analysis | `/api/ext-job-cost/variance` | GET | CostingEngine | variance_report | Variances Detailed | PASS | Job Costing | BUSINESS-CRITICAL |
+| M35-F07 | Milestone Billing Plan | `/ext-job-cost` | `GenericModuleWorkspace.tsx` | Set Billing | `/api/ext-job-cost/billing` | POST | FinanceEngine | billing_schedule | Schedule Created | PASS | Job Costing + O2C | CORE-CRITICAL |
+| M35-F08 | Subcontractor Costing | `/ext-job-cost` | `GenericModuleWorkspace.tsx` | Log SubCost | `/api/ext-job-cost/subcontract` | POST | SubcontractingService | sub_ledger | Subcontract Expenses Logged | PASS | Job Costing + SCM | CORE-CRITICAL |
+
+### M39 — Quality Control & Inspection (QMS)
+| Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| M39-F01 | Inspection Plans (IQC/PQC/OQC) | `/quality` | `M39QualityControlWorkspace.tsx` | Create Plan | `/api/quality/plans` | POST | QualityService | `qc_plans`, `qc_criteria` | Inspection Plan & Criteria Active | PASS | Quality + Item Master | CORE-CRITICAL |
+| M39-F02 | Inspection Execution & AQL Sampling | `/quality` | `M39QualityControlWorkspace.tsx` | Record Inspection | `/api/quality/inspections` | POST | QualityService | `qc_inspections`, `qc_inspection_results` | AQL Sample Calculated & Result Saved | PASS | Quality + M17 Inventory | CORE-CRITICAL |
+| M39-F03 | Non-Conformance Report (NCR) & CAPA | `/quality` | `M39QualityControlWorkspace.tsx` | Raise NCR | `/api/quality/ncrs` | POST | QualityService | `qc_ncrs`, `qc_capas` | NCR Logged & Quarantine Enforced | PASS | Quality + SRM | CORE-CRITICAL |
+| M39-F04 | Batch Release & DMS Seal | `/quality` | `M39QualityControlWorkspace.tsx` | Approve Batch | `/api/quality/batch-releases` | POST | QualityService | `qc_batch_releases`, `dms_documents` | Stock Released & COA Sealed with SHA-256 | PASS | Quality + M29 DMS | CORE-CRITICAL |
 
 ### M40 — Enterprise Administration / Platform
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |

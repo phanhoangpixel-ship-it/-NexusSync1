@@ -1,5 +1,5 @@
 import React from 'react';
-import { Award, RefreshCw, Download, Plus, Truck, ShieldCheck } from 'lucide-react';
+import { Award, RefreshCw, Download, Plus, Truck, ShieldCheck, SlidersHorizontal } from 'lucide-react';
 
 interface M11WorkspaceHeaderProps {
   loading: boolean;
@@ -7,6 +7,7 @@ interface M11WorkspaceHeaderProps {
   onExportCSV: () => void;
   onOpenNewScorecard: () => void;
   onOpenNewAudit: () => void;
+  onOpenScoringConfig: () => void;
   onNavigateToM09: () => void;
 }
 
@@ -16,6 +17,7 @@ export const M11WorkspaceHeader: React.FC<M11WorkspaceHeaderProps> = ({
   onExportCSV,
   onOpenNewScorecard,
   onOpenNewAudit,
+  onOpenScoringConfig,
   onNavigateToM09,
 }) => {
   return (
@@ -46,6 +48,16 @@ export const M11WorkspaceHeader: React.FC<M11WorkspaceHeaderProps> = ({
         >
           <Truck className="w-3.5 h-3.5" />
           <span>M09 Master Suppliers</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpenScoringConfig}
+          className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer"
+          title="Cấu hình trọng số chấm điểm SRM"
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400" />
+          <span>Cấu Hình Trọng Số</span>
         </button>
 
         <button
