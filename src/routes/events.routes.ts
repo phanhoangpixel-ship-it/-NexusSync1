@@ -314,10 +314,10 @@ function mapDbEventToBusItem(dbEvt: any) {
  */
 
 /**
- * GET /api/outbox/messages
+ * GET /api/outbox/messages & /api/events/outbox
  * Dedicated Outbox monitoring API endpoint with advanced filtering and pagination.
  */
-eventsRouter.get("/api/outbox/messages", async (req, res) => {
+eventsRouter.get(["/api/outbox/messages", "/api/events/outbox"], async (req, res) => {
   try {
     await ensureEventSeeds();
     const { 
@@ -667,10 +667,14 @@ eventsRouter.get("/api/events/outbox", async (req, res) => {
  */
 eventsRouter.post("/api/events/publish", async (req, res) => {
   try {
-    const { topic, payload, sourceModule, aggregateType, aggregateId, eventType, actorId } = req.body;
-    if (!topic || !payload) {
+    const rawTopic = req.body.topic || req.body.eventType;
+    const rawPayload = req.body.payload || req.body;
+    if (!rawTopic || !rawPayload) {
       return res.status(400).json({ success: false, error: "Missing required fields: topic, payload" });
     }
+    const topic = rawTopic;
+    const payload = rawPayload;
+    const { sourceModule, aggregateType, aggregateId, eventType, actorId } = req.body;
 
     const computedEventType = eventType || topic.split(".").pop() || "CustomEvent";
 

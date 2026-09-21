@@ -9,9 +9,38 @@
  * - M30: GL Accounting (TK 131, 511, 33311)
  */
 
-export type SalesOrderChannel = 'B2B_ENTERPRISE' | 'POS_RETAIL' | 'POS' | 'OMNICHANNEL' | 'CRM_QUOTATION';
+export type SalesOrderChannel = 'B2B_ENTERPRISE' | 'POS_RETAIL' | 'POS' | 'OMNICHANNEL' | 'CRM_QUOTATION' | 'B2B' | 'ONLINE';
 
-export type SalesOrderStatus = 'DRAFT' | 'CONFIRMED' | 'INVOICED' | 'FULFILLED' | 'PAID' | 'CANCELLED';
+/**
+ * Standard O2C Commercial Core Lifecycle Statuses (B2B Enterprise)
+ * DRAFT -> PENDING_APPROVAL -> CONFIRMED -> RESERVED -> FULFILLED -> INVOICED -> CANCELLED
+ */
+export type O2CLifecycleStatus =
+  | 'DRAFT'
+  | 'PENDING_APPROVAL'
+  | 'CONFIRMED'
+  | 'RESERVED'
+  | 'FULFILLED'
+  | 'INVOICED'
+  | 'CANCELLED';
+
+export type SalesOrderStatus =
+  | O2CLifecycleStatus
+  | 'COMPLETED'
+  | 'PAID'
+  | 'ISSUED'
+  | 'REJECTED'
+  | 'ON_HOLD';
+
+export const O2C_LIFECYCLE_TRANSITIONS: Record<O2CLifecycleStatus, O2CLifecycleStatus[]> = {
+  DRAFT: ['PENDING_APPROVAL', 'CONFIRMED', 'CANCELLED'],
+  PENDING_APPROVAL: ['CONFIRMED', 'CANCELLED'],
+  CONFIRMED: ['RESERVED', 'CANCELLED'],
+  RESERVED: ['FULFILLED', 'CANCELLED'],
+  FULFILLED: ['INVOICED'],
+  INVOICED: [],
+  CANCELLED: []
+};
 
 export type InventoryReservationStatus = 'PENDING' | 'RESERVED' | 'PARTIAL' | 'RELEASED' | 'CONSUMED';
 
@@ -19,7 +48,7 @@ export type FulfillmentStatus = 'PENDING_PICKING' | 'PACKING' | 'STAGING' | 'SHI
 
 export type VatInvoiceStatus = 'NOT_ISSUED' | 'PENDING_SIGN' | 'PENDING_ISSUE' | 'ISSUED' | 'REPLACED' | 'CANCELLED';
 
-export type PaymentMethodType = 'BANK_TRANSFER' | 'CASH' | 'CREDIT_CARD' | 'QR_PAY' | 'DEPOSIT_OFFSET' | 'DEFERRED_NET30';
+export type PaymentMethodType = 'BANK_TRANSFER' | 'CASH' | 'CREDIT_CARD' | 'QR_PAY' | 'DEPOSIT_OFFSET' | 'DEFERRED_NET30' | 'COD' | 'TRANSFER' | 'CREDIT';
 
 export type PaymentSettlementStatus = 'UNPAID' | 'PARTIAL' | 'PAID' | 'REFUNDED';
 
@@ -59,20 +88,30 @@ export interface M07CustomerCreditCheckResult {
   isApproved: boolean;
   approved?: boolean;
   customerId: number | string;
+  customerCode?: string;
   name?: string;
   customerName: string;
+  customerGroup?: string;
   creditLimit: number;
+  creditUsed?: number;
   currentBalance?: number;
   currentOutstanding?: number;
   orderAmount?: number;
   newOrderAmount?: number;
+  availableCredit?: number;
   remainingAvailableCredit?: number;
   availableCreditAfterOrder?: number;
+  isCreditBlocked?: boolean;
+  requiresManagerApproval?: boolean;
   warningMessage?: string;
   blockReason?: string;
   rejectionReason?: string;
   reason?: string;
   exceededAmount?: number;
+  paymentTermsDays?: number;
+  status?: 'APPROVED' | 'OVER_LIMIT' | 'BLOCKED';
+  approvedAt?: string;
+  approvedBy?: string | number;
 }
 
 // ==========================================
@@ -146,81 +185,102 @@ export interface M16PosOrderPayload {
 // 3. M13 UNIFIED INTEGRATED SALES ORDER
 // ==========================================
 
-export interface M13SalesOrderItem {
+export interface SalesOrderItem {
   id?: string | number;
+  orderId?: string | number;
+  productId?: number;
   sku: string;
   name: string;
   qty: number;
+  quantity?: number;
+  uomId?: number | null;
   uop?: string;
   price?: number | string;
+  unitPrice?: number;
   unitPriceNumeric?: number;
   discountPercent?: number;
   discountAmount?: number;
   taxRate?: number;
   taxAmount?: number;
   amount?: number;
+  subtotal?: number;
   totalPrice?: number;
+  pricingRuleSnapshot?: any;
   notes?: string;
 }
 
-export interface M13IntegratedSalesOrder {
-  id: string;
+export type M13SalesOrderItem = SalesOrderItem;
+
+export interface SalesOrder {
+  id: string | number;
+  code?: string;
   orderCode?: string;
-  channel: SalesOrderChannel;
-  sourceModule: 'M13_SALES' | 'M16_POS' | 'M12_CRM' | 'OMNICHANNEL';
+  channel?: SalesOrderChannel;
+  sourceModule?: 'M13_SALES' | 'M16_POS' | 'M12_CRM' | 'OMNICHANNEL' | string;
+  sourceType?: string | null;
+  sourceId?: number | null;
   
   // Customer Data (M07 linkage)
-  customerId?: number | string;
+  customerId?: number | string | null;
   customerCode?: string;
   customerName: string;
   name?: string;
   customerTier?: CustomerTierLevel;
+  customerGroup?: string;
   taxCode?: string;
-  address: string;
+  address?: string;
+  shippingAddress?: string;
   billingAddress?: string;
   deliveryAddress?: string;
-  billingEmail: string;
+  billingEmail?: string;
   email?: string;
   phone?: string;
   contactPerson?: string;
 
   // Dates
-  orderDate: string;
+  orderDate?: string;
   deliveryDate?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  dueDate?: string | Date | null;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
 
   // Financial Breakdown (With strict 0 tolerance)
-  items: M13SalesOrderItem[];
-  subtotalAmount: number;
-  discountPercentage: number;
-  discountAmount: number;
-  taxRate: number;
-  taxAmount: number;
+  items: SalesOrderItem[];
+  subtotalAmount?: number;
+  discountPercentage?: number;
+  discountAmount?: number;
+  taxRate?: number;
+  taxAmount?: number;
   totalAmount: string | number;
-  totalAmountNumeric: number;
+  totalAmountNumeric?: number;
+  finalAmount?: number;
   amountPaid: number;
-  balanceDue: number;
+  balanceDue?: number;
 
   // Statuses
-  status: SalesOrderStatus;
+  status: O2CLifecycleStatus | SalesOrderStatus;
   paymentStatus: PaymentSettlementStatus;
   paymentMethod?: PaymentMethodType;
   paymentRef?: string | null;
 
+  // Credit Gate (M07)
+  creditCheckResult?: M07CustomerCreditCheckResult | null;
+  creditExceptionApproved?: boolean;
+  creditApprovedBy?: string | number;
+
   // Supply Chain & WMS (M17/M24)
-  reservationStatus: InventoryReservationStatus;
-  fulfillmentStatus: FulfillmentStatus;
-  warehouseId?: string;
+  reservationStatus?: InventoryReservationStatus;
+  fulfillmentStatus?: FulfillmentStatus;
+  warehouseId?: string | number;
   trackingNumber?: string;
 
   // E-Invoice (M31 - NĐ 123/2020)
   requiresVatInvoice?: boolean;
-  vatStatus: VatInvoiceStatus;
-  vatInvoiceNumber: string | null;
-  vatSerial: string | null;
-  cqtCode: string | null;
-  lookupCode: string | null;
+  vatStatus?: VatInvoiceStatus;
+  vatInvoiceNumber?: string | null;
+  vatSerial?: string | null;
+  cqtCode?: string | null;
+  lookupCode?: string | null;
   vatDetails?: M16PosVatInvoiceDetails | null;
 
   // Quotation linkage (M12)
@@ -228,5 +288,26 @@ export interface M13IntegratedSalesOrder {
 
   // Notes & Audit
   notes?: string;
-  createdBy?: string;
+  createdBy?: string | number;
+  metadata?: any;
+}
+
+export interface M13IntegratedSalesOrder extends SalesOrder {
+  id: string;
+  channel: SalesOrderChannel;
+  sourceModule: 'M13_SALES' | 'M16_POS' | 'M12_CRM' | 'OMNICHANNEL';
+  subtotalAmount: number;
+  discountPercentage: number;
+  discountAmount: number;
+  taxRate: number;
+  taxAmount: number;
+  totalAmountNumeric: number;
+  balanceDue: number;
+  status: SalesOrderStatus;
+  address: string;
+  billingEmail: string;
+  orderDate: string;
+  reservationStatus: InventoryReservationStatus;
+  fulfillmentStatus: FulfillmentStatus;
+  vatStatus: VatInvoiceStatus;
 }

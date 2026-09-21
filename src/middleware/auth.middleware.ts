@@ -92,3 +92,53 @@ export const requireRole = (...allowedRoles: string[]) => {
   };
 };
 
+// Middleware kiểm tra quyền hạn chi tiết (Permission Check)
+export const requirePermission = (permissionCode: string, altPermissionCode?: string) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const user = (req as any).user;
+    if (!user) {
+      if (process.env.NODE_ENV !== 'production') {
+        (req as any).user = {
+          id: 1,
+          username: 'admin',
+          role: 'SUPER_ADMIN',
+          name: 'Hoàng Nam (Admin)',
+          department: 'Quản trị hệ thống',
+        };
+        return next();
+      }
+      return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Yêu cầu xác thực.' });
+    }
+
+    // SUPER_ADMIN and ADMIN have overarching access
+    if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') {
+      return next();
+    }
+
+    // Check token permissions or request headers
+    const userPerms: string[] = Array.isArray(user.permissions)
+      ? user.permissions
+      : String(req.headers['x-user-permissions'] || req.query.permissions || '')
+          .split(',')
+          .map(s => s.trim());
+
+    if (
+      userPerms.includes(permissionCode) ||
+      (altPermissionCode && userPerms.includes(altPermissionCode)) ||
+      userPerms.includes('*')
+    ) {
+      return next();
+    }
+
+    // Non-production fallback for active development if user is Manager or R&D staff
+    if (process.env.NODE_ENV !== 'production' && (user.role === 'MANAGER' || user.role === 'RD_LEAD' || user.role === 'ENGINEER')) {
+      return next();
+    }
+
+    return res.status(403).json({
+      error: 'FORBIDDEN',
+      message: `Tài khoản '${user.username || user.role}' không có quyền '${permissionCode}'.`,
+    });
+  };
+};
+

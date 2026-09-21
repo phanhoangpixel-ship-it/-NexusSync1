@@ -16,7 +16,12 @@ import {
   Calendar,
   UserCheck,
   CreditCard,
-  AlertTriangle
+  AlertTriangle,
+  RotateCcw,
+  Boxes,
+  Truck,
+  CheckCircle2,
+  Clock
 } from 'lucide-react';
 import { safeNumber } from '../../../../utils/salesOrderDataNormalizer';
 
@@ -36,6 +41,8 @@ interface M13OrdersTabProps {
   onOpenVatModal: (order: any) => void;
   onDownloadVatPdf: (order: any) => void;
   onCancelOrder: (order: any) => void;
+  onApproveOrder?: (order: any) => void;
+  onReserveOrder?: (order: any) => void;
   // Quick Create Form props
   newCustomer: string;
   setNewCustomer: (v: string) => void;
@@ -70,6 +77,8 @@ export const M13OrdersTab: React.FC<M13OrdersTabProps> = ({
   onOpenVatModal,
   onDownloadVatPdf,
   onCancelOrder,
+  onApproveOrder,
+  onReserveOrder,
   newCustomer,
   setNewCustomer,
   newTaxCode,
@@ -88,15 +97,47 @@ export const M13OrdersTab: React.FC<M13OrdersTabProps> = ({
 }) => {
   const [selectedM07CustId, setSelectedM07CustId] = useState<string>('');
 
+  // Semantic Status Color helper conforming strictly to Rule #19 / Section 4.4
+  const getSemanticStatusClasses = (status: string) => {
+    switch (status) {
+      case 'COMPLETED':
+      case 'FULFILLED':
+      case 'APPROVED':
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800';
+      case 'PENDING_APPROVAL':
+      case 'BACKORDER':
+      case 'WAITING_PAYMENT':
+        return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800';
+      case 'CANCELLED':
+      case 'REJECTED':
+      case 'BLOCKED':
+        return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800';
+      case 'CONFIRMED':
+      case 'RESERVED':
+      case 'PROCESSING':
+      case 'SHIPPED':
+        return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800';
+      case 'INVOICED':
+      case 'ALLOCATED':
+        return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800';
+      case 'DRAFT':
+      default:
+        return 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+    }
+  };
+
   const filteredOrders = orders.filter((o) => {
     const matchSearch =
       o.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       o.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (o.taxCode && o.taxCode.includes(searchQuery));
+      (o.taxCode && o.taxCode.includes(searchQuery)) ||
+      (o.vatInvoiceNumber && o.vatInvoiceNumber.includes(searchQuery));
     const matchStatus =
       statusFilter === 'ALL' ||
       (statusFilter === 'POS_VAT'
-        ? o.sourceModule === 'M16_POS'
+        ? o.sourceModule === 'M16_POS' && o.vatStatus !== 'ISSUED'
+        : statusFilter === 'INVOICED'
+        ? o.status === 'INVOICED' || o.vatStatus === 'ISSUED'
         : o.status === statusFilter);
     return matchSearch && matchStatus;
   });
@@ -161,6 +202,7 @@ export const M13OrdersTab: React.FC<M13OrdersTabProps> = ({
             {[
               { key: 'ALL', label: 'TẤT CẢ' },
               { key: 'CONFIRMED', label: 'ĐÃ XÁC NHẬN (CONFIRMED)' },
+              { key: 'PENDING_APPROVAL', label: 'CHỜ DUYỆT TÍN DỤNG' },
               { key: 'INVOICED', label: 'ĐÃ XUẤT HĐ (INVOICED)' },
               { key: 'POS_VAT', label: 'POS CẦN HĐ VAT' },
               { key: 'DRAFT', label: 'BẢN NHÁP' },
@@ -267,26 +309,51 @@ export const M13OrdersTab: React.FC<M13OrdersTabProps> = ({
                           </div>
                         </td>
 
-                        {/* Status SO / VAT */}
+                        {/* Status SO / Reservation / VAT */}
                         <td className="py-3 px-3">
                           <div className="space-y-1">
-                            <span
-                              className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
-                                o.status === 'CONFIRMED'
-                                  ? 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300'
-                                  : o.status === 'INVOICED'
-                                  ? 'bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300'
-                                  : o.status === 'CANCELLED'
-                                  ? 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300'
-                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                              }`}
-                            >
-                              {o.status}
-                            </span>
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold font-mono tabular-nums border ${getSemanticStatusClasses(
+                                  o.status
+                                )}`}
+                              >
+                                {o.status === 'FULFILLED' ? (
+                                  <CheckCircle2 className="w-3 h-3" />
+                                ) : o.status === 'PENDING_APPROVAL' ? (
+                                  <Clock className="w-3 h-3" />
+                                ) : null}
+                                <span>{o.status}</span>
+                              </span>
+
+                              {o.reservationStatus && o.status !== 'CANCELLED' && (
+                                <span
+                                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-mono tabular-nums font-bold border ${
+                                    o.reservationStatus === 'RESERVED'
+                                      ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800'
+                                      : o.reservationStatus === 'BACKORDER'
+                                      ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800'
+                                      : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                                  }`}
+                                  title="Trạng thái giữ chỗ tồn kho (M17 ATP Allocation)"
+                                >
+                                  <Boxes className="w-2.5 h-2.5" />
+                                  <span>{o.reservationStatus}</span>
+                                </span>
+                              )}
+                            </div>
+
                             {isIssued && (
-                              <div className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                                <Receipt className="w-3 h-3" />
+                              <div className="text-[10px] font-mono tabular-nums text-purple-700 dark:text-purple-300 flex items-center gap-1 font-semibold">
+                                <Receipt className="w-3 h-3 text-purple-600" />
                                 <span>HĐ: {o.vatInvoiceNumber}</span>
+                              </div>
+                            )}
+
+                            {o.goodsIssueRef && (
+                              <div className="text-[10px] font-mono tabular-nums text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                                <Truck className="w-3 h-3 text-emerald-600" />
+                                <span>PXK: {o.goodsIssueRef}</span>
                               </div>
                             )}
                           </div>
@@ -299,10 +366,36 @@ export const M13OrdersTab: React.FC<M13OrdersTabProps> = ({
                               type="button"
                               onClick={() => onSelectOrder(o)}
                               title="Xem Hồ sơ 360°"
-                              className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 cursor-pointer"
+                              className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 cursor-pointer transition-colors"
                             >
                               <Eye className="w-3.5 h-3.5" />
                             </button>
+
+                            {/* Approve Button for PENDING_APPROVAL (Credit Limit Exception) */}
+                            {o.status === 'PENDING_APPROVAL' && onApproveOrder && (
+                              <button
+                                type="button"
+                                onClick={() => onApproveOrder(o)}
+                                title="Phê Duyệt Đơn Hàng (Chấp Thuận Hạn Mức Tín Dụng M07)"
+                                className="px-2 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-colors"
+                              >
+                                <UserCheck className="w-3 h-3" />
+                                <span>Duyệt</span>
+                              </button>
+                            )}
+
+                            {/* Reserve Stock Button if CONFIRMED but not yet RESERVED */}
+                            {o.status === 'CONFIRMED' && o.reservationStatus !== 'RESERVED' && onReserveOrder && (
+                              <button
+                                type="button"
+                                onClick={() => onReserveOrder(o)}
+                                title="Kích Hoạt Giữ Chỗ Tồn Kho ATP (M17 InventoryService)"
+                                className="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-colors"
+                              >
+                                <Boxes className="w-3 h-3" />
+                                <span>Giữ Kho</span>
+                              </button>
+                            )}
 
                             {!isIssued && o.status !== 'CANCELLED' && (
                               <button
@@ -338,14 +431,18 @@ export const M13OrdersTab: React.FC<M13OrdersTabProps> = ({
                               </button>
                             )}
 
-                            {o.status !== 'CANCELLED' && !isIssued && (
+                            {o.status !== 'CANCELLED' && (
                               <button
                                 type="button"
                                 onClick={() => onCancelOrder(o)}
-                                title="Hủy Đơn Hàng"
-                                className="p-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 cursor-pointer"
+                                title={isIssued ? "Kích hoạt M15 RMA Credit Note (Bảo toàn chứng từ gốc theo VAS)" : "Hủy Đơn Hàng & Giải Phóng Kho (M17)"}
+                                className={`p-1.5 rounded-lg border cursor-pointer transition-colors ${
+                                  isIssued
+                                    ? "bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+                                    : "bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800"
+                                }`}
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                {isIssued ? <RotateCcw className="w-3.5 h-3.5" /> : <Trash2 className="w-3.5 h-3.5" />}
                               </button>
                             )}
                           </div>

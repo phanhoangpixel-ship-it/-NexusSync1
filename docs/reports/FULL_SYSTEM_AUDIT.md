@@ -1,0 +1,784 @@
+# FULL SYSTEM AUDIT REPORT - MODULAR ERP PLATFORM
+Date: 2026-09-20T01:12:23.505Z
+
+## 1. System Overview
+- **Total Defined API Endpoints**: 622
+- **Total Frontend API Calls**: 417
+- **Total TODOs/FIXMEs**: 2
+- **Total Mock/Fake references**: 18
+
+## 2. All Declared APIs
+- GET /api/reports/summary (in src/routes/analytics.routes.ts)
+- GET /api/analytics/pnl-monthly (in src/routes/analytics.routes.ts)
+- GET /api/analytics/kpis (in src/routes/analytics.routes.ts)
+- GET /api/analytics/category-drilldown (in src/routes/analytics.routes.ts)
+- GET /api/analytics/channel-distribution (in src/routes/analytics.routes.ts)
+- GET /api/analytics/branch-performance (in src/routes/analytics.routes.ts)
+- GET /api/audit/logs (in src/routes/audit.routes.ts)
+- GET /api/audit/logs/:id (in src/routes/audit.routes.ts)
+- GET /api/audit/verify (in src/routes/audit.routes.ts)
+- GET /api/audit/stats (in src/routes/audit.routes.ts)
+- GET /api/audit/compliance (in src/routes/audit.routes.ts)
+- POST /api/audit/compliance (in src/routes/audit.routes.ts)
+- GET /api/audit/matrix (in src/routes/audit.routes.ts)
+- GET /api/audit/export (in src/routes/audit.routes.ts)
+- POST /api/audit/capture (in src/routes/audit.routes.ts)
+- POST /api/audit/tamper-test (in src/routes/audit.routes.ts)
+- POST /api/auth/login (in src/routes/auth.routes.ts)
+- GET /api/auth/me (in src/routes/auth.routes.ts)
+- GET /api/rbac/roles (in src/routes/auth.routes.ts)
+- POST /api/rbac/roles (in src/routes/auth.routes.ts)
+- DELETE /api/rbac/roles/:id (in src/routes/auth.routes.ts)
+- GET /api/rbac/permissions (in src/routes/auth.routes.ts)
+- GET /api/users (in src/routes/auth.routes.ts)
+- PUT /api/users/:id/role (in src/routes/auth.routes.ts)
+- PUT /api/users/:id/status (in src/routes/auth.routes.ts)
+- POST /api/users (in src/routes/auth.routes.ts)
+- POST /api/users/:id/reset-password (in src/routes/auth.routes.ts)
+- POST /api/users/:id/revoke-sessions (in src/routes/auth.routes.ts)
+- DELETE /api/users/:id (in src/routes/auth.routes.ts)
+- POST /api/users/bulk-import (in src/routes/auth.routes.ts)
+- POST /api/rbac/roles/clone (in src/routes/auth.routes.ts)
+- POST /api/rbac/check-permission (in src/routes/auth.routes.ts)
+- GET /api/rbac/sessions (in src/routes/auth.routes.ts)
+- POST /api/rbac/sessions/revoke (in src/routes/auth.routes.ts)
+- GET /api/rbac/rls (in src/routes/auth.routes.ts)
+- PUT /api/rbac/rls (in src/routes/auth.routes.ts)
+- GET /api/rbac/delegations (in src/routes/auth.routes.ts)
+- POST /api/rbac/delegations (in src/routes/auth.routes.ts)
+- DELETE /api/rbac/delegations/:id (in src/routes/auth.routes.ts)
+- POST /api/admin/tenants (in src/routes/auth.routes.ts)
+- GET /api/rbac/audit (in src/routes/auth.routes.ts)
+- GET /api/rbac/password-policy (in src/routes/auth.routes.ts)
+- PUT /api/rbac/password-policy (in src/routes/auth.routes.ts)
+- POST /api/rbac/diagnostics/run (in src/routes/auth.routes.ts)
+- GET /api/bank/accounts (in src/routes/bank.routes.ts)
+- GET /api/bank/statements (in src/routes/bank.routes.ts)
+- POST /api/bank/statements/import (in src/routes/bank.routes.ts)
+- POST /api/bank/statements/auto-reconcile (in src/routes/bank.routes.ts)
+- POST /api/bank/statements/manual-match (in src/routes/bank.routes.ts)
+- POST /api/bank/statements/unmatch (in src/routes/bank.routes.ts)
+- POST /api/bank/vietqr/generate (in src/routes/bank.routes.ts)
+- GET /api/bank/reconciliation-report (in src/routes/bank.routes.ts)
+- GET /api/health (in src/routes/core.routes.ts)
+- GET /api/system-time (in src/routes/core.routes.ts)
+- GET /api/payments (in src/routes/core.routes.ts)
+- GET /api/audit/entity-lineage (in src/routes/core.routes.ts)
+- GET /api/crm/leads (in src/routes/crm.routes.ts)
+- POST /api/crm/leads (in src/routes/crm.routes.ts)
+- PUT /api/crm/leads/:id (in src/routes/crm.routes.ts)
+- DELETE /api/crm/leads/:id (in src/routes/crm.routes.ts)
+- POST /api/crm/leads/:id/convert (in src/routes/crm.routes.ts)
+- GET /api/crm/opportunities (in src/routes/crm.routes.ts)
+- PUT /api/crm/opportunities/:id/stage (in src/routes/crm.routes.ts)
+- GET /api/crm/activities (in src/routes/crm.routes.ts)
+- POST /api/crm/activities (in src/routes/crm.routes.ts)
+- GET /api/crm/quotations (in src/routes/crm.routes.ts)
+- POST /api/crm/quotations (in src/routes/crm.routes.ts)
+- PUT /api/crm/quotations/:id/status (in src/routes/crm.routes.ts)
+- POST /api/crm/quotations/:id/convert-to-so (in src/routes/crm.routes.ts)
+- GET /api/crm/analytics (in src/routes/crm.routes.ts)
+- POST /api/crm/leads/scan-stale (in src/routes/crm.routes.ts)
+- GET /api/dms/documents (in src/routes/dms.routes.ts)
+- POST /api/dms/documents (in src/routes/dms.routes.ts)
+- POST /api/dms/vault (in src/routes/dms.routes.ts)
+- POST /api/dms/vault/seal (in src/routes/dms.routes.ts)
+- POST /api/dms/documents/:id/sign (in src/routes/dms.routes.ts)
+- POST /api/dms/documents/:id/version (in src/routes/dms.routes.ts)
+- POST /api/dms/documents/:id/verify (in src/routes/dms.routes.ts)
+- POST /api/dms/documents/ocr (in src/routes/dms.routes.ts)
+- POST /api/dms/documents/:id/workflow-sign (in src/routes/dms.routes.ts)
+- POST /api/dms/documents/:id/archive (in src/routes/dms.routes.ts)
+- GET /api/eam/assets (in src/routes/eam.routes.ts)
+- GET /api/eam/work-orders (in src/routes/eam.routes.ts)
+- GET /api/eam/maintenance-plans (in src/routes/eam.routes.ts)
+- POST /api/eam/work-orders (in src/routes/eam.routes.ts)
+- POST /api/eam/work-orders/:id/complete (in src/routes/eam.routes.ts)
+- GET /api/ehs/records (in src/routes/ehs.routes.ts)
+- POST /api/ehs/records (in src/routes/ehs.routes.ts)
+- PUT /api/ehs/records/:id (in src/routes/ehs.routes.ts)
+- GET /api/ehs/inspections (in src/routes/ehs.routes.ts)
+- POST /api/ehs/inspections (in src/routes/ehs.routes.ts)
+- PUT /api/ehs/inspections/:id (in src/routes/ehs.routes.ts)
+- GET /api/ehs/trainings (in src/routes/ehs.routes.ts)
+- POST /api/ehs/trainings (in src/routes/ehs.routes.ts)
+- GET /api/outbox/messages (in src/routes/events.routes.ts)
+- GET /api/outbox/dlq (in src/routes/events.routes.ts)
+- POST /api/outbox/retry (in src/routes/events.routes.ts)
+- POST /api/events/subscribers (in src/routes/events.routes.ts)
+- POST /api/outbox/archive (in src/routes/events.routes.ts)
+- POST /api/events/dispatch-pending (in src/routes/events.routes.ts)
+- GET /api/events/outbox (in src/routes/events.routes.ts)
+- POST /api/events/publish (in src/routes/events.routes.ts)
+- POST /api/events/trigger-business-event (in src/routes/events.routes.ts)
+- POST /api/events/retry/:id (in src/routes/events.routes.ts)
+- POST /api/events/retry-all-dlq (in src/routes/events.routes.ts)
+- POST /api/events/subscribers/:id/restart (in src/routes/events.routes.ts)
+- POST /api/events/subscribers/:id/reset-offset (in src/routes/events.routes.ts)
+- GET /api/events/subscribers (in src/routes/events.routes.ts)
+- GET /api/events/metrics (in src/routes/events.routes.ts)
+- GET /api/event-bus/summary (in src/routes/events.routes.ts)
+- GET /api/events/trace/:correlationId (in src/routes/events.routes.ts)
+- GET /api/finance/accounts (in src/routes/finance.routes.ts)
+- GET /api/accounting/summary (in src/routes/finance.routes.ts)
+- GET /api/finance/accounting/summary (in src/routes/finance.routes.ts)
+- GET /api/accounting/ledger (in src/routes/finance.routes.ts)
+- GET /api/finance/accounting/ledger (in src/routes/finance.routes.ts)
+- GET /api/finance/entries (in src/routes/finance.routes.ts)
+- POST /api/finance/entries (in src/routes/finance.routes.ts)
+- POST /api/finance/verify-balance (in src/routes/finance.routes.ts)
+- POST /api/finance/period-close (in src/routes/finance.routes.ts)
+- POST /api/finance/tax-engine/calculate (in src/routes/finance.routes.ts)
+- GET /api/finance/tax-engine/summary (in src/routes/finance.routes.ts)
+- GET /api/finance/ar/credit-notes (in src/routes/finance.routes.ts)
+- POST /api/finance/ar/credit-notes (in src/routes/finance.routes.ts)
+- GET /api/finance/ap/debit-notes (in src/routes/finance.routes.ts)
+- GET /api/finance/accounting-events (in src/routes/finance.routes.ts)
+- GET /api/finance/consolidation/entities (in src/routes/finance.routes.ts)
+- GET /api/finance/consolidation/eliminations (in src/routes/finance.routes.ts)
+- POST /api/finance/consolidation/elimination-entry (in src/routes/finance.routes.ts)
+- POST /api/finance/consolidation/run (in src/routes/finance.routes.ts)
+- GET /api/finance/consolidation/report (in src/routes/finance.routes.ts)
+- GET /api/finance/consolidation/summary (in src/routes/finance.routes.ts)
+- GET /api/finance/consolidation/transfer-pricing (in src/routes/finance.routes.ts)
+- POST /api/finance/consolidation/transfer-pricing/generate-file (in src/routes/finance.routes.ts)
+- GET /api/finance/consolidation/dual-reporting-bridge (in src/routes/finance.routes.ts)
+- GET /api/hr/payrolls/preview (in src/routes/hr.routes.ts)
+- GET /api/hr/employees (in src/routes/hr.routes.ts)
+- POST /api/hr/employees (in src/routes/hr.routes.ts)
+- GET /api/hr/payrolls (in src/routes/hr.routes.ts)
+- POST /api/hr/payrolls/calculate (in src/routes/hr.routes.ts)
+- GET /api/hr/payrolls/:id/details (in src/routes/hr.routes.ts)
+- GET /api/hr/attendance (in src/routes/hr.routes.ts)
+- GET /api/hr/leaves (in src/routes/hr.routes.ts)
+- POST /api/hr/leaves (in src/routes/hr.routes.ts)
+- POST /api/hr/leaves/:id/approve (in src/routes/hr.routes.ts)
+- GET /api/hr/performance (in src/routes/hr.routes.ts)
+- GET /api/hr/training (in src/routes/hr.routes.ts)
+- POST /api/hr/ess/checkin (in src/routes/hr.routes.ts)
+- GET /api/industry-profiles (in src/routes/industryProfiles.routes.ts)
+- GET /api/industry-profiles/:id (in src/routes/industryProfiles.routes.ts)
+- POST /api/industry-profiles (in src/routes/industryProfiles.routes.ts)
+- PUT /api/industry-profiles/:id (in src/routes/industryProfiles.routes.ts)
+- DELETE /api/industry-profiles/:id (in src/routes/industryProfiles.routes.ts)
+- GET /api/warehouses (in src/routes/inventory.routes.ts)
+- GET /api/inventory/warehouses/metrics (in src/routes/inventory.routes.ts)
+- POST /api/warehouses (in src/routes/inventory.routes.ts)
+- PUT /api/warehouses/:id (in src/routes/inventory.routes.ts)
+- POST /api/warehouses/:id/toggle-status (in src/routes/inventory.routes.ts)
+- GET /api/warehouse-locations (in src/routes/inventory.routes.ts)
+- GET /api/warehouse-locations/tree/:warehouseId (in src/routes/inventory.routes.ts)
+- POST /api/warehouse-locations (in src/routes/inventory.routes.ts)
+- PUT /api/warehouse-locations/:id (in src/routes/inventory.routes.ts)
+- DELETE /api/warehouse-locations/:id (in src/routes/inventory.routes.ts)
+- POST /api/warehouse-locations/validate-placement (in src/routes/inventory.routes.ts)
+- POST /api/warehouse-locations/assign-stock (in src/routes/inventory.routes.ts)
+- GET /api/warehouse-locations/barcode/:code (in src/routes/inventory.routes.ts)
+- GET /api/inventory/balances (in src/routes/inventory.routes.ts)
+- GET /api/stock (in src/routes/inventory.routes.ts)
+- GET /api/inventory/ledger (in src/routes/inventory.routes.ts)
+- GET /api/stock/ledger (in src/routes/inventory.routes.ts)
+- GET /api/stocktakes (in src/routes/inventory.routes.ts)
+- POST /api/stocktakes (in src/routes/inventory.routes.ts)
+- GET /api/stock-transfers (in src/routes/inventory.routes.ts)
+- GET /api/stock-adjustments (in src/routes/inventory.routes.ts)
+- GET /api/stock-adjustments/:id (in src/routes/inventory.routes.ts)
+- POST /api/stock-adjustments (in src/routes/inventory.routes.ts)
+- POST /api/stock-adjustments/:id/approve (in src/routes/inventory.routes.ts)
+- POST /api/stock-adjustments/:id/reject (in src/routes/inventory.routes.ts)
+- POST /api/stock-adjustments/:id/duplicate (in src/routes/inventory.routes.ts)
+- POST /api/inventory/reset-all (in src/routes/inventory.routes.ts)
+- POST /api/inventory/transactions (in src/routes/inventory.routes.ts)
+- POST /api/inventory/reservations (in src/routes/inventory.routes.ts)
+- GET /api/inventory/reservations (in src/routes/inventory.routes.ts)
+- GET /api/stock/reservations (in src/routes/inventory.routes.ts)
+- POST /api/inventory/reservations/:id/release (in src/routes/inventory.routes.ts)
+- POST /api/inventory/reservations/:id/consume (in src/routes/inventory.routes.ts)
+- POST /api/inventory/transfers (in src/routes/inventory.routes.ts)
+- GET /api/inventory/availability (in src/routes/inventory.routes.ts)
+- GET /api/inventory/reconciliation (in src/routes/inventory.routes.ts)
+- GET /api/inventory/movements (in src/routes/inventory.routes.ts)
+- POST /api/inventory/opening-balances (in src/routes/inventory.routes.ts)
+- POST /api/inventory/transfers/request (in src/routes/inventory.routes.ts)
+- POST /api/inventory/transfers/:id/approve (in src/routes/inventory.routes.ts)
+- POST /api/inventory/transfers/:id/dispatch (in src/routes/inventory.routes.ts)
+- POST /api/inventory/transfers/:id/receive (in src/routes/inventory.routes.ts)
+- POST /api/inventory/transfers/:id/receive-partial (in src/routes/inventory.routes.ts)
+- POST /api/inventory/transfers/:id/reconcile-variance (in src/routes/inventory.routes.ts)
+- GET /api/inventory/transfers/:id/variance-detail (in src/routes/inventory.routes.ts)
+- POST /api/inventory/transfers/:id/approve-variance (in src/routes/inventory.routes.ts)
+- POST /api/stocktakes/cycle-plan (in src/routes/inventory.routes.ts)
+- GET /api/stocktakes/cycle-plan/next-due (in src/routes/inventory.routes.ts)
+- POST /api/stocktakes/:id/items/:itemId/escalate (in src/routes/inventory.routes.ts)
+- POST /api/inventory/stocktakes/:id/start (in src/routes/inventory.routes.ts)
+- POST /api/inventory/stocktakes/:id/record-count (in src/routes/inventory.routes.ts)
+- POST /api/inventory/stocktakes/:id/approve-adjustment (in src/routes/inventory.routes.ts)
+- POST /api/inventory/lots/:id/status (in src/routes/inventory.routes.ts)
+- GET /api/inventory/traceability/:productId (in src/routes/inventory.routes.ts)
+- POST /api/inventory/allocations/fifo-fefo (in src/routes/inventory.routes.ts)
+- POST /api/inventory/reservations/expire-sweeper (in src/routes/inventory.routes.ts)
+- GET /api/inventory/analytics/reorder-alerts (in src/routes/inventory.routes.ts)
+- GET /api/inventory/analytics/aging (in src/routes/inventory.routes.ts)
+- GET /api/inventory/analytics/slow-moving (in src/routes/inventory.routes.ts)
+- GET /api/inventory/quarantine-blocked (in src/routes/inventory.routes.ts)
+- GET /api/inventory/in-transit (in src/routes/inventory.routes.ts)
+- GET /api/inventory/dashboard/advanced (in src/routes/inventory.routes.ts)
+- GET /api/inventory/planning/replenishment-proposals (in src/routes/inventory.routes.ts)
+- GET /api/inventory/analytics/abc-analysis (in src/routes/inventory.routes.ts)
+- POST /api/inventory/wms/wave-picking (in src/routes/inventory.routes.ts)
+- POST /api/inventory/wms/wave-picking/complete-task (in src/routes/inventory.routes.ts)
+- POST /api/inventory/scanner/scan (in src/routes/inventory.routes.ts)
+- POST /api/inventory/offline-queue/enqueue (in src/routes/inventory.routes.ts)
+- POST /api/inventory/offline-queue/process (in src/routes/inventory.routes.ts)
+- GET /api/inventory/offline-queue/status (in src/routes/inventory.routes.ts)
+- GET /api/serial/trace (in src/routes/inventory.routes.ts)
+- GET /api/stock-adjustments/:id/print (in src/routes/inventory.routes.ts)
+- GET /api/reports/summary (in src/routes/inventory.routes.ts)
+- GET /api/invoices (in src/routes/invoices.routes.ts)
+- POST /api/invoices (in src/routes/invoices.routes.ts)
+- POST /api/invoices/:id/pay (in src/routes/invoices.routes.ts)
+- POST /api/invoices/:id/issue (in src/routes/invoices.routes.ts)
+- POST /api/invoices/:id/retry-vat (in src/routes/invoices.routes.ts)
+- GET /api/invoices/vat-summary (in src/routes/invoices.routes.ts)
+- GET /api/invoices/aging-report (in src/routes/invoices.routes.ts)
+- POST /api/invoices/ocr-parse (in src/routes/invoices.routes.ts)
+- POST /api/invoices/dunning-reminder (in src/routes/invoices.routes.ts)
+- POST /api/invoices/etax-submit (in src/routes/invoices.routes.ts)
+- GET /api/invoices/early-discount-suggestions (in src/routes/invoices.routes.ts)
+- GET /api/logistics/kpi (in src/routes/logistics.routes.ts)
+- GET /api/logistics/vehicles (in src/routes/logistics.routes.ts)
+- POST /api/logistics/vehicles (in src/routes/logistics.routes.ts)
+- PUT /api/logistics/vehicles/:id (in src/routes/logistics.routes.ts)
+- GET /api/logistics/drivers (in src/routes/logistics.routes.ts)
+- POST /api/logistics/drivers (in src/routes/logistics.routes.ts)
+- GET /api/logistics/orders (in src/routes/logistics.routes.ts)
+- GET /api/logistics/deliveries (in src/routes/logistics.routes.ts)
+- POST /api/logistics/orders (in src/routes/logistics.routes.ts)
+- POST /api/logistics/orders/:id/assign (in src/routes/logistics.routes.ts)
+- POST /api/logistics/orders/:id/status (in src/routes/logistics.routes.ts)
+- POST /api/logistics/shipments (in src/routes/logistics.routes.ts)
+- POST /api/logistics/routes (in src/routes/logistics.routes.ts)
+- POST /api/logistics/freight (in src/routes/logistics.routes.ts)
+- POST /api/logistics/pod (in src/routes/logistics.routes.ts)
+- POST /api/logistics/shipments/:id/status (in src/routes/logistics.routes.ts)
+- POST /api/logistics/shipments/:id/fail-delivery (in src/routes/logistics.routes.ts)
+- GET /api/logistics/cod-reconciliation (in src/routes/logistics.routes.ts)
+- POST /api/logistics/cod-reconciliation/:id/settle (in src/routes/logistics.routes.ts)
+- GET /api/logistics/fuel-transactions (in src/routes/logistics.routes.ts)
+- POST /api/logistics/fuel-transactions (in src/routes/logistics.routes.ts)
+- GET /api/logistics/vetc-transactions (in src/routes/logistics.routes.ts)
+- POST /api/logistics/vetc-transactions/sync (in src/routes/logistics.routes.ts)
+- POST /api/logistics/vetc-transactions/reconcile (in src/routes/logistics.routes.ts)
+- GET /api/logistics/driver-safety-scores (in src/routes/logistics.routes.ts)
+- GET /api/inventory/lots (in src/routes/lots.routes.ts)
+- GET /api/inventory/lots/:id (in src/routes/lots.routes.ts)
+- POST /api/inventory/lots (in src/routes/lots.routes.ts)
+- PATCH /api/inventory/lots/:id/status (in src/routes/lots.routes.ts)
+- DELETE /api/inventory/lots/:id (in src/routes/lots.routes.ts)
+- POST /api/inventory/lots/fefo-simulate (in src/routes/lots.routes.ts)
+- GET /api/inventory/lots/:id/trace (in src/routes/lots.routes.ts)
+- GET /api/inventory/lots/:id/ledger (in src/routes/lots.routes.ts)
+- GET /api/inventory/lots/:id/trace-upstream (in src/routes/lots.routes.ts)
+- GET /api/inventory/lots/:id/trace-downstream (in src/routes/lots.routes.ts)
+- POST /api/inventory/lots/:id/recall-incident (in src/routes/lots.routes.ts)
+- GET /api/inventory/lots/:id/recall-dossier (in src/routes/lots.routes.ts)
+- GET /api/manufacturing/orders (in src/routes/manufacturing.routes.ts)
+- GET /api/manufacturing/orders/by-code/:code (in src/routes/manufacturing.routes.ts)
+- GET /api/manufacturing/orders/:id (in src/routes/manufacturing.routes.ts)
+- GET /api/manufacturing/orders/:id/history (in src/routes/manufacturing.routes.ts)
+- GET /api/manufacturing/boms (in src/routes/manufacturing.routes.ts)
+- POST /api/manufacturing/orders (in src/routes/manufacturing.routes.ts)
+- POST /api/manufacturing/orders/:id/release (in src/routes/manufacturing.routes.ts)
+- POST /api/manufacturing/orders/:id/issue-materials (in src/routes/manufacturing.routes.ts)
+- POST /api/manufacturing/orders/:id/report-production (in src/routes/manufacturing.routes.ts)
+- POST /api/manufacturing/orders/:id/complete (in src/routes/manufacturing.routes.ts)
+- GET /api/master-data/cache/metrics (in src/routes/masterData.routes.ts)
+- POST /api/master-data/cache/flush (in src/routes/masterData.routes.ts)
+- GET /api/products (in src/routes/masterData.routes.ts)
+- GET /api/categories (in src/routes/masterData.routes.ts)
+- GET /api/product-uoms (in src/routes/masterData.routes.ts)
+- POST /api/uom/convert (in src/routes/masterData.routes.ts)
+- GET /api/customers/:id/credit (in src/routes/masterData.routes.ts)
+- GET /api/customers (in src/routes/masterData.routes.ts)
+- GET /api/suppliers (in src/routes/masterData.routes.ts)
+- GET /api/suppliers/analytics/spend (in src/routes/masterData.routes.ts)
+- GET /api/suppliers/:id (in src/routes/masterData.routes.ts)
+- PATCH /api/suppliers/:id/terms (in src/routes/masterData.routes.ts)
+- POST /api/suppliers/:id/evaluations (in src/routes/masterData.routes.ts)
+- GET /api/srm/scorecards (in src/routes/masterData.routes.ts)
+- GET /api/srm/scoring-config (in src/routes/masterData.routes.ts)
+- PUT /api/srm/scoring-config (in src/routes/masterData.routes.ts)
+- POST /api/suppliers/:id/scorecards (in src/routes/masterData.routes.ts)
+- POST /api/suppliers/:id/contacts (in src/routes/masterData.routes.ts)
+- DELETE /api/suppliers/:id/contacts/:contactId (in src/routes/masterData.routes.ts)
+- POST /api/suppliers/:id/bank-accounts (in src/routes/masterData.routes.ts)
+- DELETE /api/suppliers/:id/bank-accounts/:bankId (in src/routes/masterData.routes.ts)
+- POST /api/suppliers/seed (in src/routes/masterData.routes.ts)
+- POST /api/suppliers (in src/routes/masterData.routes.ts)
+- PUT /api/suppliers/:id (in src/routes/masterData.routes.ts)
+- DELETE /api/suppliers/:id (in src/routes/masterData.routes.ts)
+- GET /api/org/cost-centers (in src/routes/orgWorkflow.routes.ts)
+- GET /api/org/cost-centers/:code (in src/routes/orgWorkflow.routes.ts)
+- POST /api/org/cost-centers/check-budget (in src/routes/orgWorkflow.routes.ts)
+- POST /api/workflow/matrix (in src/routes/orgWorkflow.routes.ts)
+- GET /api/workflow/matrix/rules (in src/routes/orgWorkflow.routes.ts)
+- GET /api/pricing/lists (in src/routes/pricing.routes.ts)
+- GET /api/pricing/items (in src/routes/pricing.routes.ts)
+- GET /api/pricing/rules (in src/routes/pricing.routes.ts)
+- GET /api/pricing/customer-prices (in src/routes/pricing.routes.ts)
+- GET /api/pricing/quantity-tiers (in src/routes/pricing.routes.ts)
+- GET /api/pricing/promotions (in src/routes/pricing.routes.ts)
+- GET /api/pricing/approvals (in src/routes/pricing.routes.ts)
+- GET /api/pricing/audit-logs (in src/routes/pricing.routes.ts)
+- POST /api/pricing/resolve (in src/routes/pricing.routes.ts)
+- POST /api/pricing/bulk-calculate (in src/routes/pricing.routes.ts)
+- POST /api/pricing/approve (in src/routes/pricing.routes.ts)
+- POST /api/pricing/override (in src/routes/pricing.routes.ts)
+- POST /api/pricing/math (in src/routes/pricing.routes.ts)
+- POST /api/pricing/dynamic-discount (in src/routes/pricing.routes.ts)
+- GET /api/issues (in src/routes/projects.routes.ts)
+- POST /api/issues (in src/routes/projects.routes.ts)
+- POST /api/issues/:id/resolve (in src/routes/projects.routes.ts)
+- POST /api/issues/:id/escalate (in src/routes/projects.routes.ts)
+- POST /api/issues/:id/assign (in src/routes/projects.routes.ts)
+- GET /api/issues/assets (in src/routes/projects.routes.ts)
+- POST /api/issues/assets (in src/routes/projects.routes.ts)
+- POST /api/issues/assets/:id/maintenance (in src/routes/projects.routes.ts)
+- GET /api/issues/knowledge-base (in src/routes/projects.routes.ts)
+- POST /api/issues/knowledge-base (in src/routes/projects.routes.ts)
+- POST /api/issues/knowledge-base/:id/helpful (in src/routes/projects.routes.ts)
+- POST /api/issues/:id/note (in src/routes/projects.routes.ts)
+- GET /api/projects (in src/routes/projects.routes.ts)
+- POST /api/projects (in src/routes/projects.routes.ts)
+- PUT /api/projects/:id/status (in src/routes/projects.routes.ts)
+- GET /api/projects/:id/wbs (in src/routes/projects.routes.ts)
+- POST /api/projects/:id/wbs (in src/routes/projects.routes.ts)
+- GET /api/projects/:id/timesheets (in src/routes/projects.routes.ts)
+- POST /api/projects/:id/timesheets (in src/routes/projects.routes.ts)
+- POST /api/projects/:id/material-issue (in src/routes/projects.routes.ts)
+- GET /api/projects/:id/evm (in src/routes/projects.routes.ts)
+- GET /api/projects/resources (in src/routes/projects.routes.ts)
+- GET /api/projects/documents (in src/routes/projects.routes.ts)
+- POST /api/projects/documents (in src/routes/projects.routes.ts)
+- PUT /api/projects/documents/:id/status (in src/routes/projects.routes.ts)
+- GET /api/projects/risks (in src/routes/projects.routes.ts)
+- GET /api/purchase-orders (in src/routes/purchases.routes.ts)
+- GET /api/purchase/orders (in src/routes/purchases.routes.ts)
+- GET /api/purchases (in src/routes/purchases.routes.ts)
+- GET /api/purchase-orders/:id (in src/routes/purchases.routes.ts)
+- GET /api/purchase/orders/:id (in src/routes/purchases.routes.ts)
+- GET /api/purchase-orders/:id/items (in src/routes/purchases.routes.ts)
+- GET /api/purchase/orders/:id/items (in src/routes/purchases.routes.ts)
+- POST /api/purchase-orders (in src/routes/purchases.routes.ts)
+- POST /api/purchase/orders (in src/routes/purchases.routes.ts)
+- POST /api/purchase-orders/:id/submit-approval (in src/routes/purchases.routes.ts)
+- POST /api/purchase/orders/:id/submit-approval (in src/routes/purchases.routes.ts)
+- POST /api/purchase-orders/:id/approve (in src/routes/purchases.routes.ts)
+- POST /api/purchase/orders/:id/approve (in src/routes/purchases.routes.ts)
+- POST /api/po/approve/:id (in src/routes/purchases.routes.ts)
+- POST /api/purchase-orders/:id/reject (in src/routes/purchases.routes.ts)
+- POST /api/purchase/orders/:id/reject (in src/routes/purchases.routes.ts)
+- POST /api/purchase/orders/:id/cancel (in src/routes/purchases.routes.ts)
+- POST /api/po/reject/:id (in src/routes/purchases.routes.ts)
+- PUT /api/purchase-orders/:id (in src/routes/purchases.routes.ts)
+- PUT /api/purchase/orders/:id (in src/routes/purchases.routes.ts)
+- PATCH /api/purchase-orders/:id (in src/routes/purchases.routes.ts)
+- PATCH /api/purchase/orders/:id (in src/routes/purchases.routes.ts)
+- DELETE /api/purchase-orders/:id (in src/routes/purchases.routes.ts)
+- DELETE /api/purchase/orders/:id (in src/routes/purchases.routes.ts)
+- GET /api/goods-receipts (in src/routes/purchases.routes.ts)
+- GET /api/purchase/goods-receipts (in src/routes/purchases.routes.ts)
+- POST /api/goods-receipts (in src/routes/purchases.routes.ts)
+- POST /api/purchase/orders/:id/receive (in src/routes/purchases.routes.ts)
+- GET /api/purchase/matching-cases (in src/routes/purchases.routes.ts)
+- GET /api/purchase-orders/:id/three-way-match (in src/routes/purchases.routes.ts)
+- POST /api/purchase/matching-cases/:id/resolve (in src/routes/purchases.routes.ts)
+- GET /api/purchase/contracts (in src/routes/purchases.routes.ts)
+- POST /api/purchase/contracts (in src/routes/purchases.routes.ts)
+- PUT /api/purchase/contracts/:id/renew (in src/routes/purchases.routes.ts)
+- PUT /api/purchase/contracts/:id (in src/routes/purchases.routes.ts)
+- DELETE /api/purchase/contracts/:id (in src/routes/purchases.routes.ts)
+- GET /api/quality/kpi (in src/routes/quality.routes.ts)
+- GET /api/quality/plans (in src/routes/quality.routes.ts)
+- GET /api/quality/plans/:id (in src/routes/quality.routes.ts)
+- POST /api/quality/plans (in src/routes/quality.routes.ts)
+- GET /api/quality/inspections (in src/routes/quality.routes.ts)
+- GET /api/quality/inspections/:id (in src/routes/quality.routes.ts)
+- POST /api/quality/inspections (in src/routes/quality.routes.ts)
+- POST /api/quality/inspections/:id/evaluate (in src/routes/quality.routes.ts)
+- POST /api/quality/inspections/aql-sample-size (in src/routes/quality.routes.ts)
+- GET /api/quality/ncrs (in src/routes/quality.routes.ts)
+- GET /api/quality/ncrs/:id (in src/routes/quality.routes.ts)
+- POST /api/quality/ncrs (in src/routes/quality.routes.ts)
+- POST /api/quality/ncrs/:id/disposition (in src/routes/quality.routes.ts)
+- GET /api/quality/capas (in src/routes/quality.routes.ts)
+- POST /api/quality/capas (in src/routes/quality.routes.ts)
+- POST /api/quality/capas/:id/verify (in src/routes/quality.routes.ts)
+- GET /api/quality/batch-releases (in src/routes/quality.routes.ts)
+- POST /api/quality/batch-releases (in src/routes/quality.routes.ts)
+- POST /api/quality/batch-releases/:id/post-inventory (in src/routes/quality.routes.ts)
+- GET /api/quality/quarantine (in src/routes/quality.routes.ts)
+- POST /api/quality/quarantine/:id/approve (in src/routes/quality.routes.ts)
+- POST /api/quality/quarantine/:id/reject (in src/routes/quality.routes.ts)
+- GET /api/quality/suppliers/scorecards (in src/routes/quality.routes.ts)
+- GET /api/quality/suppliers/:id/scorecard (in src/routes/quality.routes.ts)
+- POST /api/quality/inspections/:id/seal-coa (in src/routes/quality.routes.ts)
+- POST /api/quality/batch-releases/:id/seal-coa (in src/routes/quality.routes.ts)
+- POST /api/quality/ncrs/:id/seal-dms (in src/routes/quality.routes.ts)
+- GET /api/rd/projects (in src/routes/rd.routes.ts)
+- POST /api/rd/projects (in src/routes/rd.routes.ts)
+- PUT /api/rd/projects/:id (in src/routes/rd.routes.ts)
+- POST /api/rd/projects/:id/approve (in src/routes/rd.routes.ts)
+- GET /api/rd/formulas (in src/routes/rd.routes.ts)
+- POST /api/rd/formulas (in src/routes/rd.routes.ts)
+- POST /api/rd/formulas/:id/approve (in src/routes/rd.routes.ts)
+- GET /api/rd/patents (in src/routes/rd.routes.ts)
+- POST /api/rd/patents (in src/routes/rd.routes.ts)
+- GET /api/rd/trials (in src/routes/rd.routes.ts)
+- POST /api/rd/trials (in src/routes/rd.routes.ts)
+- POST /api/rd/ai-suggest (in src/routes/rd.routes.ts)
+- GET /api/returns (in src/routes/returns.routes.ts)
+- GET /api/sales/rma/list (in src/routes/returns.routes.ts)
+- GET /api/returns/credit-notes (in src/routes/returns.routes.ts)
+- GET /api/returns/:id (in src/routes/returns.routes.ts)
+- POST /api/returns/validate-eligibility (in src/routes/returns.routes.ts)
+- POST /api/returns/fraud-check (in src/routes/returns.routes.ts)
+- POST /api/sales/rma/process (in src/routes/returns.routes.ts)
+- GET /api/sales (in src/routes/sales.routes.ts)
+- GET /api/sales/orders (in src/routes/sales.routes.ts)
+- POST /api/sales/pricing/calculate-discount (in src/routes/sales.routes.ts)
+- POST /api/sales/pricing/resolve-price (in src/routes/sales.routes.ts)
+- POST /api/sales/pricing/resolve-batch (in src/routes/sales.routes.ts)
+- GET /api/sales/pos/lookup-barcode (in src/routes/sales.routes.ts)
+- GET /api/pos/lookup-barcode (in src/routes/sales.routes.ts)
+- GET /api/pos/lookup (in src/routes/sales.routes.ts)
+- POST /api/sales/orders/create-b2b (in src/routes/sales.routes.ts)
+- POST /api/sales (in src/routes/sales.routes.ts)
+- POST /api/sales/orders (in src/routes/sales.routes.ts)
+- POST /api/sales/orders/:id/approve (in src/routes/sales.routes.ts)
+- POST /api/sales/orders/:id/approve-credit (in src/routes/sales.routes.ts)
+- POST /api/sales/orders/:id/reject-credit (in src/routes/sales.routes.ts)
+- GET /api/sales/omnichannel (in src/routes/sales.routes.ts)
+- POST /api/sales/pos (in src/routes/sales.routes.ts)
+- POST /api/sales-orders/pos (in src/routes/sales.routes.ts)
+- POST /api/pos/orders (in src/routes/sales.routes.ts)
+- POST /api/pos/sale (in src/routes/sales.routes.ts)
+- POST /api/sales/omnichannel/create (in src/routes/sales.routes.ts)
+- POST /api/pos/checkout (in src/routes/sales.routes.ts)
+- POST /api/sales/pos/checkout (in src/routes/sales.routes.ts)
+- POST /api/sales/orders/convert-from-pos (in src/routes/sales.routes.ts)
+- POST /api/pos/convert-to-vat (in src/routes/sales.routes.ts)
+- POST /api/sales/online (in src/routes/sales.routes.ts)
+- POST /api/sales/fulfillment/transition (in src/routes/sales.routes.ts)
+- POST /api/sales/orders/:id/reserve (in src/routes/sales.routes.ts)
+- POST /api/sales/orders/:id/confirm (in src/routes/sales.routes.ts)
+- POST /api/sales/orders/:id/fulfill (in src/routes/sales.routes.ts)
+- POST /api/sales/orders/:id/goods-issue (in src/routes/sales.routes.ts)
+- POST /api/sales/orders/:id/invoice (in src/routes/sales.routes.ts)
+- POST /api/sales/orders/:id/issue-invoice (in src/routes/sales.routes.ts)
+- POST /api/sales/orders/:id/cancel (in src/routes/sales.routes.ts)
+- POST /api/sales-orders/pos/:id/void (in src/routes/sales.routes.ts)
+- POST /api/sales/pos/:id/void (in src/routes/sales.routes.ts)
+- POST /api/pos/orders/:id/void (in src/routes/sales.routes.ts)
+- POST /api/sales/orders/:id/void (in src/routes/sales.routes.ts)
+- POST /api/sales-orders/pos/:id/refund (in src/routes/sales.routes.ts)
+- POST /api/sales/pos/:id/refund (in src/routes/sales.routes.ts)
+- POST /api/pos/orders/:id/refund (in src/routes/sales.routes.ts)
+- POST /api/sales/payment/process (in src/routes/sales.routes.ts)
+- POST /api/sales/payment/collect-cod (in src/routes/sales.routes.ts)
+- POST /api/sales/rma/create (in src/routes/sales.routes.ts)
+- POST /api/sales/rma/process (in src/routes/sales.routes.ts)
+- GET /api/sales/rma/list (in src/routes/sales.routes.ts)
+- POST /api/sales/test-suite/run (in src/routes/sales.routes.ts)
+- POST /api/sales/test-suite/concurrent-stress (in src/routes/sales.routes.ts)
+- GET /api/serials (in src/routes/serials.routes.ts)
+- POST /api/serials (in src/routes/serials.routes.ts)
+- GET /api/serials/:id/history (in src/routes/serials.routes.ts)
+- POST /api/serials/:id/actions (in src/routes/serials.routes.ts)
+- GET /api/serial-profiles (in src/routes/serials.routes.ts)
+- POST /api/serial-profiles (in src/routes/serials.routes.ts)
+- GET /api/settings (in src/routes/settings.routes.ts)
+- PUT /api/settings (in src/routes/settings.routes.ts)
+- GET /api/settings/branches (in src/routes/settings.routes.ts)
+- POST /api/settings/branches/:id/activate (in src/routes/settings.routes.ts)
+- GET /api/settings/profiles (in src/routes/settings.routes.ts)
+- POST /api/settings/profiles/:id/activate (in src/routes/settings.routes.ts)
+- GET /api/settings/sessions (in src/routes/settings.routes.ts)
+- POST /api/settings/sessions/:id/force-logout (in src/routes/settings.routes.ts)
+- GET /api/settings/diagnostics (in src/routes/settings.routes.ts)
+- POST /api/settings/diagnostics/run (in src/routes/settings.routes.ts)
+- GET /api/rbac/matrix (in src/routes/settings.routes.ts)
+- PUT /api/rbac/matrix (in src/routes/settings.routes.ts)
+- GET /api/settings/integrity/rules (in src/routes/settings.routes.ts)
+- POST /api/settings/integrity/scan (in src/routes/settings.routes.ts)
+- POST /api/settings/integrity/fix/:ruleId (in src/routes/settings.routes.ts)
+- POST /api/settings/integrity/purge (in src/routes/settings.routes.ts)
+- GET /api/settings/export/csv (in src/routes/settings.routes.ts)
+- GET /api/currency/rates (in src/routes/settings.routes.ts)
+- GET /api/settings/currencies (in src/routes/settings.routes.ts)
+- POST /api/settings/currencies (in src/routes/settings.routes.ts)
+- PUT /api/settings/currencies/:id (in src/routes/settings.routes.ts)
+- POST /api/settings/currencies/sync-vcb (in src/routes/settings.routes.ts)
+- GET /api/settings/sequences (in src/routes/settings.routes.ts)
+- POST /api/settings/sequences (in src/routes/settings.routes.ts)
+- POST /api/settings/sequences/:docType/next (in src/routes/settings.routes.ts)
+- POST /api/settings/sequences/:docType/preview (in src/routes/settings.routes.ts)
+- GET /api/settings/fiscal-periods (in src/routes/settings.routes.ts)
+- PUT /api/settings/fiscal-periods/:periodCode/status (in src/routes/settings.routes.ts)
+- GET /api/settings/fiscal-periods/check-open (in src/routes/settings.routes.ts)
+- GET /api/settings/tax-rates (in src/routes/settings.routes.ts)
+- POST /api/settings/tax-rates (in src/routes/settings.routes.ts)
+- PUT /api/settings/tax-rates/:id (in src/routes/settings.routes.ts)
+- GET /api/settings/feature-flags (in src/routes/settings.routes.ts)
+- POST /api/settings/feature-flags/:flagKey/toggle (in src/routes/settings.routes.ts)
+- PUT /api/settings/feature-flags/:flagKey (in src/routes/settings.routes.ts)
+- GET /api/settings/backup/snapshot (in src/routes/settings.routes.ts)
+- POST /api/settings/backup/trigger (in src/routes/settings.routes.ts)
+- GET /api/settings/backup/list (in src/routes/settings.routes.ts)
+- GET /api/settings/backup/download/:backupId (in src/routes/settings.routes.ts)
+- DELETE /api/settings/backup/:backupId (in src/routes/settings.routes.ts)
+- POST /api/settings/backup/restore-check (in src/routes/settings.routes.ts)
+- GET /api/settings/notification-templates (in src/routes/settings.routes.ts)
+- PUT /api/settings/notification-templates/:id (in src/routes/settings.routes.ts)
+- GET /api/settings/audit-history (in src/routes/settings.routes.ts)
+- GET /active (in src/routes/shift.routes.ts)
+- GET /history (in src/routes/shift.routes.ts)
+- GET /:id (in src/routes/shift.routes.ts)
+- GET /:id/summary (in src/routes/shift.routes.ts)
+- POST /open (in src/routes/shift.routes.ts)
+- POST /close (in src/routes/shift.routes.ts)
+- POST /:id/close (in src/routes/shift.routes.ts)
+- GET /:id/reconciliation (in src/routes/shift.routes.ts)
+- GET /:id/reconcile (in src/routes/shift.routes.ts)
+- POST /:id/reconciliation (in src/routes/shift.routes.ts)
+- POST /:id/reconcile (in src/routes/shift.routes.ts)
+- POST /cash-movement (in src/routes/shift.routes.ts)
+- POST /:id/approve-variance (in src/routes/shift.routes.ts)
+- POST /approve-variance (in src/routes/shift.routes.ts)
+- POST /test-suite/run (in src/routes/shift.routes.ts)
+- GET /test-suite/run (in src/routes/shift.routes.ts)
+- GET /api/sourcing/packages (in src/routes/sourcing.routes.ts)
+- GET /api/sourcing/packages/:id (in src/routes/sourcing.routes.ts)
+- POST /api/sourcing/packages (in src/routes/sourcing.routes.ts)
+- GET /api/sourcing/rfqs (in src/routes/sourcing.routes.ts)
+- POST /api/sourcing/rfqs (in src/routes/sourcing.routes.ts)
+- DELETE /api/sourcing/rfqs/:id (in src/routes/sourcing.routes.ts)
+- PATCH /api/sourcing/rfqs/:id/status (in src/routes/sourcing.routes.ts)
+- GET /api/sourcing/rfqs/:id/suppliers (in src/routes/sourcing.routes.ts)
+- GET /api/sourcing/suppliers/:id/eligibility (in src/routes/sourcing.routes.ts)
+- POST /api/sourcing/rfqs/:id/invite (in src/routes/sourcing.routes.ts)
+- GET /api/sourcing/bids (in src/routes/sourcing.routes.ts)
+- POST /api/sourcing/bids (in src/routes/sourcing.routes.ts)
+- GET /api/sourcing/rfqs/:id/bids (in src/routes/sourcing.routes.ts)
+- POST /api/sourcing/rfqs/:id/bids (in src/routes/sourcing.routes.ts)
+- POST /api/sourcing/rfqs/:id/reverse-auction/round (in src/routes/sourcing.routes.ts)
+- GET /api/sourcing/rfqs/:id/reverse-auction (in src/routes/sourcing.routes.ts)
+- GET /api/sourcing/evaluations (in src/routes/sourcing.routes.ts)
+- POST /api/sourcing/evaluations (in src/routes/sourcing.routes.ts)
+- POST /api/sourcing/rfqs/:id/consensus-evaluation (in src/routes/sourcing.routes.ts)
+- POST /api/sourcing/rfqs/:id/auto-evaluate (in src/routes/sourcing.routes.ts)
+- GET /api/sourcing/rfqs/:id/comparison (in src/routes/sourcing.routes.ts)
+- GET /api/sourcing/comparison (in src/routes/sourcing.routes.ts)
+- GET /api/sourcing/rfqs/:id/bpa-benchmark (in src/routes/sourcing.routes.ts)
+- GET /api/sourcing/awards (in src/routes/sourcing.routes.ts)
+- POST /api/sourcing/awards (in src/routes/sourcing.routes.ts)
+- POST /api/sourcing/awards/:id/generate-po (in src/routes/sourcing.routes.ts)
+- POST /api/sourcing/awards/:id/delegate-po (in src/routes/sourcing.routes.ts)
+- POST /api/sourcing/awards/:id/seal-dms (in src/routes/sourcing.routes.ts)
+- POST /api/sourcing/comparison/:rfqId/seal-dms (in src/routes/sourcing.routes.ts)
+- POST /api/sourcing/rfqs/:id/seal-dms (in src/routes/sourcing.routes.ts)
+- GET /api/supply-chain/plans (in src/routes/supplyChain.routes.ts)
+- GET /api/supply-chain/forecasts (in src/routes/supplyChain.routes.ts)
+- POST /api/supply-chain/calculate-mrp (in src/routes/supplyChain.routes.ts)
+- GET /api/treasury/bank-accounts (in src/routes/treasury.routes.ts)
+- GET /api/treasury/vouchers (in src/routes/treasury.routes.ts)
+- POST /api/treasury/vouchers (in src/routes/treasury.routes.ts)
+- POST /api/treasury/vouchers/:id/approve (in src/routes/treasury.routes.ts)
+- GET /api/treasury/transfers (in src/routes/treasury.routes.ts)
+- POST /api/treasury/transfers (in src/routes/treasury.routes.ts)
+- GET /api/treasury/bank-statements (in src/routes/treasury.routes.ts)
+- POST /api/treasury/reconcile (in src/routes/treasury.routes.ts)
+- GET /api/treasury/cashflow-forecast (in src/routes/treasury.routes.ts)
+- POST /api/unified-pipeline/execute (in src/routes/unifiedPipeline.routes.ts)
+- GET /api/unified-pipeline/metrics (in src/routes/unifiedPipeline.routes.ts)
+- GET /api/workspace/summary (in src/routes/workspace.routes.ts)
+- GET /api/workspace/work-items (in src/routes/workspace.routes.ts)
+- GET /api/workspace/entity-preview (in src/routes/workspace.routes.ts)
+- GET /api/workspace/process-chains (in src/routes/workspace.routes.ts)
+- GET /api/workspace/search (in src/routes/workspace.routes.ts)
+- POST /api/po/approve/:id (in src/routes/workspace.routes.ts)
+- POST /api/po/approve/* (in src/routes/workspace.routes.ts)
+- POST /api/po/reject/:id (in src/routes/workspace.routes.ts)
+- POST /api/po/reject/* (in src/routes/workspace.routes.ts)
+- POST /api/inventory/adjust/:id (in src/routes/workspace.routes.ts)
+- POST /api/inventory/adjust/* (in src/routes/workspace.routes.ts)
+- POST /api/service-desk/take/:id (in src/routes/workspace.routes.ts)
+- POST /api/service-desk/take/* (in src/routes/workspace.routes.ts)
+- POST /api/so/approve/:id (in src/routes/workspace.routes.ts)
+- POST /api/so/approve/* (in src/routes/workspace.routes.ts)
+- POST /api/hr/leave/approve/:id (in src/routes/workspace.routes.ts)
+- POST /api/hr/leave/approve/* (in src/routes/workspace.routes.ts)
+- POST /api/rma/:action/:id (in src/routes/workspace.routes.ts)
+- POST /api/rma/:action/* (in src/routes/workspace.routes.ts)
+- POST /api/orders/:id/:action (in src/routes/workspace.routes.ts)
+- POST /api/dispatch/approve/:id (in src/routes/workspace.routes.ts)
+- POST /api/dispatch/approve/* (in src/routes/workspace.routes.ts)
+- POST /api/maintenance/take/:id (in src/routes/workspace.routes.ts)
+- POST /api/maintenance/take/* (in src/routes/workspace.routes.ts)
+- POST /api/manufacturing/complete/:id (in src/routes/workspace.routes.ts)
+- POST /api/manufacturing/complete/* (in src/routes/workspace.routes.ts)
+- POST /api/invoices/sign/:id (in src/routes/workspace.routes.ts)
+- POST /api/invoices/sign/* (in src/routes/workspace.routes.ts)
+- POST /api/workspace/work-items/:id/action (in src/routes/workspace.routes.ts)
+
+## 3 & 4 & 6. Backend APIs Declared But Potentially Unused (Or only used dynamically)
+- /api/audit/stats
+- /api/audit/compliance
+- /api/audit/matrix
+- /api/audit/export
+- /api/audit/capture
+- /api/audit/tamper-test
+- /api/auth/me
+- /api/rbac/audit
+- /api/dms/vault
+- /api/dms/vault/seal
+- /api/outbox/messages
+- /api/outbox/dlq
+- /api/outbox/retry
+- /api/outbox/archive
+- /api/events/publish
+- /api/events/metrics
+- /api/event-bus/summary
+- /api/events/trace
+- /api/accounting/summary
+- /api/finance/accounting/summary
+- /api/accounting/ledger
+- /api/finance/accounting/ledger
+- /api/finance/tax-engine/summary
+- /api/finance/consolidation/elimination-entry
+- /api/finance/consolidation/run
+- /api/finance/consolidation/summary
+- /api/inventory/ledger
+- /api/stock/ledger
+- /api/inventory/reset-all
+- /api/inventory/transactions
+- /api/stock/reservations
+- /api/inventory/transfers
+- /api/inventory/availability
+- /api/inventory/reconciliation
+- /api/inventory/movements
+- /api/inventory/opening-balances
+- /api/inventory/transfers/request
+- /api/inventory/stocktakes
+- /api/inventory/traceability
+- /api/inventory/allocations/fifo-fefo
+- /api/inventory/analytics/reorder-alerts
+- /api/inventory/analytics/aging
+- /api/inventory/analytics/slow-moving
+- /api/inventory/quarantine-blocked
+- /api/inventory/in-transit
+- /api/inventory/dashboard/advanced
+- /api/inventory/planning/replenishment-proposals
+- /api/inventory/analytics/abc-analysis
+- /api/inventory/wms/wave-picking
+- /api/inventory/wms/wave-picking/complete-task
+- /api/inventory/scanner/scan
+- /api/inventory/offline-queue/enqueue
+- /api/inventory/offline-queue/process
+- /api/inventory/offline-queue/status
+- /api/serial/trace
+- /api/logistics/deliveries
+- /api/logistics/shipments
+- /api/logistics/pod
+- /api/categories
+- /api/product-uoms
+- /api/uom/convert
+- /api/workflow/matrix
+- /api/workflow/matrix/rules
+- /api/pricing/lists
+- /api/pricing/rules
+- /api/pricing/customer-prices
+- /api/pricing/quantity-tiers
+- /api/pricing/promotions
+- /api/pricing/approvals
+- /api/pricing/audit-logs
+- /api/pricing/bulk-calculate
+- /api/pricing/approve
+- /api/pricing/override
+- /api/pricing/math
+- /api/purchase/orders
+- /api/purchases
+- /api/po/approve
+- /api/po/reject
+- /api/quality/kpi
+- /api/quality/plans
+- /api/quality/capas
+- /api/quality/batch-releases
+- /api/quality/suppliers/scorecards
+- /api/quality/suppliers
+- /api/pos/lookup-barcode
+- /api/pos/lookup
+- /api/pos/orders
+- /api/pos/sale
+- /api/pos/checkout
+- /api/pos/convert-to-vat
+- /api/currency/rates
+- /active
+- /history
+- /open
+- /close
+- /cash-movement
+- /approve-variance
+- /test-suite/run
+- /api/sourcing/suppliers
+- /api/unified-pipeline/metrics
+- /api/workspace/summary
+- /api/workspace/entity-preview
+- /api/workspace/process-chains
+- /api/workspace/search
+- /api/po/approve/*
+- /api/po/reject/*
+- /api/inventory/adjust
+- /api/inventory/adjust/*
+- /api/service-desk/take
+- /api/service-desk/take/*
+- /api/so/approve
+- /api/so/approve/*
+- /api/hr/leave/approve
+- /api/hr/leave/approve/*
+- /api/rma
+- /api/orders
+- /api/dispatch/approve
+- /api/dispatch/approve/*
+- /api/maintenance/take
+- /api/maintenance/take/*
+- /api/manufacturing/complete
+- /api/manufacturing/complete/*
+
+## 5. Frontend API Calls with No Exact Backend Match (Check for dynamic params or missing implementations)
+All frontend calls seem to have a backend match.
+
+## 12 & 13. Technical Debt: TODOs, FIXMEs, and Mocks
+### TODOs / FIXMEs
+- **src/routes/settings.routes.ts:1897**: const payloadToDownload = found.payload || {
+- **src/routes/settings.routes.ts:1910**: res.json(payloadToDownload);
+
+### Mock/Fake Implementations Detected
+- **src/routes/audit.routes.ts:337**: fakedHash: 'f4b2382c9de6488d8b8849b29e64e1c272719d3cf55688d8b8849b29e64e1c27',
+- **src/routes/wmsExtended.routes.ts:1187**: let MOCK_FREIGHTS: any[] = [];
+- **src/routes/wmsExtended.routes.ts:1197**: return sendSuccess(res, MOCK_FREIGHTS);
+- **src/routes/wmsExtended.routes.ts:1218**: id: MOCK_FREIGHTS.length + 1,
+- **src/routes/wmsExtended.routes.ts:1228**: MOCK_FREIGHTS.unshift(newFreight);
+- **src/components/offline/OfflineSyncCenterModal.tsx:129**: const mockPayload = {
+- **src/components/offline/OfflineSyncCenterModal.tsx:142**: mockPayload
+- **src/modules/inventory/m18-warehouse/components/WarehouseOutboundTab.tsx:28**: const [orders, setOrders] = useState<OutboundOrder[]>(mockOutboundOrders);
+- **src/modules/inventory/m18-warehouse/components/WarehouseOutboundTab.tsx:29**: const [waves, setWaves] = useState<WavePickingBatch[]>(mockWaveBatches);
+- **src/modules/inventory/m18-warehouse/components/WarehouseOutboundTab.tsx:30**: const [cartons, setCartons] = useState<PackingCarton[]>(mockPackingCartons);
+- **src/modules/inventory/m18-warehouse/components/mockData.ts:3**: export const mockOutboundOrders: OutboundOrder[] = [
+- **src/modules/inventory/m18-warehouse/components/mockData.ts:224**: export const mockWaveBatches: WavePickingBatch[] = [
+- **src/modules/inventory/m18-warehouse/components/mockData.ts:253**: export const mockPackingCartons: PackingCarton[] = [
+- **src/modules/inventory/m20-adjustment/components/StockAdjustmentLedgerAuditTab.tsx:46**: // Generate Ledger Records from Approved adjustments and mock historical audits
+- **src/modules/inventory/m20-adjustment/components/StockAdjustmentWorkspace.tsx:70**: // Fallback default enterprise mock data for M20
+- **src/modules/sales/m13-sales-orders/components/M13SalesOrdersWorkspace.tsx:252**: // Mock realistic concurrency metrics if offline
+- **src/modules/sales/m16-pos/components/ConvertVatInvoiceModal.tsx:96**: // Quick lookup tax code mock autofill
+- **src/modules/sales/m16-pos/components/ThermalReceiptModal.tsx:157**: {/* Dynamic QR Transfer & Barcode Mock */}

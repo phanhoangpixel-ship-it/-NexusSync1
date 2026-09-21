@@ -131,7 +131,7 @@ async function recordAuditLog(tx: any, input: {
     const userName = user.length > 0 ? user[0].fullName : undefined;
     const role = user.length > 0 ? user[0].role : 'USER';
 
-    await AuditService.recordAuditLog({
+    AuditService.captureAsync({
       userId: input.userId,
       username,
       userName,
@@ -581,6 +581,7 @@ export const InventoryService = {
     const outTypes = [
       'OUT',
       'SALE',
+      'SALE_ISSUE',
       'TRANSFER_OUT',
       'ADJUSTMENT_OUT',
       'PURCHASE_RETURN',
@@ -595,7 +596,9 @@ export const InventoryService = {
       'PURCHASE',
       'TRANSFER_IN',
       'ADJUSTMENT_IN',
+      'INBOUND_ADJUSTMENT',
       'SALES_RETURN',
+      'SALE_RETURN',
       'GOODS_RECEIPT',
       'INBOUND_RECEIPT',
       'RETURN_FROM_CUSTOMER',
@@ -605,10 +608,14 @@ export const InventoryService = {
       'QUARANTINE_RELEASE',
     ];
 
+    const rawType = params.type || (params as any).transactionType || 'ADJUSTMENT_IN';
+    const effectiveType = inTypes.includes(rawType) ? (rawType === 'SALE_RETURN' ? 'SALES_RETURN' : (rawType === 'INBOUND_ADJUSTMENT' ? 'ADJUSTMENT_IN' : rawType)) : rawType;
+    params.type = effectiveType;
+
     let qty = params.quantity;
-    if (outTypes.includes(params.type) && qty > 0) {
+    if (outTypes.includes(effectiveType) && qty > 0) {
       qty = -qty; // Auto-correct to negative if OUT
-    } else if (inTypes.includes(params.type) && qty < 0) {
+    } else if (inTypes.includes(effectiveType) && qty < 0) {
       qty = Math.abs(qty); // Auto-correct to positive if IN
     }
 
@@ -617,10 +624,10 @@ export const InventoryService = {
       warehouseId,
       locationId = null,
       lotId = null,
-      type,
+      type = effectiveType,
       referenceNo,
       notes,
-      userId,
+      userId = 1,
       serials = [],
       referenceId = 0,
       referenceItemId = 0,
@@ -647,13 +654,27 @@ export const InventoryService = {
         throw new Error(`Location ID ${locationId} không thuộc Kho ID ${warehouseId}`);
       }
     } else {
-      const defaultLoc = await tx
+      // Intelligently find if a stock balance already exists for this product in the warehouse
+      const candidateBalances = await tx
         .select()
-        .from(warehouseLocations)
-        .where(and(eq(warehouseLocations.warehouseId, warehouseId), eq(warehouseLocations.isActive, true)))
-        .limit(1);
-      if (defaultLoc.length > 0) {
-        effectiveLocationId = defaultLoc[0].id;
+        .from(stockBalances)
+        .where(and(eq(stockBalances.productId, productId), eq(stockBalances.warehouseId, warehouseId)));
+
+      const bestBal = candidateBalances.find((b: any) => (b.stockAvailable || 0) >= Math.abs(qty))
+        || candidateBalances.find((b: any) => (b.stockPhysical || 0) > 0)
+        || candidateBalances[0];
+
+      if (bestBal && bestBal.locationId !== undefined) {
+        effectiveLocationId = bestBal.locationId;
+      } else {
+        const defaultLoc = await tx
+          .select()
+          .from(warehouseLocations)
+          .where(and(eq(warehouseLocations.warehouseId, warehouseId), eq(warehouseLocations.isActive, true)))
+          .limit(1);
+        if (defaultLoc.length > 0) {
+          effectiveLocationId = defaultLoc[0].id;
+        }
       }
     }
 
@@ -737,7 +758,34 @@ export const InventoryService = {
       balanceConditions.push(isNull(stockBalances.locationId));
     }
 
-    const existingBalance = await tx.select().from(stockBalances).where(and(...balanceConditions)).limit(1);
+    let existingBalance = await tx.select().from(stockBalances).where(and(...balanceConditions)).limit(1);
+
+    // If no specific balance record exists but product has master physical stock, initialize it
+    if (existingBalance.length === 0 && (product.stockPhysical || 0) > 0) {
+      const initPhys = product.stockPhysical || 0;
+      const initRes = product.stockReserved || 0;
+      const initAvail = product.stockAvailable !== null && product.stockAvailable !== undefined
+        ? product.stockAvailable
+        : Math.max(0, initPhys - initRes);
+      try {
+        const seeded = await tx
+          .insert(stockBalances)
+          .values({
+            productId,
+            warehouseId,
+            locationId: effectiveLocationId,
+            stockPhysical: initPhys,
+            stockReserved: initRes,
+            stockAvailable: initAvail,
+          })
+          .returning();
+        if (seeded && seeded.length > 0) {
+          existingBalance = seeded;
+        }
+      } catch {
+        // Ignored if concurrent insert occurred
+      }
+    }
 
     let currentPhysical = 0;
     let currentReserved = 0;
@@ -782,6 +830,34 @@ export const InventoryService = {
             stockAvailable: availableAfter,
           })
           .where(eq(stockBalances.id, balanceId));
+      } else if (type === 'QUARANTINE_HOLD') {
+        const holdQty = Math.abs(qty);
+        onHandAfter = currentPhysical + holdQty;
+        allocatedAfter = currentReserved + holdQty;
+        availableAfter = Math.max(0, onHandAfter - allocatedAfter);
+
+        await tx
+          .update(stockBalances)
+          .set({
+            stockPhysical: onHandAfter,
+            stockReserved: allocatedAfter,
+            stockAvailable: availableAfter,
+          })
+          .where(eq(stockBalances.id, balanceId));
+      } else if (type === 'QUARANTINE_RELEASE') {
+        const relQty = Math.abs(qty);
+        onHandAfter = currentPhysical;
+        allocatedAfter = Math.max(0, currentReserved - relQty);
+        availableAfter = Math.max(0, onHandAfter - allocatedAfter);
+
+        await tx
+          .update(stockBalances)
+          .set({
+            stockPhysical: onHandAfter,
+            stockReserved: allocatedAfter,
+            stockAvailable: availableAfter,
+          })
+          .where(eq(stockBalances.id, balanceId));
       } else {
         onHandAfter = currentPhysical + qty;
         allocatedAfter = currentReserved;
@@ -809,9 +885,16 @@ export const InventoryService = {
         );
       }
 
-      onHandAfter = Math.max(0, qty);
-      allocatedAfter = 0;
-      availableAfter = Math.max(0, qty);
+      if (type === 'QUARANTINE_HOLD') {
+        const holdQty = Math.abs(qty);
+        onHandAfter = holdQty;
+        allocatedAfter = holdQty;
+        availableAfter = 0;
+      } else {
+        onHandAfter = Math.max(0, qty);
+        allocatedAfter = 0;
+        availableAfter = Math.max(0, qty);
+      }
 
       const newBalance = await tx
         .insert(stockBalances)
@@ -821,7 +904,7 @@ export const InventoryService = {
           locationId: effectiveLocationId,
           stockPhysical: onHandAfter,
           stockAvailable: availableAfter,
-          stockReserved: 0,
+          stockReserved: allocatedAfter,
         })
         .returning();
       balanceId = newBalance[0].id;

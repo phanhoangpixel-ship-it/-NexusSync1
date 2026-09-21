@@ -28,7 +28,7 @@ export const M13VatInvoicesTab: React.FC<M13VatInvoicesTabProps> = ({
   const [vatPage, setVatPage] = useState(1);
   const itemsPerPage = 6;
 
-  const issuedOrders = orders.filter((o) => o.vatStatus === 'ISSUED');
+  const issuedOrders = orders.filter((o) => o.vatStatus === 'ISSUED' || o.status === 'INVOICED');
 
   const filteredVatOrders = issuedOrders.filter((o) => {
     const q = vatSearch.toLowerCase();
@@ -219,9 +219,10 @@ export const M13VatInvoicesTab: React.FC<M13VatInvoicesTabProps> = ({
                         <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                         <span>{o.cqtCode || 'T26-0001-A9F32E-78'}</span>
                       </div>
-                      <div className="text-[9px] text-slate-400 mt-0.5 flex items-center gap-1">
+                      <div className="text-[9px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
                         <Key className="w-2.5 h-2.5 text-purple-500" />
-                        <span>Cloud HSM SHA-256</span>
+                        <span>HSM SHA-256</span>
+                        <span className="text-purple-600 dark:text-purple-400 font-bold ml-1">• GL VAS M30</span>
                       </div>
                     </td>
 

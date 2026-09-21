@@ -221,11 +221,97 @@ html.dark select:disabled {
   color: #94a3b8;
 }
 
-/* Global Table Header Centering (User Request: "áp dụng cho toàn bộ") */
+/* ========================================================================= */
+/* NEXUSSYNC ERP - GLOBAL TABLE CELL LEGIBILITY & TEXT-WRAP ENGINE           */
+/* Content Priority & Multi-Resolution Display Optimization                  */
+/* ========================================================================= */
+
+/* 1. Table Headers: Centered with Balanced Wrapping across all resolutions */
 table th,
 thead th,
 .enterprise-table th {
   text-align: center !important;
+  text-wrap: balance;
+  text-wrap: pretty;
+  line-height: 1.35;
+}
+
+/* Compact or fixed-width header columns (actions, checkboxes, codes) */
+table th.nowrap,
+table th.th-nowrap,
+table th:has(input[type="checkbox"]),
+table th:has(input[type="radio"]),
+table th[data-priority="nowrap"] {
+  white-space: nowrap;
+}
+
+/* 2. High-Priority Non-Breaking Content (Strict white-space: nowrap)        */
+/* Financial figures, quantities, SKUs, LOTs, dates, badges, and action bars */
+/* must NEVER wrap or split across lines, preserving data integrity.         */
+table td.font-mono,
+table td .font-mono,
+table td [class*="font-mono"],
+table td.tabular-nums,
+table td .tabular-nums,
+table td [class*="tabular-nums"],
+table td code,
+table td time,
+table td:has(time),
+table td:has(code),
+table td:has(button),
+table td:has(input[type="checkbox"]),
+table td:has(input[type="radio"]),
+table td:has([class*="rounded-full"]),
+table td:has([class*="badge"]),
+table td:has([class*="pill"]),
+table td:has([class*="status"]),
+table td.cell-nowrap,
+table td.nowrap,
+.cell-nowrap,
+.table-cell-nowrap,
+[data-priority="nowrap"] {
+  white-space: nowrap;
+}
+
+/* 3. Descriptive & Contextual Content (Priority: text-wrap: balance)        */
+/* Item descriptions, product names, notes, reasons, and remarks wrap evenly */
+/* to prevent typographical orphans and awkward line dangling.               */
+table td.cell-descriptive,
+table td.cell-balance,
+table td.balance-text,
+table td p,
+table td div:not([class*="font-mono"]):not([class*="tabular-nums"]):not([class*="badge"]):not([class*="pill"]):not([class*="flex"]),
+.cell-balance,
+.text-balance,
+[data-priority="balance"] {
+  white-space: normal;
+  text-wrap: balance;
+  text-wrap: pretty;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+/* 4. Multi-Resolution Consistency Guard                                     */
+@media (max-width: 768px) {
+  /* On compact/mobile screens, prevent numerical and action degradation */
+  table td:last-child,
+  table td:has(button),
+  table td .font-mono {
+    white-space: nowrap !important;
+  }
+
+  table th {
+    text-wrap: balance;
+  }
+}
+
+@media (min-width: 1024px) {
+  /* On desktop/laptop screens, ensure balanced reading cadence */
+  table td.cell-descriptive,
+  table td.cell-balance,
+  table th {
+    text-wrap: balance;
+  }
 }
 
 /* Custom Scrollbar for ERP Tables */

@@ -120,6 +120,89 @@ router.post("/api/uom/convert", async (req, res) => {
   }
 });
 
+// GET Customer Credit Limit & Evaluation (M07 Credit Guard Gate)
+router.get("/api/customers/:id/credit", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const customer = await db.select().from(schema.customers).where(eq(schema.customers.id, id)).get();
+    if (!customer) return res.status(404).json({ error: "Customer not found" });
+    
+    // Parse custom configuration from notes if available
+    let customLimit: number | null = null;
+    let isCreditBlocked = false;
+    let paymentTermsDays = customer.customerGroup === 'B2B' ? 30 : 0;
+    try {
+      if (customer.notes && customer.notes.startsWith('{')) {
+        const parsed = JSON.parse(customer.notes);
+        if (typeof parsed.creditLimit === 'number') customLimit = parsed.creditLimit;
+        if (typeof parsed.isCreditBlocked === 'boolean') isCreditBlocked = parsed.isCreditBlocked;
+        if (typeof parsed.paymentTermsDays === 'number') paymentTermsDays = parsed.paymentTermsDays;
+      }
+    } catch (_) {}
+
+    // Calculate outstanding credit from active unpaid orders
+    const orders = await db.select().from(schema.salesOrders).where(
+      and(
+        eq(schema.salesOrders.customerId, id),
+        sql`${schema.salesOrders.status} != 'CANCELLED'`,
+        sql`${schema.salesOrders.paymentStatus} != 'PAID'`
+      )
+    ).all();
+    
+    const creditUsed = orders.reduce((sum, o) => {
+      const remainingOnOrder = Math.max(0, (o.finalAmount || 0) - (o.amountPaid || 0));
+      return sum + remainingOnOrder;
+    }, 0);
+
+    const defaultLimit = customer.customerGroup === 'B2B' ? 1000000000 : (customer.customerGroup === 'VIP' ? 2000000000 : 200000000);
+    const creditLimit = customLimit !== null ? customLimit : defaultLimit;
+    const availableCredit = creditLimit - creditUsed;
+
+    const newOrderAmount = Number(req.query.amount || req.query.newOrderAmount) || 0;
+    const availableCreditAfterOrder = availableCredit - newOrderAmount;
+    const exceededAmount = Math.max(0, (creditUsed + newOrderAmount) - creditLimit);
+    const isApproved = !isCreditBlocked && exceededAmount === 0;
+    const requiresManagerApproval = !isApproved;
+
+    let warningMessage: string | undefined = undefined;
+    let rejectionReason: string | undefined = undefined;
+
+    if (isCreditBlocked) {
+      rejectionReason = `Khách hàng [${customer.companyName || customer.name}] đang bị KHÓA CÔNG NỢ (Credit Blocked) theo chính sách M07.`;
+      warningMessage = rejectionReason;
+    } else if (exceededAmount > 0) {
+      rejectionReason = `Đơn hàng (${newOrderAmount.toLocaleString('vi-VN')} đ) vượt quá hạn mức tín dụng còn lại (${Math.max(0, availableCredit).toLocaleString('vi-VN')} đ). Vượt mức: ${exceededAmount.toLocaleString('vi-VN')} đ.`;
+      warningMessage = rejectionReason;
+    }
+
+    res.json({
+      isApproved,
+      approved: isApproved,
+      customerId: id,
+      customerCode: `CUST-${id.toString().padStart(4, '0')}`,
+      customerName: customer.companyName || customer.name,
+      customerGroup: customer.customerGroup || 'STANDARD',
+      creditLimit,
+      creditUsed,
+      currentOutstanding: creditUsed,
+      available: availableCredit,
+      availableCredit,
+      remainingAvailableCredit: availableCredit,
+      newOrderAmount,
+      availableCreditAfterOrder,
+      exceededAmount,
+      isCreditBlocked,
+      requiresManagerApproval,
+      paymentTermsDays,
+      status: isCreditBlocked ? 'BLOCKED' : (exceededAmount > 0 ? 'OVER_LIMIT' : 'APPROVED'),
+      warningMessage,
+      rejectionReason
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get("/api/customers", async (req, res) => {
     try {
       const customers = await masterDataCache.getOrSet('customers:all', async () => {

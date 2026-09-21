@@ -5,11 +5,15 @@ import { randomUUID } from "crypto";
 
 export type CashMovementType =
   | "OPENING_FLOAT"
+  | "FLOAT_IN"
+  | "FLOAT_OUT"
   | "SALE_CASH"
   | "REFUND_CASH"
+  | "REFUND_OUT"
   | "CASH_IN"
   | "CASH_OUT"
   | "SAFE_DROP"
+  | "SAFE_DROP_OUT"
   | "HANDOVER_IN"
   | "HANDOVER_OUT";
 
@@ -17,11 +21,15 @@ export type CashDirection = "IN" | "OUT";
 
 const SHIFT_REQUIRED_TYPES: ReadonlySet<CashMovementType> = new Set([
   "OPENING_FLOAT",
+  "FLOAT_IN",
+  "FLOAT_OUT",
   "SALE_CASH",
   "REFUND_CASH",
+  "REFUND_OUT",
   "CASH_IN",
   "CASH_OUT",
   "SAFE_DROP",
+  "SAFE_DROP_OUT",
   "HANDOVER_IN",
   "HANDOVER_OUT",
 ]);
@@ -31,7 +39,7 @@ export interface PostMovementParams {
   cashDrawerId: number;
   movementType: CashMovementType;
   amount: number;
-  direction: CashDirection;
+  direction?: CashDirection;
   custodianId: string;
   fromLocation?: string;
   toLocation?: string;
@@ -106,11 +114,25 @@ export class CashMovementService {
       throw new Error(`amount phải là số dương. Nhận được: ${params.amount}`);
     }
 
+    // Smart default direction based on movementType if not explicitly passed
+    let direction: CashDirection = params.direction || "IN";
+    if (!params.direction) {
+      const outTypes = new Set([
+        "SAFE_DROP",
+        "SAFE_DROP_OUT",
+        "REFUND_CASH",
+        "REFUND_OUT",
+        "FLOAT_OUT",
+        "CASH_OUT",
+        "HANDOVER_OUT"
+      ]);
+      direction = outTypes.has(params.movementType) ? "OUT" : "IN";
+    }
 
     const movementNo = `CM-${Date.now()}-${randomUUID().slice(0, 8)}`;
     const now = new Date();
 
-    const record = await txObj.transaction(async (tx: any) => {
+    const execute = async (tx: any) => {
       const txExisting = await tx.select().from(cashMovements).where(eq(cashMovements.idempotencyKey, idempotencyKey)).limit(1);
       if (txExisting.length > 0) {
         return txExisting[0];
@@ -122,18 +144,30 @@ export class CashMovementService {
         cashDrawerId: params.cashDrawerId,
         movementType: params.movementType,
         amount: params.amount,
-        direction: params.direction,
+        direction,
         custodianId: params.custodianId,
-        fromLocation: params.fromLocation ?? "DRAWER",
-        toLocation: params.toLocation ?? "DRAWER",
+        fromLocation: params.fromLocation ?? (direction === "IN" ? "SAFE" : "DRAWER"),
+        toLocation: params.toLocation ?? (direction === "IN" ? "DRAWER" : "SAFE"),
         referenceNo: params.referenceNo ?? null,
         idempotencyKey,
         notes: params.notes ?? null,
         createdAt: now,
       }).returning();
 
+      // Synchronize expectedCash on active shift for real-time tracking
+      if (params.shiftId) {
+        const delta = direction === "IN" ? params.amount : -params.amount;
+        const currentShifts = await tx.select().from(cashShifts).where(eq(cashShifts.id, params.shiftId)).limit(1);
+        if (currentShifts.length > 0) {
+          const newExpected = (currentShifts[0].expectedCash || 0) + delta;
+          await tx.update(cashShifts).set({ expectedCash: newExpected } as any).where(eq(cashShifts.id, params.shiftId));
+        }
+      }
+
       return inserted[0];
-    });
+    };
+
+    const record = await execute(txObj || this.dbInstance);
 
     return record as unknown as CashMovementRecord;
   }

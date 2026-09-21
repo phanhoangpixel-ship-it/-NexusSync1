@@ -3,4 +3,4 @@ export interface M06InnovationRDWorkspaceProps {
     onNotify: (type: 'success' | 'danger' | 'warning' | 'info', title: string, message: string) => void;
 }
 
-export type RDSubTab = 'projects' | 'formulas' | 'patents' | 'trials';
+export type RDSubTab = 'projects' | 'formulas' | 'samples' | 'compliance' | 'costing' | 'patents' | 'trials';

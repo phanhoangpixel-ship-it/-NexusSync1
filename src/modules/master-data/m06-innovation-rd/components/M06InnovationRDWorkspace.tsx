@@ -31,9 +31,22 @@ import {
   Tag,
   ArrowRight,
   TrendingUp,
-  Share2
+  Share2,
+  PackageOpen,
+  Lock,
+  Scale,
+  FileCheck,
+  DollarSign
 } from 'lucide-react';
-import { RDSubTab } from "./types";
+import { RDSubTab, M06InnovationRDWorkspaceProps } from "./types";
+import { SampleEvaluationTab } from './SampleEvaluationTab';
+import { EcoComplianceTab } from './EcoComplianceTab';
+import { CostEstimatorTab } from './CostEstimatorTab';
+import { MaterialRequisitionModal } from './MaterialRequisitionModal';
+import { RegisterSkuModal } from './RegisterSkuModal';
+import { HandoverChecklistDrawer } from './HandoverChecklistDrawer';
+import { AiAdvisorModal } from './AiAdvisorModal';
+import { ProjectDetailDrawer } from './ProjectDetailDrawer';
 
 export const M06InnovationRDWorkspace: React.FC<M06InnovationRDWorkspaceProps> = ({
   onSelectEntity,
@@ -55,6 +68,16 @@ export const M06InnovationRDWorkspace: React.FC<M06InnovationRDWorkspaceProps> =
   const [formulas, setFormulas] = useState<any[]>([]);
   const [patents, setPatents] = useState<any[]>([]);
   const [trials, setTrials] = useState<any[]>([]);
+  const [samples, setSamples] = useState<any[]>([]);
+  const [complianceList, setComplianceList] = useState<any[]>([]);
+
+  // Action Modals & Drawers
+  const [showRequisitionModal, setShowRequisitionModal] = useState(false);
+  const [showRegisterSkuModal, setShowRegisterSkuModal] = useState(false);
+  const [showHandoverModal, setShowHandoverModal] = useState(false);
+  const [showAiAdvisorModal, setShowAiAdvisorModal] = useState(false);
+  const [showDetailDrawer, setShowDetailDrawer] = useState(false);
+  const [actionProject, setActionProject] = useState<any | null>(null);
 
   // Filter & Search states
   const [projectSearch, setProjectSearch] = useState('');
@@ -116,11 +139,13 @@ export const M06InnovationRDWorkspace: React.FC<M06InnovationRDWorkspaceProps> =
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [projRes, formRes, patRes, trialRes] = await Promise.all([
+      const [projRes, formRes, patRes, trialRes, sampleRes, compRes] = await Promise.all([
         fetch('/api/rd/projects'),
         fetch('/api/rd/formulas'),
         fetch('/api/rd/patents'),
         fetch('/api/rd/trials'),
+        fetch('/api/rd/samples'),
+        fetch('/api/rd/eco-compliance'),
       ]);
 
       if (projRes.ok) {
@@ -138,6 +163,14 @@ export const M06InnovationRDWorkspace: React.FC<M06InnovationRDWorkspaceProps> =
       if (trialRes.ok) {
         const data = await trialRes.json();
         setTrials(Array.isArray(data) ? data : []);
+      }
+      if (sampleRes.ok) {
+        const data = await sampleRes.json();
+        setSamples(Array.isArray(data) ? data : []);
+      }
+      if (compRes.ok) {
+        const data = await compRes.json();
+        setComplianceList(Array.isArray(data) ? data : []);
       }
     } catch (err: any) {
       onNotify('danger', 'Lỗi tải dữ liệu', err.message || 'Không thể kết nối đến máy chủ R&D.');
@@ -220,6 +253,8 @@ export const M06InnovationRDWorkspace: React.FC<M06InnovationRDWorkspaceProps> =
 
   const handleSelectProject = (project: any) => {
     setSelectedProjectForDetail(project);
+    setActionProject(project);
+    setShowDetailDrawer(true);
     onSelectEntity({
       entityType: 'RD_PROJECT',
       entityId: project.projectCode || String(project.id),
@@ -234,7 +269,7 @@ export const M06InnovationRDWorkspace: React.FC<M06InnovationRDWorkspaceProps> =
         budget: project.budget,
       },
     });
-    onNotify('info', 'Đã tải dự án R&D', `Chi tiết [${project.projectCode}] sẵn sàng trên Context Bar.`);
+    onNotify('info', 'Chi tiết đề tài R&D', `Đã mở hồ sơ [${project.projectCode}] và tải Context Rail.`);
   };
 
   // --------------------------------------------------------------------------
@@ -394,30 +429,9 @@ export const M06InnovationRDWorkspace: React.FC<M06InnovationRDWorkspaceProps> =
   // --------------------------------------------------------------------------
   // AI GEMINI R&D ADVISOR
   // --------------------------------------------------------------------------
-  const handleConsultAiAdvisor = async (project: any) => {
-    setAiContextProject(project);
-    setAiLoading(true);
-    setAiAdvice(null);
-    try {
-      const res = await fetch('/api/rd/ai-suggest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          promptType: 'FORMULATION',
-          projectTitle: project.title,
-          category: project.category,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setAiAdvice(data.analysis);
-        onNotify('info', 'AI Gemini R&D Advisor', 'Đã tạo báo cáo khuyến nghị khoa học.');
-      }
-    } catch (err: any) {
-      onNotify('danger', 'Lỗi AI', err.message);
-    } finally {
-      setAiLoading(false);
-    }
+  const handleConsultAiAdvisor = (project: any) => {
+    setActionProject(project);
+    setShowAiAdvisorModal(true);
   };
 
   // --------------------------------------------------------------------------
@@ -651,6 +665,58 @@ export const M06InnovationRDWorkspace: React.FC<M06InnovationRDWorkspaceProps> =
 
           <button
             type="button"
+            id="tab-rd-samples"
+            onClick={() => setActiveTab('samples')}
+            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+              activeTab === 'samples'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <FlaskConical className="w-4 h-4 shrink-0" />
+            <span>3. Đánh Giá Mẫu Thử (Lab Samples)</span>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold shrink-0 ${
+              activeTab === 'samples' ? 'bg-blue-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+            }`}>
+              {samples.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            id="tab-rd-compliance"
+            onClick={() => setActiveTab('compliance')}
+            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+              activeTab === 'compliance'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4 shrink-0" />
+            <span>4. Tuân Thủ Sinh Thái &amp; Pháp Lý</span>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold shrink-0 ${
+              activeTab === 'compliance' ? 'bg-blue-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+            }`}>
+              {complianceList.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            id="tab-rd-costing"
+            onClick={() => setActiveTab('costing')}
+            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+              activeTab === 'costing'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <DollarSign className="w-4 h-4 shrink-0" />
+            <span>5. Dự Toán Giá Thành M42</span>
+          </button>
+
+          <button
+            type="button"
             id="tab-rd-patents"
             onClick={() => setActiveTab('patents')}
             className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
@@ -660,7 +726,7 @@ export const M06InnovationRDWorkspace: React.FC<M06InnovationRDWorkspaceProps> =
             }`}
           >
             <Award className="w-4 h-4 shrink-0" />
-            <span>3. Sở Hữu Trí Tuệ &amp; Sáng Chế</span>
+            <span>6. Sở Hữu Trí Tuệ &amp; Sáng Chế</span>
             <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold shrink-0 ${
               activeTab === 'patents' ? 'bg-blue-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
             }`}>
@@ -679,7 +745,7 @@ export const M06InnovationRDWorkspace: React.FC<M06InnovationRDWorkspaceProps> =
             }`}
           >
             <Activity className="w-4 h-4 shrink-0" />
-            <span>4. Thử Nghiệm Lab &amp; Kiểm Chuẩn</span>
+            <span>7. Thử Nghiệm Lab &amp; Kiểm Chuẩn</span>
             <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold shrink-0 ${
               activeTab === 'trials' ? 'bg-blue-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
             }`}>
@@ -834,25 +900,60 @@ export const M06InnovationRDWorkspace: React.FC<M06InnovationRDWorkspaceProps> =
                               : p.budget}
                           </td>
                           <td className="py-3 px-4">
-                            {isCompleted ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 bg-emerald-100 text-emerald-950 border-emerald-300 dark:bg-emerald-950/90 dark:text-emerald-200 dark:border-emerald-700 text-xs font-bold rounded-full border">
-                                <CheckCircle2 className="w-3 h-3 mr-1" />
-                                Nghiệm Thu
+                            {p.stage === 'HANDED_OVER' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/80 dark:text-purple-300 dark:border-purple-800 text-[11px] font-bold rounded-full">
+                                <Lock className="w-3 h-3" /> Đã Bàn Giao
                               </span>
-                            ) : isTesting ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 bg-amber-100 text-amber-950 border-amber-300 dark:bg-amber-950/90 dark:text-amber-200 dark:border-amber-700 text-xs font-bold rounded-full border">
-                                <FlaskConical className="w-3 h-3 mr-1" />
-                                Thử Nghiệm
+                            ) : p.stage === 'APPROVED' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800 text-[11px] font-bold rounded-full">
+                                <CheckCircle2 className="w-3 h-3" /> Đã Phê Duyệt
+                              </span>
+                            ) : p.stage === 'SAMPLE_EVALUATION' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/80 dark:text-blue-300 dark:border-blue-800 text-[11px] font-bold rounded-full">
+                                <FlaskConical className="w-3 h-3" /> Đánh Giá Mẫu
+                              </span>
+                            ) : p.stage === 'TRIAL' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800 text-[11px] font-bold rounded-full">
+                                <Activity className="w-3 h-3" /> Thử Nghiệm Lab
                               </span>
                             ) : (
-                              <span className="inline-flex items-center px-2.5 py-0.5 bg-blue-100 text-blue-950 border-blue-300 dark:bg-blue-950/90 dark:text-blue-200 dark:border-blue-700 text-xs font-bold rounded-full border">
-                                <Activity className="w-3 h-3 mr-1" />
-                                Đang Nghiên Cứu
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 text-[11px] font-bold rounded-full">
+                                Ý Tưởng (Draft)
                               </span>
                             )}
                           </td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                title="Xuất vật tư phòng Lab (M17 Authority)"
+                                onClick={() => {
+                                  setActionProject(p);
+                                  setShowRequisitionModal(true);
+                                }}
+                                className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg transition-colors border border-blue-200 dark:border-blue-800"
+                              >
+                                <PackageOpen className="w-4 h-4" />
+                              </button>
+                              <button
+                                title="Đăng ký SKU Item Master (M07 Authority)"
+                                onClick={() => {
+                                  setActionProject(p);
+                                  setShowRegisterSkuModal(true);
+                                }}
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-lg transition-colors border border-emerald-200 dark:border-emerald-800"
+                              >
+                                <Tag className="w-4 h-4" />
+                              </button>
+                              <button
+                                title="Biên bản nghiệm thu & bàn giao Stage-Gate"
+                                onClick={() => {
+                                  setActionProject(p);
+                                  setShowHandoverModal(true);
+                                }}
+                                className="p-1.5 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/50 rounded-lg transition-colors border border-purple-200 dark:border-purple-800"
+                              >
+                                <FileCheck className="w-4 h-4" />
+                              </button>
                               <button
                                 title="Tư vấn AI Gemini R&D"
                                 onClick={() => handleConsultAiAdvisor(p)}
@@ -867,16 +968,6 @@ export const M06InnovationRDWorkspace: React.FC<M06InnovationRDWorkspaceProps> =
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
-                              {!isCompleted && (
-                                <button
-                                  title="Nghiệm thu đề tài"
-                                  onClick={() => handleApproveProject(p)}
-                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center gap-1 shadow-2xs"
-                                >
-                                  <Check className="w-3 h-3" />
-                                  <span>Nghiệm Thu</span>
-                                </button>
-                              )}
                             </div>
                           </td>
                         </tr>
@@ -1012,7 +1103,42 @@ export const M06InnovationRDWorkspace: React.FC<M06InnovationRDWorkspaceProps> =
       )}
 
       {/* -------------------------------------------------------------------- */}
-      {/* TAB 3: SỞ HỮU TRÍ TUỆ & SÁNG CHẾ                                     */}
+      {/* TAB 3: ĐÁNH GIÁ MẪU THỬ (SAMPLE EVALUATION)                          */}
+      {/* -------------------------------------------------------------------- */}
+      {activeTab === 'samples' && (
+        <SampleEvaluationTab
+          samples={samples}
+          projects={projects}
+          onRefresh={loadAllData}
+          onNotify={onNotify}
+        />
+      )}
+
+      {/* -------------------------------------------------------------------- */}
+      {/* TAB 4: TUÂN THỦ SINH THÁI & PHÁP LÝ (ECO-COMPLIANCE)                 */}
+      {/* -------------------------------------------------------------------- */}
+      {activeTab === 'compliance' && (
+        <EcoComplianceTab
+          complianceList={complianceList}
+          projects={projects}
+          onRefresh={loadAllData}
+          onNotify={onNotify}
+        />
+      )}
+
+      {/* -------------------------------------------------------------------- */}
+      {/* TAB 5: DỰ TOÁN GIÁ THÀNH M42 (COST ESTIMATOR)                        */}
+      {/* -------------------------------------------------------------------- */}
+      {activeTab === 'costing' && (
+        <CostEstimatorTab
+          projects={projects}
+          formulas={formulas}
+          onNotify={onNotify}
+        />
+      )}
+
+      {/* -------------------------------------------------------------------- */}
+      {/* TAB 6: SỞ HỮU TRÍ TUỆ & SÁNG CHẾ                                     */}
       {/* -------------------------------------------------------------------- */}
       {activeTab === 'patents' && (
         <div className="space-y-4">
@@ -1769,6 +1895,91 @@ export const M06InnovationRDWorkspace: React.FC<M06InnovationRDWorkspaceProps> =
           </div>
         </div>
       )}
+
+      {/* -------------------------------------------------------------------- */}
+      {/* ENTERPRISE ACTION MODALS (M17, M07, Stage-Gate Integrations)          */}
+      {/* -------------------------------------------------------------------- */}
+      <MaterialRequisitionModal
+        isOpen={showRequisitionModal}
+        project={actionProject}
+        onClose={() => {
+          setShowRequisitionModal(false);
+          setActionProject(null);
+        }}
+        onSuccess={() => {
+          loadAllData();
+          setShowRequisitionModal(false);
+          setActionProject(null);
+        }}
+        onNotify={onNotify}
+      />
+
+      <RegisterSkuModal
+        isOpen={showRegisterSkuModal}
+        project={actionProject}
+        onClose={() => {
+          setShowRegisterSkuModal(false);
+          setActionProject(null);
+        }}
+        onSuccess={() => {
+          loadAllData();
+          setShowRegisterSkuModal(false);
+          setActionProject(null);
+        }}
+        onNotify={onNotify}
+      />
+
+      <HandoverChecklistDrawer
+        isOpen={showHandoverModal}
+        project={actionProject}
+        onClose={() => {
+          setShowHandoverModal(false);
+          setActionProject(null);
+        }}
+        onSuccess={() => {
+          loadAllData();
+          setShowHandoverModal(false);
+          setActionProject(null);
+        }}
+        onNotify={onNotify}
+        onOpenRegisterSku={() => setShowRegisterSkuModal(true)}
+      />
+
+      <AiAdvisorModal
+        isOpen={showAiAdvisorModal}
+        project={actionProject}
+        onClose={() => {
+          setShowAiAdvisorModal(false);
+          setActionProject(null);
+        }}
+        onNotify={onNotify}
+      />
+
+      <ProjectDetailDrawer
+        isOpen={showDetailDrawer}
+        project={actionProject}
+        onClose={() => {
+          setShowDetailDrawer(false);
+          setActionProject(null);
+        }}
+        onOpenRequisition={(p) => {
+          setActionProject(p);
+          setShowRequisitionModal(true);
+        }}
+        onOpenRegisterSku={(p) => {
+          setActionProject(p);
+          setShowRegisterSkuModal(true);
+        }}
+        onOpenHandover={(p) => {
+          setActionProject(p);
+          setShowHandoverModal(true);
+        }}
+        onOpenAiAdvisor={(p) => {
+          setActionProject(p);
+          setShowAiAdvisorModal(true);
+        }}
+        onNotify={onNotify}
+      />
 
       {/* -------------------------------------------------------------------- */}
       {/* CONFIRM DIALOG (Rule #19 Compliance)                                 */}

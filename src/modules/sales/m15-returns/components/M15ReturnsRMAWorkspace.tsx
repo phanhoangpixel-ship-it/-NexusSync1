@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Clock,
   AlertTriangle,
+  AlertCircle,
   Plus,
   ShieldCheck,
   Boxes,
@@ -27,10 +28,17 @@ import {
   Sliders,
   Filter,
   PackageCheck,
-  ArrowRight
+  ArrowRight,
+  Lock,
+  FileCheck,
+  Truck,
+  Wrench,
+  Trash2,
+  ExternalLink
 } from 'lucide-react';
 import { RmaRecord } from "./types";
 import { INITIAL_RMA_SEED } from "./mockData";
+import { WarrantyStatusBadge, FraudRiskBadge, WorkflowProgressBadge, DmsSealBadge } from "./M15Badges";
 
 export const M15ReturnsRMAWorkspace: React.FC<M15ReturnsRMAWorkspaceProps> = ({
   onSelectEntity,
@@ -40,14 +48,16 @@ export const M15ReturnsRMAWorkspace: React.FC<M15ReturnsRMAWorkspaceProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useWorkspaceSessionTab<'requests' | 'inspection' | 'disposition' | 'traceability'>('M15', 'requests');
 
-  // RMA State
+  // RMA State - Live synced with backend /api/returns
   const [rmaList, setRmaList] = useState<RmaRecord[]>(INITIAL_RMA_SEED);
   const [selectedRma, setSelectedRma] = useState<RmaRecord | null>(null);
+  const [vaultedDocs, setVaultedDocs] = useState<any[]>([]);
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [resolutionFilter, setResolutionFilter] = useState('ALL');
+  const [inspectionFilter, setInspectionFilter] = useState<'ALL' | 'PENDING' | 'INSPECTED'>('ALL');
 
   // Confirm Dialog State (Rule #19)
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
@@ -102,38 +112,69 @@ export const M15ReturnsRMAWorkspace: React.FC<M15ReturnsRMAWorkspaceProps> = ({
     onNotify('info', 'Trợ lý Hướng Dẫn', `Đang mở hồ sơ đổi trả: ${ref}`);
   }, [guidedTask]);
 
-  // Sync RMAs from backend
+  // Sync RMAs from live Backend Router (/api/returns)
   const fetchRMAs = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/sales/rma/list');
+      const res = await fetch('/api/returns');
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
           const formatted: RmaRecord[] = data.map((d: any) => ({
-            id: d.rmaCode ?? `RMA-2026-${Math.floor(100 + Math.random() * 900)}`,
-            customerName: d.customerName ?? d.orderCode ?? 'Khách hàng Doanh nghiệp',
-            originalSo: d.orderCode ?? 'SO-2026-0001',
-            deliveryCode: `DEL-${d.rmaCode ?? '001'}`,
-            productCode: d.returnItems?.[0]?.productId ?? 'SKU-GEN',
-            productName: d.returnItems?.[0]?.productName ?? `Vật tư kỹ thuật ${d.returnItems?.[0]?.productId ?? ''}`,
-            quantity: d.returnItems?.reduce((sum: number, it: any) => sum + (it.quantity ?? 0), 0) ?? 1,
-            uom: 'Cái',
-            lotSerial: d.lotSerial ?? 'LOT-MIXED',
-            reason: d.reason ?? 'Yêu cầu đổi trả bảo hành',
-            requestedResolution: d.refundMethod === 'CREDIT_NOTE' ? 'CREDIT (Cấn trừ công nợ / Hoàn tiền)' : (d.refundMethod ?? 'REPLACE (Đổi mới sản phẩm)'),
-            status: d.status ?? 'REQUESTED',
-            inspectionResult: d.inspectionResult ?? 'PENDING',
-            disposition: d.inventoryReturned ? 'RESTOCK' : (d.disposition ?? 'PENDING'),
-            financialStatus: d.creditNoteNumber ? 'CREDIT_NOTE_ISSUED' : (d.financialStatus ?? 'PENDING'),
-            date: d.createdAt ? d.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
+            id: d.id || d.rmaNumber || d.rmaCode,
+            dbId: d.dbId,
+            rmaNumber: d.rmaNumber || d.id,
+            customerName: d.customerName || d.orderCode || 'Khách hàng Doanh nghiệp',
+            customerId: d.customerId,
+            originalSo: d.originalSo || d.orderCode || 'SO-2026-0001',
+            orderCode: d.orderCode || d.originalSo,
+            orderId: d.orderId,
+            deliveryCode: d.deliveryCode || `DEL-${d.rmaNumber || d.id}`,
+            productCode: d.productCode || d.returnItems?.[0]?.productCode || d.items?.[0]?.productCode || 'SKU-GEN',
+            productName: d.productName || d.returnItems?.[0]?.productName || d.items?.[0]?.productName || 'Vật tư kỹ thuật',
+            quantity: d.quantity || d.returnItems?.reduce((sum: number, it: any) => sum + (it.quantity ?? 0), 0) || 1,
+            uom: d.uom || 'Cái',
+            lotSerial: d.lotSerial || 'LOT-MIXED',
+            warehouseId: d.warehouseId,
+            reason: d.reason || 'Yêu cầu đổi trả bảo hành',
+            requestedResolution: d.requestedResolution || (d.refundMethod === 'CREDIT_NOTE' ? 'CREDIT (Cấn trừ công nợ / Hoàn tiền)' : 'REPLACE (Đổi mới sản phẩm)'),
+            status: d.status || 'REQUESTED',
+            inspectionResult: d.inspectionResult || 'PENDING',
+            disposition: d.disposition || 'PENDING',
+            financialStatus: d.financialStatus || 'PENDING',
+            refundMethod: d.refundMethod || 'CREDIT_NOTE',
+            warrantyStatus: d.warrantyStatus || 'VALID',
+            returnWindowDays: d.returnWindowDays || 30,
+            fraudScore: d.fraudScore ?? 0,
+            fraudFlags: d.fraudFlags || null,
+            rtvReferenceCode: d.rtvReferenceCode || null,
+            maintenanceWoCode: d.maintenanceWoCode || null,
+            refundChannel: d.refundChannel || 'CREDIT_NOTE_M31',
+            isImmutable: d.isImmutable ?? ['COMPLETED', 'RESTOCKED', 'REFUNDED', 'CLOSED'].includes(d.status),
+            isLocked: d.isLocked ?? ['COMPLETED', 'RESTOCKED', 'REFUNDED', 'CLOSED'].includes(d.status),
+            totalAmount: d.totalAmount || 0,
+            refundedAmount: d.refundedAmount || 0,
+            creditNoteNumber: d.creditNoteNumber || null,
+            inspectionNotes: d.inspectionNotes || null,
+            inspectedBy: d.inspectedBy || null,
+            inspectedAt: d.inspectedAt || null,
+            approvedBy: d.approvedBy || null,
+            approvedAt: d.approvedAt || null,
+            completedAt: d.completedAt || null,
+            rejectedAt: d.rejectedAt || null,
+            rejectionReason: d.rejectionReason || null,
+            vaultDocumentCode: d.vaultDocumentCode || null,
+            items: d.items || d.returnItems || [],
+            date: d.date || d.requestDate || (d.createdAt ? d.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10)),
             _raw: d
           }));
           setRmaList(formatted);
+        } else if (Array.isArray(data) && data.length === 0) {
+          setRmaList(INITIAL_RMA_SEED);
         }
       }
     } catch (err) {
-      console.error(err);
+      console.error("Lỗi đồng bộ hồ sơ RMA từ /api/returns:", err);
     } finally {
       setLoading(false);
     }
@@ -189,155 +230,357 @@ export const M15ReturnsRMAWorkspace: React.FC<M15ReturnsRMAWorkspaceProps> = ({
       return;
     }
 
-    const idempotencyKey = `IDEMP-RMA-CREATE-${newSo}-${Date.now()}`;
+    const idempotencyKey = `IDEMP-RMA-CREATE-${newSo.trim()}-${Date.now()}`;
     try {
-      const res = await fetch('/api/sales/rma/create', {
+      setLoading(true);
+      const res = await fetch('/api/returns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orderCode: newSo,
-          customerName: newCustomer,
-          productName: newProduct || 'Vật tư kỹ thuật công nghiệp',
-          quantity: Number(newQty) || 1,
-          reason: newReason || 'Sản phẩm lỗi kỹ thuật',
-          refundMethod: newResolution.includes('CREDIT') ? 'CREDIT_NOTE' : 'CASH',
+          orderCode: newSo.trim(),
+          customerName: newCustomer.trim(),
+          productName: newProduct.trim() || 'Vật tư kỹ thuật công nghiệp',
+          quantity: Math.max(1, Number(newQty) || 1),
+          reason: newReason.trim() || 'Sản phẩm lỗi kỹ thuật',
+          requestedResolution: newResolution,
+          refundMethod: newResolution.includes('CREDIT') ? 'CREDIT_NOTE' : 'CREDIT_NOTE',
           idempotencyKey
         })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Lỗi tạo RMA');
       
-      onNotify('success', 'Tạo Yêu cầu Trả hàng (RMA) thành công', `Đã ghi nhận mã RMA ${data.rmaCode ?? 'mới'}.`);
-      fetchRMAs();
+      onNotify(
+        'success',
+        'Tạo Yêu cầu Trả hàng (RMA) thành công',
+        `Đã ghi nhận mã [${data.rmaNumber || data.rmaCode || 'Mới'}]. Hồ sơ đã niêm phong sang M29 DMS Vault.`
+      );
+      await fetchRMAs();
       setNewSo('');
       setNewCustomer('');
       setNewProduct('');
+      setNewQty('1');
     } catch (err: any) {
-      // Fallback local state creation if API is unavailable
-      const localNew: RmaRecord = {
-        id: `RMA-2026-00${Math.floor(87 + Math.random() * 20)}`,
-        customerName: newCustomer,
-        originalSo: newSo,
-        deliveryCode: `DEL-${newSo}`,
-        productCode: 'SKU-CUSTOM',
-        productName: newProduct || 'Sản phẩm đổi trả theo yêu cầu',
-        quantity: Number(newQty) || 1,
-        uom: 'Cái',
-        lotSerial: 'LOT-2026-GEN',
-        reason: newReason,
-        requestedResolution: newResolution,
-        status: 'REQUESTED',
-        inspectionResult: 'PENDING',
-        disposition: 'PENDING',
-        financialStatus: 'PENDING',
-        date: new Date().toISOString().slice(0, 10)
-      };
-      setRmaList(prev => [localNew, ...prev]);
-      onNotify('success', 'Ghi nhận RMA thành công', `Đã tạo hồ sơ đổi trả ${localNew.id} cho ${newCustomer}.`);
-      setNewSo('');
-      setNewCustomer('');
-      setNewProduct('');
+      onNotify('danger', 'Lỗi khởi tạo RMA', err.message || 'Không thể tạo hồ sơ RMA.');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleApproveRma = (rmaId: string) => {
     const rma = rmaList.find(r => r.id === rmaId);
     if (!rma) return;
+
+    const isHighFraud = (rma.fraudScore ?? 0) >= 50 || String(rma.fraudFlags || '').includes('HIGH_RISK_FRAUD');
+    const dialogVariant = isHighFraud ? 'warning' : 'primary';
+
     setConfirmDialog({
       isOpen: true,
-      variant: 'primary',
-      title: `Phê duyệt Yêu cầu RMA ${rmaId}`,
-      message: `Bạn có chắc chắn muốn phê duyệt yêu cầu ${rmaId} của khách hàng "${rma.customerName}" để tiếp nhận hàng về kho và kích hoạt cổng QC Giám định không?`,
-      confirmText: 'Phê Duyệt Ngay',
+      variant: dialogVariant,
+      title: isHighFraud
+        ? `[Cảnh Báo Gian Lận] Phê duyệt Đặc Cách RMA ${rmaId}`
+        : `Phê duyệt Yêu cầu RMA ${rmaId}`,
+      message: isHighFraud
+        ? `CẢNH BÁO ĐỘNG CƠ FRAUD SHIELD: Hồ sơ ${rmaId} có điểm rủi ro gian lận cao (${rma.fraudScore ?? 75}/100) do vượt tần suất hoàn trả hoặc nghi vấn số Serial. Hành động phê duyệt này yêu cầu thẩm quyền Giám đốc (Director Override / returns:fraud_override). Bạn có chắc chắn muốn phê duyệt đặc cách?`
+        : `Bạn có chắc chắn muốn phê duyệt yêu cầu ${rmaId} của khách hàng "${rma.customerName}" để tiếp nhận hàng về kho và kích hoạt Cổng Giám định QC (M39)?`,
+      confirmText: isHighFraud ? 'Phê Duyệt Đặc Cách (GĐ)' : 'Phê Duyệt Tiếp Nhận',
       cancelText: 'Hủy Bỏ',
       onConfirm: async () => {
         try {
-          const res = await fetch('/api/sales/rma/process', {
+          setLoading(true);
+          const res = await fetch(`/api/returns/${encodeURIComponent(rmaId)}/approve`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              orderCode: rma.originalSo,
-              rmaCode: rmaId,
-              action: 'APPROVE',
+              fraudOverride: isHighFraud,
               idempotencyKey: `IDEMP-RMA-APPROVE-${rmaId}-${Date.now()}`
             })
           });
           const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Lỗi phê duyệt');
-          onNotify('success', 'Phê duyệt RMA thành công', `Yêu cầu ${rmaId} đã được chấp thuận.`);
-          fetchRMAs();
+          if (!res.ok) throw new Error(data.error || 'Lỗi phê duyệt RMA');
+          onNotify('success', 'Phê duyệt RMA thành công', `Hồ sơ ${rmaId} đã được chấp thuận. Trạng thái chuyển sang chờ QC kiểm định.`);
+          await fetchRMAs();
         } catch (err: any) {
-          setRmaList(prev => prev.map(r => r.id === rmaId ? { ...r, status: 'APPROVED' } : r));
-          onNotify('success', 'Phê duyệt RMA thành công', `Yêu cầu ${rmaId} đã được chấp thuận.`);
+          onNotify('danger', 'Lỗi phê duyệt', err.message || 'Không thể phê duyệt hồ sơ RMA.');
+        } finally {
+          setLoading(false);
         }
       }
     });
   };
 
-  const handleCompleteInspection = async (rmaId: string, result: 'GOOD' | 'DEFECTIVE' | 'DAMAGED') => {
+  const handleRejectRma = (rmaId: string) => {
     const rma = rmaList.find(r => r.id === rmaId);
     if (!rma) return;
-    try {
-      const action = result === 'GOOD' ? 'INSPECT' : 'REJECT';
-      const res = await fetch('/api/sales/rma/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderCode: rma.originalSo,
-          rmaCode: rmaId,
-          action,
-          inspectionResult: result,
-          idempotencyKey: `IDEMP-RMA-INSPECT-${rmaId}-${Date.now()}`
-        })
+    setConfirmDialog({
+      isOpen: true,
+      variant: 'danger',
+      title: `Từ chối Tiếp nhận Yêu cầu RMA ${rmaId}`,
+      message: `Bạn có chắc chắn muốn từ chối yêu cầu đổi trả ${rmaId} của khách hàng "${rma.customerName}"? Hành động này sẽ khóa hồ sơ RMA và ghi nhật ký kiểm toán M02.`,
+      confirmText: 'Xác Nhận Từ Chối',
+      cancelText: 'Quay Lại',
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          const res = await fetch(`/api/returns/${encodeURIComponent(rmaId)}/reject`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              rejectionReason: 'Hàng không đáp ứng tiêu chuẩn tiếp nhận hoặc quá thời hạn bảo hành cho phép',
+              idempotencyKey: `IDEMP-RMA-REJECT-${rmaId}-${Date.now()}`
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Lỗi từ chối RMA');
+          onNotify('warning', 'Từ chối RMA thành công', `Hồ sơ ${rmaId} đã bị từ chối tiếp nhận.`);
+          await fetchRMAs();
+        } catch (err: any) {
+          onNotify('danger', 'Lỗi từ chối', err.message || 'Không thể từ chối hồ sơ RMA.');
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
+  };
+
+  const handleCompleteInspection = (rmaId: string, result: 'GOOD' | 'DEFECTIVE' | 'DAMAGED' | 'REJECTED') => {
+    const rma = rmaList.find(r => r.id === rmaId);
+    if (!rma) return;
+
+    if (rma.status === 'CLOSED' || rma.status === 'CANCELLED' || rma.isImmutable) {
+      setConfirmDialog({
+        isOpen: true,
+        variant: 'danger',
+        title: 'Phiếu đã đóng',
+        message: `Phiếu RMA [${rmaId}] hiện đang ở trạng thái [${rma.status}]. Phiếu đã đóng hoặc đã hủy, không thể thực hiện xác nhận hoặc thay đổi kết quả kiểm định. Mọi điều chỉnh phải tạo chứng từ Reversal/Adjustment mới theo quy chuẩn kế toán.`,
+        confirmText: 'Đã Hiểu',
+        cancelText: 'Đóng',
+        onConfirm: () => {}
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi kiểm định');
-      onNotify('success', 'Hoàn tất Kiểm tra (Inspection)', `Đã cập nhật kết quả kiểm định ${result} cho RMA ${rmaId}.`);
-      fetchRMAs();
-    } catch (err: any) {
-      setRmaList(prev => prev.map(r => r.id === rmaId ? { ...r, inspectionResult: result } : r));
-      onNotify('success', 'Hoàn tất Kiểm tra (Inspection)', `Đã cập nhật phân loại ${result} cho RMA ${rmaId}.`);
+      return;
     }
+
+    const resultLabel = result === 'GOOD' ? 'ĐẠT TIÊU CHUẨN (GOOD)' : result === 'DEFECTIVE' ? 'LỖI KỸ THUẬT (DEFECTIVE)' : result === 'DAMAGED' ? 'HỎNG HÓC VẬT LÝ (DAMAGED)' : 'TỪ CHỐI QC (REJECTED)';
+    const dialogVariant = result === 'GOOD' ? 'primary' : result === 'DEFECTIVE' ? 'warning' : 'danger';
+
+    setConfirmDialog({
+      isOpen: true,
+      variant: dialogVariant,
+      title: `Xác nhận Giám định QC: ${resultLabel}`,
+      message: `Bạn có chắc chắn muốn ghi nhận kết quả "${result}" cho RMA ${rmaId} (${rma.productName})? Biên bản kiểm nghiệm kỹ thuật sẽ tự động được niêm phong điện tử sang Kho Chứng Từ Số M29 DMS Vault.`,
+      confirmText: 'Xác Nhận Kết Quả QC',
+      cancelText: 'Hủy Bỏ',
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          const res = await fetch(`/api/returns/${encodeURIComponent(rmaId)}/inspect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              inspectionResult: result,
+              inspectionNotes: `Đã hoàn tất giám định QC: Phân loại ${result}. ${result === 'GOOD' ? 'Hàng nguyên tem niêm phong, ngoại quan tốt, đủ điều kiện tái nhập kho.' : result === 'DEFECTIVE' ? 'Lỗi chức năng kỹ thuật, đề xuất sửa chữa hoặc đổi mới.' : 'Hàng biến dạng hoặc hư hỏng nặng do ngoại lực.'}`,
+              idempotencyKey: `IDEMP-RMA-INSPECT-${rmaId}-${Date.now()}`
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Lỗi kiểm định');
+          onNotify(
+            'success',
+            'Giám định Kỹ thuật Hoàn tất (M39 QC)',
+            `Đã lưu kết quả [${result}] cho RMA ${rmaId}. Biên bản kiểm định đã niêm phong sang M29 DMS Vault.`
+          );
+          await fetchRMAs();
+        } catch (err: any) {
+          onNotify('danger', 'Lỗi kiểm định QC', err.message || 'Không thể hoàn tất kiểm định.');
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
+  };
+
+  const handleReinspectRma = (rmaId: string, result: 'GOOD' | 'DEFECTIVE' | 'DAMAGED') => {
+    const rma = rmaList.find(r => r.id === rmaId);
+    if (!rma) return;
+
+    if (rma.status === 'CLOSED' || rma.status === 'CANCELLED' || rma.isImmutable) {
+      setConfirmDialog({
+        isOpen: true,
+        variant: 'danger',
+        title: 'Phiếu đã đóng',
+        message: `Phiếu RMA [${rmaId}] hiện đang ở trạng thái [${rma.status}]. Phiếu đã đóng hoặc đã hủy, không thể thực hiện giám định lại.`,
+        confirmText: 'Đã Hiểu',
+        cancelText: 'Đóng',
+        onConfirm: () => {}
+      });
+      return;
+    }
+
+    setConfirmDialog({
+      isOpen: true,
+      variant: 'warning',
+      title: `[Quyền Giám Sát QC] Đánh Giá & Phân Loại Lại: RMA ${rmaId}`,
+      message: `Hồ sơ ${rmaId} hiện đã có kết quả phân loại (${rma.inspectionResult}). Thao tác giám định lại yêu cầu quyền Trưởng phòng QC (Supervisor Override). Bạn có chắc chắn muốn ghi đè kết quả thành "${result}"? Hệ thống sẽ cập nhật lại biên bản kiểm định và ghi nhận audit log.`,
+      confirmText: 'Xác Nhận Giám Định Lại',
+      cancelText: 'Hủy Bỏ',
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          const res = await fetch(`/api/returns/${encodeURIComponent(rmaId)}/inspect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              inspectionResult: result,
+              forceReinspect: true,
+              inspectionNotes: `[TÁI GIÁM ĐỊNH QC] Cập nhật lại kết quả phân loại: ${result}. ${result === 'GOOD' ? 'Kiểm tra bổ sung xác nhận đạt chuẩn tái nhập kho.' : result === 'DEFECTIVE' ? 'Xác nhận lại lỗi kỹ thuật linh kiện.' : 'Xác nhận lại hỏng hóc vật lý.'}`,
+              idempotencyKey: `IDEMP-RMA-REINSPECT-${rmaId}-${Date.now()}`
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Lỗi tái kiểm định');
+          onNotify(
+            'success',
+            'Tái Giám Định QC Thành Công',
+            `Đã cập nhật lại kết quả [${result}] cho RMA ${rmaId}.`
+          );
+          await fetchRMAs();
+        } catch (err: any) {
+          onNotify('danger', 'Lỗi tái kiểm định', err.message || 'Không thể thực hiện tái kiểm định.');
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
+  };
+
+  const handleNavigateToDisposition = (rma: RmaRecord) => {
+    setSelectedRma(rma);
+    setActiveTab('disposition');
+    onNotify('info', 'Chuyển Tuyến Xử Lý RMA', `Đã chuyển sang Tab Quyết Định Xử Lý (Disposition) cho hồ sơ [${rma.id}].`);
   };
 
   const handleApplyDisposition = (rmaId: string, disposition: string) => {
     const rma = rmaList.find(r => r.id === rmaId);
     if (!rma) return;
+
+    const isHighFraud = (rma.fraudScore ?? 0) >= 50 || String(rma.fraudFlags || '').includes('HIGH_RISK_FRAUD');
+
+    const dispMap: Record<string, { label: string; desc: string }> = {
+      RESTOCK: { label: 'RESTOCK (Nhập kho bán lại - M17)', desc: 'Kích hoạt InventoryService.postTransaction() hoàn nhập tồn kho, cập nhật giá vốn CostingEngine và phát hành Credit Note tài chính.' },
+      RETURN_TO_VENDOR: { label: 'RETURN_TO_VENDOR (Trả nhà cung cấp - RTV M08/M11)', desc: 'Chuyển thông tin sang bộ phận M16 Mua hàng để làm thủ tục đổi trả NCC, xuất kho hoàn trả và đối trừ công nợ AP.' },
+      REPAIR: { label: 'REPAIR (Lệnh sửa chữa bảo dưỡng - M27 EAM)', desc: 'Khởi tạo Lệnh bảo dưỡng Corrective Repair tại M27, chuyển giao thiết bị đến Bộ phận Kỹ thuật Dịch vụ để sửa chữa cho khách hàng.' },
+      REPLACE: { label: 'REPLACE (Xuất kho đổi mới - M17)', desc: 'Cấp phép xuất thiết bị thay thế mới tương đương từ kho thành phẩm cho khách hàng.' },
+      SCRAP: { label: 'SCRAP (Hủy hàng phế liệu)', desc: 'Lập biên bản tiêu hủy/rã linh kiện hỏng, ghi nhận chi phí hao hụt tài sản vào tài khoản chi phí doanh nghiệp.' },
+      CREDIT: { label: 'CREDIT (Phát hành Credit Note / Hoàn tiền)', desc: 'Phát hành Credit Note giảm trừ công nợ AR tại M31, hạch toán Sổ cái GL (Nợ 5212 / Có 131) và niêm phong sang M29 DMS Vault.' }
+    };
+
+    const dispInfo = dispMap[disposition] || { label: disposition, desc: 'Thực thi quyết định xử lý hàng đổi trả theo quy trình.' };
+
+    let dialogVariant: 'primary' | 'warning' | 'danger' = 'primary';
+    if (disposition === 'SCRAP') {
+      dialogVariant = 'danger';
+    } else if (disposition === 'RETURN_TO_VENDOR' || isHighFraud) {
+      dialogVariant = 'warning';
+    }
+
     setConfirmDialog({
       isOpen: true,
-      variant: 'warning',
-      title: `Xác nhận Thực thi Hướng Xử Lý cho RMA ${rmaId}`,
-      message: `Bạn có chắc chắn muốn áp dụng phương án xử lý "${disposition}" cho RMA ${rmaId}? Hệ thống sẽ đồng thời phát lệnh sang Inventory Core (postTransaction) và hạch toán Tài chính.`,
-      confirmText: 'Thực Thi Ngay',
+      variant: dialogVariant,
+      title: isHighFraud
+        ? `[Cảnh Báo Gian Lận & Quyết Định] ${dispInfo.label}`
+        : `Thực thi Hướng Xử Lý: ${dispInfo.label}`,
+      message: `${isHighFraud ? `CẢNH BÁO FRAUD SHIELD (${rma.fraudScore ?? 75}/100): Yêu cầu Giám đốc phê duyệt đặc cách để thực thi. ` : ''}Bạn có chắc chắn muốn phê duyệt phương án "${disposition}" cho RMA ${rmaId}? ${dispInfo.desc}`,
+      confirmText: isHighFraud ? 'Đặc Cách Thực Thi (GĐ)' : 'Thực Thi Ngay (Single-Writer)',
       cancelText: 'Hủy Bỏ',
       onConfirm: async () => {
         try {
-          const res = await fetch('/api/sales/rma/process', {
+          setLoading(true);
+          const res = await fetch(`/api/returns/${encodeURIComponent(rmaId)}/disposition`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              orderCode: rma.originalSo,
-              rmaCode: rmaId,
-              action: 'EXECUTE_RETURN_AND_REFUND',
               disposition,
-              refundMethod: rma._raw?.refundMethod ?? 'CREDIT_NOTE',
-              idempotencyKey: `IDEMP-RMA-EXECUTE-${rmaId}-${Date.now()}`
+              fraudOverride: isHighFraud,
+              refundMethod: 'CREDIT_NOTE',
+              idempotencyKey: `IDEMP-RMA-DISP-${rmaId}-${Date.now()}`
             })
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Lỗi thực thi');
-          onNotify('success', 'Thực thi Hướng xử lý (Disposition)', `Đã liên kết Inventory Core & tài chính thành công cho RMA ${rmaId}.`);
-          fetchRMAs();
+          onNotify(
+            'success',
+            'Thực thi Hướng xử lý Thành Công',
+            `Đã thực thi [${disposition}] cho RMA ${rmaId}. Tồn kho đã cập nhật qua InventoryService, Credit Note ${data.creditNoteNumber || ''} đã phát hành và lưu trữ vào M29 DMS Vault.`
+          );
+          await fetchRMAs();
         } catch (err: any) {
-          setRmaList(prev => prev.map(r => r.id === rmaId ? { ...r, disposition: disposition as any, financialStatus: 'CREDIT_NOTE_ISSUED', status: 'COMPLETED' } : r));
-          onNotify('success', 'Thực thi Hướng xử lý (Disposition)', `Đã cập nhật phương án ${disposition} và hoàn tất hồ sơ RMA ${rmaId}.`);
+          onNotify('danger', 'Lỗi thực thi Disposition', err.message || 'Không thể thực thi phương án xử lý.');
+        } finally {
+          setLoading(false);
         }
       }
     });
   };
 
-  const handleSelectRma = (item: RmaRecord) => {
+  const handleCreateReversal = (rmaId: string) => {
+    const rma = rmaList.find(r => r.id === rmaId);
+    if (!rma) return;
+
+    setConfirmDialog({
+      isOpen: true,
+      variant: 'warning',
+      title: `Tạo Chứng Từ Điều Chỉnh / Hủy Đảo (Reversal) cho ${rmaId}`,
+      message: `Chứng từ RMA [${rmaId}] đã đạt trạng thái bất biến và bị khóa hoàn toàn (Rule #01 & Rule #16). Hệ thống sẽ tạo một chứng từ Reversal/Adjustment mới (RMA-REV-2026-XXXX) liên kết đối ứng với chứng từ gốc, giữ nguyên vẹn dữ liệu kiểm toán M02. Bạn có muốn tiếp tục?`,
+      confirmText: 'Tạo Chứng Từ Reversal Mới',
+      cancelText: 'Hủy Bỏ',
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          const res = await fetch(`/api/returns/${encodeURIComponent(rmaId)}/reversal`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              reversalReason: 'Yêu cầu điều chỉnh số lượng và hạch toán hoàn trả từ chứng từ bất biến',
+              adjustmentType: 'REVERSAL',
+              idempotencyKey: `IDEMP-REV-${rmaId}-${Date.now()}`
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Lỗi tạo chứng từ Reversal');
+          onNotify(
+            'success',
+            'Khởi tạo Reversal RMA thành công',
+            `Đã tạo chứng từ điều chỉnh [${data.rmaNumber || ''}] liên kết với [${rmaId}]. Hồ sơ đã lưu trữ vào M29 DMS Vault.`
+          );
+          await fetchRMAs();
+          if (selectedRma) setSelectedRma(null);
+        } catch (err: any) {
+          onNotify('danger', 'Lỗi tạo Reversal', err.message || 'Không thể tạo chứng từ Reversal.');
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
+  };
+
+  const handleSelectRma = async (item: RmaRecord) => {
     setSelectedRma(item);
+    setVaultedDocs([]);
+    try {
+      const res = await fetch(`/api/returns/${encodeURIComponent(item.id)}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data) {
+          setSelectedRma(prev => prev ? { ...prev, ...json.data } : json.data);
+        }
+        if (json.vaultedDocuments && Array.isArray(json.vaultedDocuments)) {
+          setVaultedDocs(json.vaultedDocuments);
+        }
+      }
+    } catch (err) {
+      console.error("Lỗi đồng bộ chi tiết hồ sơ RMA:", err);
+    }
+
     onSelectEntity({
       type: 'RMA',
       id: item.id,
@@ -353,8 +596,8 @@ export const M15ReturnsRMAWorkspace: React.FC<M15ReturnsRMAWorkspaceProps> = ({
         { id: 1, action: 'INSPECT_RMA_DETAILS', timestamp: new Date().toISOString(), user: 'admin', sha256Checksum: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' }
       ],
       glEntries: [
-        { account: '5212 - Hàng bán bị trả lại', debit: 150000000, credit: 0, description: `Giảm trừ doanh thu hàng trả ${item.id}` },
-        { account: '131 - Phải thu của khách hàng', debit: 0, credit: 150000000, description: `Cấn trừ công nợ khách hàng ${item.customerName}` }
+        { account: '5212 - Hàng bán bị trả lại', debit: item.totalAmount || 15000000, credit: 0, description: `Giảm trừ doanh thu hàng trả ${item.id}` },
+        { account: '131 - Phải thu của khách hàng', debit: 0, credit: item.totalAmount || 15000000, description: `Cấn trừ công nợ khách hàng ${item.customerName}` }
       ]
     });
     onNotify('info', 'Đã chọn hồ sơ RMA', `Đã đồng bộ hồ sơ ${item.id} vào Thanh Ngữ Cảnh Đối Tượng.`);
@@ -382,6 +625,16 @@ export const M15ReturnsRMAWorkspace: React.FC<M15ReturnsRMAWorkspaceProps> = ({
   const qcGoodCount = useMemo(() => rmaList.filter(r => r.inspectionResult === 'GOOD').length, [rmaList]);
   const qcDefectiveCount = useMemo(() => rmaList.filter(r => r.inspectionResult === 'DEFECTIVE').length, [rmaList]);
   const qcDamagedCount = useMemo(() => rmaList.filter(r => r.inspectionResult === 'DAMAGED').length, [rmaList]);
+  const pendingInspectCount = useMemo(() => rmaList.filter(r => r.inspectionResult === 'PENDING').length, [rmaList]);
+  const inspectedCount = useMemo(() => rmaList.filter(r => r.inspectionResult !== 'PENDING').length, [rmaList]);
+
+  const filteredInspectionList = useMemo(() => {
+    return rmaList.filter(item => {
+      if (inspectionFilter === 'PENDING') return item.inspectionResult === 'PENDING';
+      if (inspectionFilter === 'INSPECTED') return item.inspectionResult !== 'PENDING';
+      return true;
+    });
+  }, [rmaList, inspectionFilter]);
 
   const restockCount = useMemo(() => rmaList.filter(r => r.disposition === 'RESTOCK').length, [rmaList]);
   const creditIssuedCount = useMemo(() => rmaList.filter(r => r.financialStatus === 'CREDIT_NOTE_ISSUED').length, [rmaList]);
@@ -664,13 +917,14 @@ export const M15ReturnsRMAWorkspace: React.FC<M15ReturnsRMAWorkspaceProps> = ({
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
-                        <tr className="border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-800/80 tracking-wider">
-                          <th className="py-2.5 px-3">Mã RMA & Ngày</th>
-                          <th className="py-2.5 px-3">Khách hàng / SO gốc</th>
-                          <th className="py-2.5 px-3">Sản phẩm & Số lượng</th>
-                          <th className="py-2.5 px-3">Lý do & Giải quyết</th>
-                          <th className="py-2.5 px-3 text-center">Trạng thái</th>
-                          <th className="py-2.5 px-3 text-right">Thao tác</th>
+                        <tr className="border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-700 dark:text-slate-200 uppercase bg-slate-100/90 dark:bg-slate-800 tracking-wider">
+                          <th className="py-3 px-3">Mã RMA & Ngày</th>
+                          <th className="py-3 px-3">Khách hàng / SO gốc</th>
+                          <th className="py-3 px-3">Sản phẩm & Số lượng</th>
+                          <th className="py-3 px-3">Bảo hành & Gian lận</th>
+                          <th className="py-3 px-3">Tiến độ Luồng Xử Lý</th>
+                          <th className="py-3 px-3 text-center">Trạng thái</th>
+                          <th className="py-3 px-3 text-right">Thao tác</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60 text-xs">
@@ -682,70 +936,143 @@ export const M15ReturnsRMAWorkspace: React.FC<M15ReturnsRMAWorkspaceProps> = ({
                           return (
                             <tr
                               key={item.id}
-                              className={`transition-colors duration-150 hover:bg-slate-100/80 dark:hover:bg-slate-700/60 ${
+                              className={`transition-colors duration-150 ease-in-out hover:bg-slate-100/90 dark:hover:bg-slate-700/60 ${
                                 isCompleted
-                                  ? 'border-l-4 border-emerald-500/60 bg-emerald-50/10 dark:bg-emerald-950/10'
+                                  ? 'border-l-4 border-emerald-600 bg-emerald-50/20 dark:bg-emerald-950/20'
                                   : isApproved
-                                  ? 'border-l-4 border-blue-600 bg-blue-50/15 dark:bg-blue-950/10'
+                                  ? 'border-l-4 border-blue-600 bg-blue-50/20 dark:bg-blue-950/20'
                                   : isUnderReview
-                                  ? 'border-l-4 border-purple-500 bg-purple-50/15 dark:bg-purple-950/10'
-                                  : 'border-l-4 border-amber-500 bg-amber-50/15 dark:bg-amber-950/10'
+                                  ? 'border-l-4 border-purple-600 bg-purple-50/20 dark:bg-purple-950/20'
+                                  : 'border-l-4 border-amber-600 bg-amber-50/20 dark:bg-amber-950/20'
                               }`}
                             >
                               <td className="py-3 px-3">
-                                <span className="font-mono text-xs font-bold text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800">
+                                <span className="font-mono text-xs font-bold text-rose-800 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/80 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800 inline-block tabular-nums">
                                   {item.id}
                                 </span>
-                                <div className="text-[10px] font-mono text-slate-400 mt-1">{item.date}</div>
+                                <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 mt-1 tabular-nums">{item.date}</div>
                               </td>
                               <td className="py-3 px-3">
-                                <div className="font-bold text-slate-900 dark:text-white">{item.customerName}</div>
-                                <div className="font-mono text-[11px] text-blue-600 dark:text-blue-400 mt-0.5">
-                                  SO: {item.originalSo} <span className="text-slate-400">({item.deliveryCode})</span>
+                                <div className="font-bold text-slate-900 dark:text-slate-100">{item.customerName}</div>
+                                <div className="font-mono text-[11px] text-blue-700 dark:text-blue-300 mt-0.5 tabular-nums">
+                                  SO: <span className="font-semibold">{item.originalSo}</span> <span className="text-slate-500">({item.deliveryCode})</span>
                                 </div>
                               </td>
                               <td className="py-3 px-3">
                                 <div className="font-semibold text-slate-900 dark:text-slate-100">{item.productName}</div>
-                                <div className="font-mono text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
-                                  SL: <span className="font-bold text-slate-900 dark:text-white">{item.quantity} {item.uom}</span> • Lot: {item.lotSerial}
+                                <div className="font-mono text-[11px] text-slate-700 dark:text-slate-300 mt-0.5 tabular-nums">
+                                  SL: <span className="font-bold text-slate-900 dark:text-white tabular-nums">{item.quantity}</span> {item.uom} • Lot/Serial: <span className="font-semibold">{item.lotSerial}</span>
                                 </div>
                               </td>
                               <td className="py-3 px-3">
-                                <div className="text-slate-700 dark:text-slate-300 text-xs line-clamp-1">{item.reason}</div>
-                                <div className="font-semibold text-[10px] text-rose-700 dark:text-rose-300 mt-1 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800 inline-block">
-                                  {item.requestedResolution}
+                                <div className="flex flex-col gap-1.5 items-start">
+                                  <WarrantyStatusBadge status={item.warrantyStatus} />
+                                  <FraudRiskBadge score={item.fraudScore ?? 0} flags={item.fraudFlags} />
+                                </div>
+                              </td>
+                              <td className="py-3 px-3">
+                                <div className="flex flex-col gap-1 items-start">
+                                  <WorkflowProgressBadge
+                                    disposition={item.disposition}
+                                    maintenanceWoCode={item.maintenanceWoCode}
+                                    rtvReferenceCode={item.rtvReferenceCode}
+                                    creditNoteNumber={item.creditNoteNumber}
+                                  />
+                                  <div className="text-[10px] text-slate-600 dark:text-slate-400 line-clamp-1 italic">
+                                    {item.reason}
+                                  </div>
                                 </div>
                               </td>
                               <td className="py-3 px-3 text-center">
-                                <span
-                                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
-                                    isCompleted
-                                      ? 'bg-emerald-100 text-emerald-950 border-emerald-300 dark:bg-emerald-950/90 dark:text-emerald-200 dark:border-emerald-700'
-                                      : isApproved
-                                      ? 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950/90 dark:text-blue-200 dark:border-blue-700'
-                                      : isUnderReview
-                                      ? 'bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-950/90 dark:text-purple-200 dark:border-purple-700'
-                                      : 'bg-amber-100 text-amber-950 border-amber-300 dark:bg-amber-950/90 dark:text-amber-200 dark:border-amber-700'
-                                  }`}
-                                >
-                                  {item.status}
-                                </span>
+                                <div className="flex flex-col items-center gap-1">
+                                  <span
+                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                                      isCompleted
+                                        ? 'bg-emerald-100 text-emerald-950 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-200 dark:border-emerald-700'
+                                        : isApproved
+                                        ? 'bg-blue-100 text-blue-950 border-blue-300 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-700'
+                                        : isUnderReview
+                                        ? 'bg-purple-100 text-purple-950 border-purple-300 dark:bg-purple-950 dark:text-purple-200 dark:border-purple-700'
+                                        : 'bg-amber-100 text-amber-950 border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-700'
+                                    }`}
+                                  >
+                                    {item.status}
+                                  </span>
+                                  {item.isImmutable && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600">
+                                      <Lock className="w-2.5 h-2.5 text-slate-600 dark:text-slate-400" />
+                                      Bất biến
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="py-3 px-3 text-right">
                                 <div className="flex items-center justify-end gap-1.5">
-                                  {item.status === 'REQUESTED' && (
+                                  {item.status === 'REQUESTED' && !item.isImmutable && (
+                                    <>
+                                      <button
+                                        onClick={() => handleApproveRma(item.id)}
+                                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold transition-all shadow-2xs cursor-pointer flex items-center gap-1"
+                                        title="Phê duyệt tiếp nhận hàng trả về kho kiểm định"
+                                      >
+                                        <Check className="w-3 h-3" />
+                                        <span>Duyệt</span>
+                                      </button>
+                                      <button
+                                        onClick={() => handleRejectRma(item.id)}
+                                        className="px-2 py-1 text-rose-800 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/40 rounded-lg text-[10px] font-bold transition-all border border-rose-300 dark:border-rose-800 cursor-pointer flex items-center gap-1"
+                                        title="Từ chối yêu cầu đổi trả"
+                                      >
+                                        <X className="w-3 h-3" />
+                                        <span>Từ chối</span>
+                                      </button>
+                                    </>
+                                  )}
+
+                                  {item.status === 'APPROVED' && item.inspectionResult === 'PENDING' && !item.isImmutable && (
                                     <button
-                                      onClick={() => handleApproveRma(item.id)}
-                                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold transition-all shadow-2xs cursor-pointer"
+                                      onClick={() => {
+                                        setActiveTab('inspection');
+                                        onNotify('info', 'Chuyển sang Cổng QC', `Vui lòng thực hiện phân loại giám định cho ${item.id}.`);
+                                      }}
+                                      className="px-2 py-1 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                                      title="Chuyển sang Giám định QC (M39)"
                                     >
-                                      Duyệt
+                                      <PackageCheck className="w-3 h-3 text-amber-700 dark:text-amber-400" />
+                                      <span>Giám định QC</span>
                                     </button>
                                   )}
+
+                                  {(item.status === 'UNDER_REVIEW' || (item.inspectionResult !== 'PENDING' && item.disposition === 'PENDING')) && !item.isImmutable && (
+                                    <button
+                                      onClick={() => {
+                                        setActiveTab('disposition');
+                                        onNotify('info', 'Chuyển sang Quyết định Xử lý', `Vui lòng chọn hướng xử lý (Restock/RTV/Credit) cho ${item.id}.`);
+                                      }}
+                                      className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 text-indigo-800 dark:text-indigo-200 border border-indigo-300 dark:border-indigo-700 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                                      title="Chuyển sang Quyết định Xử lý (Disposition)"
+                                    >
+                                      <Boxes className="w-3 h-3 text-indigo-700 dark:text-indigo-400" />
+                                      <span>Xử lý Kho</span>
+                                    </button>
+                                  )}
+
+                                  {item.isImmutable && (
+                                    <button
+                                      onClick={() => handleCreateReversal(item.id)}
+                                      className="px-2 py-1 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/80 text-purple-800 dark:text-purple-200 border border-purple-300 dark:border-purple-800 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                                      title="Tạo chứng từ điều chỉnh / hủy đảo mới (Reversal) do chứng từ đã bất biến"
+                                    >
+                                      <RotateCcw className="w-3 h-3 text-purple-700 dark:text-purple-400" />
+                                      <span>Reversal</span>
+                                    </button>
+                                  )}
+
                                   <button
                                     onClick={() => handleSelectRma(item)}
-                                    className="px-2.5 py-1 text-[11px] font-semibold bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/80 text-rose-800 dark:text-rose-300 rounded-lg transition-colors border border-rose-200 dark:border-rose-800 cursor-pointer shadow-2xs flex items-center gap-1"
+                                    className="px-2.5 py-1 text-[11px] font-semibold bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/80 text-rose-800 dark:text-rose-200 rounded-lg transition-colors border border-rose-300 dark:border-rose-800 cursor-pointer shadow-2xs flex items-center gap-1"
                                   >
-                                    <Eye className="w-3 h-3" />
+                                    <Eye className="w-3 h-3 text-rose-700 dark:text-rose-400" />
                                     <span>360°</span>
                                   </button>
                                 </div>
@@ -968,72 +1295,320 @@ export const M15ReturnsRMAWorkspace: React.FC<M15ReturnsRMAWorkspaceProps> = ({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {rmaList.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 space-y-3 relative overflow-hidden transition-all hover:shadow-md"
+            {/* L3: Segmented Sub-filter Bar cho Tab 2 */}
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setInspectionFilter('ALL')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    inspectionFilter === 'ALL'
+                      ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs border border-slate-200 dark:border-slate-700'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-bold text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/80 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-800">
-                      {item.id}
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">{item.date}</span>
-                  </div>
+                  <Filter className="w-3.5 h-3.5" />
+                  <span>Tất Cả Phiếu</span>
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                    {rmaList.length}
+                  </span>
+                </button>
 
-                  <div>
-                    <h4 className="font-bold text-slate-900 dark:text-white text-sm">{item.productName}</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{item.customerName}</p>
-                  </div>
+                <button
+                  type="button"
+                  onClick={() => setInspectionFilter('PENDING')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    inspectionFilter === 'PENDING'
+                      ? 'bg-amber-500 text-white shadow-2xs'
+                      : 'text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>⏳ Chờ Giám Định QC</span>
+                  <span className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    inspectionFilter === 'PENDING' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200'
+                  }`}>
+                    {pendingInspectCount}
+                  </span>
+                </button>
 
-                  <div className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500 dark:text-slate-400">Đơn hàng gốc:</span>
-                      <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{item.originalSo}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500 dark:text-slate-400">Số lượng & Lot:</span>
-                      <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">{item.quantity} {item.uom} • {item.lotSerial}</span>
-                    </div>
-                    <div className="flex justify-between items-center pt-1">
-                      <span className="text-slate-500 dark:text-slate-400">Kết quả QC:</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
-                        item.inspectionResult === 'GOOD' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
-                        item.inspectionResult === 'DEFECTIVE' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' :
-                        item.inspectionResult === 'DAMAGED' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
-                        'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-300'
-                      }`}>
-                        {item.inspectionResult}
-                      </span>
-                    </div>
-                  </div>
+                <button
+                  type="button"
+                  onClick={() => setInspectionFilter('INSPECTED')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    inspectionFilter === 'INSPECTED'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                  }`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>🛡️ Đã Xác Nhận Phân Loại</span>
+                  <span className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    inspectionFilter === 'INSPECTED' ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
+                  }`}>
+                    {inspectedCount}
+                  </span>
+                </button>
+              </div>
 
-                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-1">
-                    <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Phân loại QC:</span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleCompleteInspection(item.id, 'GOOD')}
-                        className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold cursor-pointer transition-all shadow-2xs"
-                      >
-                        GOOD
-                      </button>
-                      <button
-                        onClick={() => handleCompleteInspection(item.id, 'DEFECTIVE')}
-                        className="px-2 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[10px] font-bold cursor-pointer transition-all shadow-2xs"
-                      >
-                        DEFECTIVE
-                      </button>
-                      <button
-                        onClick={() => handleCompleteInspection(item.id, 'DAMAGED')}
-                        className="px-2 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-[10px] font-bold cursor-pointer transition-all shadow-2xs"
-                      >
-                        DAMAGED
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                Hiển thị: <span className="font-bold text-slate-800 dark:text-slate-200">{filteredInspectionList.length}</span> hồ sơ
+              </div>
             </div>
+
+            {filteredInspectionList.length === 0 ? (
+              <div className="p-8 text-center rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-dashed border-slate-300 dark:border-slate-700 space-y-2">
+                <ShieldCheck className="w-8 h-8 text-slate-400 mx-auto" />
+                <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                  {inspectionFilter === 'PENDING'
+                    ? 'Hiện không có phiếu RMA nào đang chờ giám định QC.'
+                    : 'Chưa có phiếu RMA nào đã hoàn tất phân loại kiểm định.'}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {filteredInspectionList.map((item) => {
+                  const isClosedOrCancelled = item.status === 'CLOSED' || item.status === 'CANCELLED' || Boolean(item.isImmutable);
+                  const isPending = item.inspectionResult === 'PENDING';
+                  const isGood = item.inspectionResult === 'GOOD';
+                  const isDefective = item.inspectionResult === 'DEFECTIVE';
+                  const isDamaged = item.inspectionResult === 'DAMAGED' || item.inspectionResult === 'REJECTED' || item.inspectionResult === 'SCRAP';
+
+                  if (isPending) {
+                    return (
+                      <div
+                        key={item.id}
+                        className={`p-4 rounded-xl ${
+                          isClosedOrCancelled
+                            ? 'bg-slate-50 dark:bg-slate-900/40 border-2 border-slate-300 dark:border-slate-700 opacity-80'
+                            : 'bg-amber-50/20 dark:bg-amber-950/10 border-2 border-amber-300 dark:border-amber-700/70'
+                        } space-y-3 relative overflow-hidden transition-all hover:shadow-md flex flex-col justify-between`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-bold text-rose-800 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/80 px-2 py-0.5 rounded border border-rose-300 dark:border-rose-800 tabular-nums">
+                              {item.id}
+                            </span>
+                            {isClosedOrCancelled ? (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-200 border border-rose-300 dark:border-rose-700 flex items-center gap-1">
+                                <Lock className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                                {item.status === 'CANCELLED' ? 'Phiếu Đã Hủy' : 'Phiếu Đã Đóng'}
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 border border-amber-300 dark:border-amber-700 flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                                Chờ Phân Loại QC
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 tabular-nums">{item.date}</span>
+                        </div>
+
+                        <div>
+                          <h4 className="font-bold text-slate-900 dark:text-white text-sm">{item.productName}</h4>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{item.customerName}</p>
+                          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                            <WarrantyStatusBadge status={item.warrantyStatus} />
+                            <FraudRiskBadge score={item.fraudScore ?? 0} flags={item.fraudFlags} />
+                          </div>
+                        </div>
+
+                        {isClosedOrCancelled && (
+                          <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-[11px] text-rose-700 dark:text-rose-300 flex items-center gap-1.5 font-medium">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-600 dark:text-rose-400" />
+                            <span>Phiếu đã đóng ({item.status}) — Thao tác kiểm định bị vô hiệu hóa</span>
+                          </div>
+                        )}
+
+                        <div className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs space-y-1.5">
+                          <div className="flex justify-between">
+                            <span className="text-slate-600 dark:text-slate-400">Đơn hàng gốc:</span>
+                            <span className="font-mono font-bold text-blue-700 dark:text-blue-300 tabular-nums">{item.originalSo}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-600 dark:text-slate-400">Số lượng & Lot:</span>
+                            <span className="font-mono font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{item.quantity} {item.uom} • {item.lotSerial}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-600 dark:text-slate-400">Lý do hoàn trả:</span>
+                            <span className="text-slate-800 dark:text-slate-200 text-right truncate max-w-[170px]" title={item.reason}>{item.reason}</span>
+                          </div>
+                          <div className="flex justify-between items-center pt-1 border-t border-slate-100 dark:border-slate-700">
+                            <span className="text-slate-600 dark:text-slate-400">Trạng thái QC:</span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold border bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-700">
+                              CHƯA KIỂM ĐỊNH
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="pt-2.5 border-t border-amber-200 dark:border-amber-800/60 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                              <Sliders className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                              Thao tác phân loại QC:
+                            </span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 italic">
+                              {isClosedOrCancelled ? 'Đã vô hiệu hóa' : 'Chọn 1 kết quả'}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            <button
+                              onClick={() => handleCompleteInspection(item.id, 'GOOD')}
+                              disabled={loading || isClosedOrCancelled}
+                              className={`py-1.5 px-2 rounded-lg text-[10px] font-bold transition-all shadow-2xs text-center flex items-center justify-center gap-1 ${
+                                isClosedOrCancelled
+                                  ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed border border-slate-300 dark:border-slate-700'
+                                  : 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer'
+                              }`}
+                              title={isClosedOrCancelled ? 'Phiếu đã đóng hoặc đã hủy - Không thể phân loại QC' : 'Sản phẩm nguyên vẹn, đạt tiêu chuẩn nhập kho bán lại'}
+                            >
+                              <CheckCircle2 className="w-3 h-3 shrink-0" />
+                              <span>GOOD</span>
+                            </button>
+                            <button
+                              onClick={() => handleCompleteInspection(item.id, 'DEFECTIVE')}
+                              disabled={loading || isClosedOrCancelled}
+                              className={`py-1.5 px-2 rounded-lg text-[10px] font-bold transition-all shadow-2xs text-center flex items-center justify-center gap-1 ${
+                                isClosedOrCancelled
+                                  ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed border border-slate-300 dark:border-slate-700'
+                                  : 'bg-amber-600 hover:bg-amber-500 text-white cursor-pointer'
+                              }`}
+                              title={isClosedOrCancelled ? 'Phiếu đã đóng hoặc đã hủy - Không thể phân loại QC' : 'Lỗi kỹ thuật, linh khiếm khuyết - Đề xuất đổi mới/sửa chữa'}
+                            >
+                              <AlertTriangle className="w-3 h-3 shrink-0" />
+                              <span>DEFECTIVE</span>
+                            </button>
+                            <button
+                              onClick={() => handleCompleteInspection(item.id, 'DAMAGED')}
+                              disabled={loading || isClosedOrCancelled}
+                              className={`py-1.5 px-2 rounded-lg text-[10px] font-bold transition-all shadow-2xs text-center flex items-center justify-center gap-1 ${
+                                isClosedOrCancelled
+                                  ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed border border-slate-300 dark:border-slate-700'
+                                  : 'bg-rose-600 hover:bg-rose-500 text-white cursor-pointer'
+                              }`}
+                              title={isClosedOrCancelled ? 'Phiếu đã đóng hoặc đã hủy - Không thể phân loại QC' : 'Hư hỏng nặng, móp méo, vỡ - Đề xuất hủy phế liệu'}
+                            >
+                              <X className="w-3 h-3 shrink-0" />
+                              <span>DAMAGED</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // ĐÃ XÁC NHẬN PHÂN LOẠI (QC CERTIFIED & LOCKED)
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-4 rounded-xl ${
+                        isClosedOrCancelled
+                          ? 'bg-slate-50 dark:bg-slate-900/40 border-2 border-slate-300 dark:border-slate-700 opacity-85'
+                          : isGood
+                          ? 'bg-emerald-50/30 dark:bg-emerald-950/15 border-2 border-emerald-300/80 dark:border-emerald-700/80'
+                          : isDefective
+                          ? 'bg-amber-50/20 dark:bg-amber-950/10 border-2 border-amber-300/80 dark:border-amber-700/80'
+                          : 'bg-slate-50 dark:bg-slate-900/60 border-2 border-slate-300 dark:border-slate-700'
+                      } space-y-3 relative overflow-hidden transition-all hover:shadow-md flex flex-col justify-between`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-rose-800 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/80 px-2 py-0.5 rounded border border-rose-300 dark:border-rose-800 tabular-nums">
+                            {item.id}
+                          </span>
+                          {isClosedOrCancelled ? (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700 flex items-center gap-1">
+                              <Lock className="w-3 h-3 text-slate-500" />
+                              {item.status === 'CANCELLED' ? 'Phiếu Đã Hủy' : 'Phiếu Đã Đóng'}
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
+                              <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                              Đã Phân Loại QC
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 tabular-nums">{item.date}</span>
+                      </div>
+
+                      <div>
+                        <h4 className="font-bold text-slate-900 dark:text-white text-sm">{item.productName}</h4>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{item.customerName}</p>
+                        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                          <WarrantyStatusBadge status={item.warrantyStatus} />
+                          <FraudRiskBadge score={item.fraudScore ?? 0} flags={item.fraudFlags} />
+                        </div>
+                      </div>
+
+                      {/* Hộp Thông Tin Chứng Nhận QC */}
+                      <div className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-600 dark:text-slate-400 font-medium">Kết quả Giám định:</span>
+                          <span className={`px-2.5 py-0.5 rounded-md text-[11px] font-mono font-bold border flex items-center gap-1 ${
+                            isGood ? 'bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-200 dark:border-emerald-700' :
+                            isDefective ? 'bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-700' :
+                            'bg-rose-50 text-rose-900 border-rose-300 dark:bg-rose-950 dark:text-rose-200 dark:border-rose-700'
+                          }`}>
+                            {isGood && <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />}
+                            {isDefective && <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />}
+                            {isDamaged && <X className="w-3 h-3 text-rose-600 dark:text-rose-400" />}
+                            {item.inspectionResult}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-slate-500 dark:text-slate-400">Đơn hàng SO:</span>
+                          <span className="font-mono font-bold text-blue-700 dark:text-blue-300 tabular-nums">{item.originalSo}</span>
+                        </div>
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-slate-500 dark:text-slate-400">Số lượng & Lot:</span>
+                          <span className="font-mono font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{item.quantity} {item.uom} • {item.lotSerial}</span>
+                        </div>
+                        <div className="pt-1.5 border-t border-slate-100 dark:border-slate-700 text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                          <span className="flex items-center gap-1">
+                            <FileCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                            Niêm phong M29 DMS Vault
+                          </span>
+                          <span className="font-mono text-indigo-700 dark:text-indigo-300 font-semibold">
+                            {item.disposition === 'PENDING' ? 'Sẵn sàng ra quyết định' : item.disposition}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Khóa nút phân loại và cung cấp CTA chuyển tiếp */}
+                      <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
+                        <div className="bg-slate-100 dark:bg-slate-800/90 rounded-lg p-2 flex items-center justify-between text-[11px]">
+                          <span className="text-slate-600 dark:text-slate-300 font-medium flex items-center gap-1">
+                            <Lock className="w-3.5 h-3.5 text-slate-500" />
+                            {isClosedOrCancelled ? 'Phiếu đã đóng / kết thúc' : 'Đã khóa phân loại'}
+                          </span>
+                          <button
+                            onClick={() => handleReinspectRma(item.id, isGood ? 'DEFECTIVE' : 'GOOD')}
+                            disabled={loading || isClosedOrCancelled}
+                            className={`text-[10px] font-semibold flex items-center gap-0.5 ${
+                              isClosedOrCancelled
+                                ? 'text-slate-400 dark:text-slate-600 cursor-not-allowed'
+                                : 'text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer'
+                            }`}
+                            title={isClosedOrCancelled ? 'Phiếu đã đóng - không thể đánh giá lại' : 'Yêu cầu quyền Giám sát QC để đánh giá lại kết quả'}
+                          >
+                            <RotateCcw className="w-2.5 h-2.5" />
+                            Đánh giá lại
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={() => handleNavigateToDisposition(item)}
+                          className="w-full py-2 px-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold cursor-pointer transition-all shadow-2xs flex items-center justify-center gap-1.5 group"
+                        >
+                          <span>Chuyển sang Quyết định xử lý (Disposition)</span>
+                          <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1132,60 +1707,80 @@ export const M15ReturnsRMAWorkspace: React.FC<M15ReturnsRMAWorkspaceProps> = ({
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-800/80 tracking-wider">
-                    <th className="py-2.5 px-3">Mã RMA</th>
-                    <th className="py-2.5 px-3">Sản phẩm & Khách hàng</th>
-                    <th className="py-2.5 px-3 text-center">Kết quả QC</th>
-                    <th className="py-2.5 px-3 text-center">Hướng xử lý hiện tại</th>
-                    <th className="py-2.5 px-3 text-center">Trạng thái Tài chính</th>
-                    <th className="py-2.5 px-3 text-right">Thực thi Xử lý (Disposition)</th>
+                  <tr className="border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-700 dark:text-slate-200 uppercase bg-slate-100/90 dark:bg-slate-800 tracking-wider">
+                    <th className="py-3 px-3">Mã RMA</th>
+                    <th className="py-3 px-3">Sản phẩm & Khách hàng</th>
+                    <th className="py-3 px-3 text-center">Kết quả QC (M39)</th>
+                    <th className="py-3 px-3">Hướng Xử Lý Hiện Tại</th>
+                    <th className="py-3 px-3 text-center">Tài chính (M31/M32)</th>
+                    <th className="py-3 px-3 text-right">Thực thi Xử lý (Disposition)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60 text-xs">
                   {rmaList.map((item) => (
                     <tr
                       key={item.id}
-                      className="transition-colors duration-150 hover:bg-slate-100/80 dark:hover:bg-slate-700/60 border-l-4 border-rose-500 bg-rose-50/15 dark:bg-rose-950/10"
+                      className="transition-colors duration-150 ease-in-out hover:bg-slate-100/90 dark:hover:bg-slate-700/60 border-l-4 border-rose-600 bg-rose-50/20 dark:bg-rose-950/20"
                     >
-                      <td className="py-3 px-3 font-mono font-bold text-rose-700 dark:text-rose-400">
+                      <td className="py-3 px-3 font-mono font-bold text-rose-800 dark:text-rose-300 tabular-nums">
                         {item.id}
                       </td>
                       <td className="py-3 px-3">
-                        <div className="font-semibold text-slate-900 dark:text-white">{item.productName}</div>
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400">{item.customerName}</div>
+                        <div className="font-semibold text-slate-900 dark:text-slate-100">{item.productName}</div>
+                        <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">{item.customerName}</div>
                       </td>
                       <td className="py-3 px-3 text-center">
-                        <span className="font-mono font-semibold px-2 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
+                        <span className={`font-mono font-bold px-2 py-0.5 rounded text-[10px] border ${
+                          item.inspectionResult === 'GOOD'
+                            ? 'bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-200 dark:border-emerald-700'
+                            : item.inspectionResult === 'DEFECTIVE'
+                            ? 'bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/80 dark:text-amber-200 dark:border-amber-700'
+                            : item.inspectionResult === 'DAMAGED' || item.inspectionResult === 'REJECTED'
+                            ? 'bg-rose-50 text-rose-900 border-rose-300 dark:bg-rose-950/80 dark:text-rose-200 dark:border-rose-700'
+                            : 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-700 dark:text-slate-300'
+                        }`}>
                           {item.inspectionResult}
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-center font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                        {item.disposition}
+                      <td className="py-3 px-3">
+                        <WorkflowProgressBadge
+                          disposition={item.disposition}
+                          maintenanceWoCode={item.maintenanceWoCode}
+                          rtvReferenceCode={item.rtvReferenceCode}
+                          creditNoteNumber={item.creditNoteNumber}
+                        />
                       </td>
                       <td className="py-3 px-3 text-center">
-                        <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                        <span className="px-2.5 py-0.5 text-[10px] font-mono font-bold rounded-full bg-blue-50 text-blue-900 dark:bg-blue-950 dark:text-blue-200 border border-blue-300 dark:border-blue-700 tabular-nums">
                           {item.financialStatus}
                         </span>
                       </td>
                       <td className="py-3 px-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          <select
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                handleApplyDisposition(item.id, e.target.value);
-                              }
-                            }}
-                            defaultValue=""
-                            className="px-2.5 py-1 text-xs border rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-semibold focus:outline-hidden focus:ring-2 focus:ring-rose-500"
-                          >
-                            <option value="" disabled>-- Chọn Hướng Xử Lý --</option>
-                            <option value="RESTOCK">RESTOCK (Nhập kho bán lại)</option>
-                            <option value="REPAIR">REPAIR (Sửa chữa bảo hành)</option>
-                            <option value="REPLACE">REPLACE (Xuất kho đổi mới)</option>
-                            <option value="SCRAP">SCRAP (Hủy hàng phế liệu)</option>
-                            <option value="RETURN_TO_VENDOR">RETURN_TO_VENDOR (Trả nhà cung cấp)</option>
-                            <option value="CREDIT">CREDIT (Phát hành Credit Note)</option>
-                          </select>
+                          {item.isImmutable ? (
+                            <div className="flex items-center gap-1 text-slate-600 dark:text-slate-300 font-mono text-[11px] bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-600">
+                              <Lock className="w-3.5 h-3.5 text-slate-500" />
+                              <span>Đã khóa bất biến</span>
+                            </div>
+                          ) : (
+                            <select
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  handleApplyDisposition(item.id, e.target.value);
+                                }
+                              }}
+                              defaultValue=""
+                              className="px-2.5 py-1.5 text-xs border rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-semibold focus:outline-hidden focus:ring-2 focus:ring-rose-500 shadow-2xs cursor-pointer"
+                            >
+                              <option value="" disabled>-- Chọn Hướng Xử Lý --</option>
+                              <option value="RESTOCK">RESTOCK (Nhập kho bán lại - M17)</option>
+                              <option value="REPAIR">REPAIR (Lệnh sửa chữa bảo dưỡng - M27)</option>
+                              <option value="REPLACE">REPLACE (Xuất kho đổi mới - M17)</option>
+                              <option value="SCRAP">SCRAP (Hủy hàng phế liệu - M17)</option>
+                              <option value="RETURN_TO_VENDOR">RETURN_TO_VENDOR (Trả nhà cung cấp - M08/M11)</option>
+                              <option value="CREDIT">CREDIT (Phát hành Credit Note AR / Quỹ M32)</option>
+                            </select>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1278,57 +1873,64 @@ export const M15ReturnsRMAWorkspace: React.FC<M15ReturnsRMAWorkspaceProps> = ({
               {/* Customer & Order info */}
               <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
                 <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Khách hàng:</span>
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Khách hàng:</span>
                   <div className="font-bold text-slate-900 dark:text-white text-sm mt-0.5">{selectedRma.customerName}</div>
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Đơn hàng Gốc (SO):</span>
-                  <div className="font-mono font-bold text-blue-600 dark:text-blue-400 text-sm mt-0.5">{selectedRma.originalSo}</div>
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Đơn hàng Gốc (SO):</span>
+                  <div className="font-mono font-bold text-blue-700 dark:text-blue-300 text-sm mt-0.5 tabular-nums">{selectedRma.originalSo}</div>
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Phiếu xuất kho:</span>
-                  <div className="font-mono text-slate-700 dark:text-slate-300 mt-0.5">{selectedRma.deliveryCode}</div>
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Phiếu xuất kho:</span>
+                  <div className="font-mono text-slate-800 dark:text-slate-200 mt-0.5 tabular-nums">{selectedRma.deliveryCode}</div>
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ngày yêu cầu:</span>
-                  <div className="font-mono text-slate-700 dark:text-slate-300 mt-0.5">{selectedRma.date}</div>
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Ngày yêu cầu:</span>
+                  <div className="font-mono text-slate-800 dark:text-slate-200 mt-0.5 tabular-nums">{selectedRma.date}</div>
                 </div>
               </div>
 
               {/* Product & Quantity */}
               <div className="space-y-2">
-                <h4 className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] border-b border-slate-100 dark:border-slate-700 pb-1">
-                  Sản phẩm & Thông tin Lô
+                <h4 className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] border-b border-slate-200 dark:border-slate-700 pb-1">
+                  Sản phẩm & Thông tin Lô / Serial
                 </h4>
-                <div className="grid grid-cols-3 gap-3 bg-rose-50/50 dark:bg-rose-950/30 p-3 rounded-xl border border-rose-100 dark:border-rose-900">
+                <div className="grid grid-cols-3 gap-3 bg-rose-50/60 dark:bg-rose-950/40 p-3.5 rounded-xl border border-rose-200 dark:border-rose-900">
                   <div>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">Sản phẩm:</span>
-                    <div className="font-bold text-rose-950 dark:text-rose-200 mt-0.5">{selectedRma.productName}</div>
+                    <span className="text-[11px] text-slate-700 dark:text-slate-300 font-semibold">Sản phẩm:</span>
+                    <div className="font-bold text-slate-900 dark:text-rose-100 mt-0.5">{selectedRma.productName}</div>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">Số lượng trả:</span>
-                    <div className="font-mono font-bold text-rose-950 dark:text-rose-200 mt-0.5">{selectedRma.quantity} {selectedRma.uom}</div>
+                    <span className="text-[11px] text-slate-700 dark:text-slate-300 font-semibold">Số lượng trả:</span>
+                    <div className="font-mono font-bold text-rose-900 dark:text-rose-200 mt-0.5 tabular-nums">{selectedRma.quantity} {selectedRma.uom}</div>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">Lot / Serial:</span>
-                    <div className="font-mono font-bold text-rose-950 dark:text-rose-200 mt-0.5">{selectedRma.lotSerial}</div>
+                    <span className="text-[11px] text-slate-700 dark:text-slate-300 font-semibold">Lot / Serial:</span>
+                    <div className="font-mono font-bold text-rose-900 dark:text-rose-200 mt-0.5 tabular-nums">{selectedRma.lotSerial}</div>
                   </div>
                 </div>
               </div>
 
-              {/* Reason & Resolution */}
+              {/* Reason & Badges */}
               <div className="space-y-2">
-                <h4 className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] border-b border-slate-100 dark:border-slate-700 pb-1">
-                  Lý do & Hướng giải quyết
+                <h4 className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] border-b border-slate-200 dark:border-slate-700 pb-1">
+                  Lý do & Tình Trạng Tiếp Nhận
                 </h4>
-                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                <div className="p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2.5">
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Lý do khách trả:</span>
-                    <p className="text-slate-800 dark:text-slate-200 mt-0.5">{selectedRma.reason}</p>
+                    <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase">Lý do khách trả:</span>
+                    <p className="text-slate-900 dark:text-slate-100 mt-0.5">{selectedRma.reason}</p>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Yêu cầu giải quyết:</span>
-                    <div className="font-semibold text-rose-600 dark:text-rose-400 mt-0.5">{selectedRma.requestedResolution}</div>
+                  <div className="flex items-center gap-2 flex-wrap pt-1">
+                    <WarrantyStatusBadge status={selectedRma.warrantyStatus} />
+                    <FraudRiskBadge score={selectedRma.fraudScore ?? 0} flags={selectedRma.fraudFlags} />
+                    <WorkflowProgressBadge
+                      disposition={selectedRma.disposition}
+                      maintenanceWoCode={selectedRma.maintenanceWoCode}
+                      rtvReferenceCode={selectedRma.rtvReferenceCode}
+                      creditNoteNumber={selectedRma.creditNoteNumber}
+                    />
+                    <DmsSealBadge vaultDocumentCode={selectedRma.vaultDocumentCode} />
                   </div>
                 </div>
               </div>
@@ -1354,9 +1956,168 @@ export const M15ReturnsRMAWorkspace: React.FC<M15ReturnsRMAWorkspaceProps> = ({
                   </span>
                 </div>
               </div>
+
+              {/* Enterprise Invariant & Domain Integration Metadata (Phase 01 & 02) */}
+              <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                <h4 className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Ranh giới Thẩm quyền &amp; Giám sát Tính Toàn vẹn (Domain Lineage)</span>
+                </h4>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                    <span className="text-[10px] text-slate-500 block">Bảo hành (M23)</span>
+                    <span className={`font-mono font-bold text-xs ${
+                      selectedRma.warrantyStatus === 'VALID' ? 'text-emerald-600' :
+                      selectedRma.warrantyStatus === 'EXPIRED' ? 'text-amber-600' : 'text-rose-600'
+                    }`}>
+                      {selectedRma.warrantyStatus || 'VALID'}
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                    <span className="text-[10px] text-slate-500 block">Kênh hoàn tiền</span>
+                    <span className="font-mono font-bold text-xs text-blue-600">
+                      {selectedRma.refundChannel || (selectedRma.refundMethod === 'CASH' ? 'CASH_M32' : 'CREDIT_NOTE_M31')}
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                    <span className="text-[10px] text-slate-500 block">Điểm rủi ro gian lận</span>
+                    <span className={`font-mono font-bold text-xs ${
+                      (selectedRma.fraudScore ?? 0) >= 50 ? 'text-rose-600' : 'text-slate-700 dark:text-slate-300'
+                    }`}>
+                      {selectedRma.fraudScore ?? 0}/100
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                    <span className="text-[10px] text-slate-500 block">Tính bất biến (Rule #01)</span>
+                    <span className={`font-mono font-bold text-xs ${
+                      selectedRma.isImmutable ? 'text-purple-600' : 'text-emerald-600'
+                    }`}>
+                      {selectedRma.isImmutable ? 'LOCKED (READ-ONLY)' : 'MUTABLE'}
+                    </span>
+                  </div>
+                </div>
+
+                {(selectedRma.maintenanceWoCode || selectedRma.rtvReferenceCode) && (
+                  <div className="p-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-[11px] flex items-center justify-between">
+                    {selectedRma.maintenanceWoCode && (
+                      <div>
+                        <span className="text-indigo-600 dark:text-indigo-400 font-semibold">Lệnh bảo dưỡng M27: </span>
+                        <span className="font-mono font-bold text-slate-900 dark:text-white">{selectedRma.maintenanceWoCode}</span>
+                      </div>
+                    )}
+                    {selectedRma.rtvReferenceCode && (
+                      <div>
+                        <span className="text-indigo-600 dark:text-indigo-400 font-semibold">Chứng từ RTV M08/M11: </span>
+                        <span className="font-mono font-bold text-slate-900 dark:text-white">{selectedRma.rtvReferenceCode}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {selectedRma.isImmutable && (
+                  <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 text-purple-900 dark:text-purple-200 text-xs flex items-start gap-2">
+                    <Lock className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Chứng từ Đạt Trạng Thái Bất Biến (Immutable Invariant):</span>
+                      <p className="text-[11px] text-purple-700 dark:text-purple-300 mt-0.5">
+                        Hồ sơ RMA đã hoàn tất hoặc hạch toán xong, đã khóa ghi và không thể sửa đổi trực tiếp theo chuẩn Rule #01 &amp; Rule #16. Mọi nhu cầu hiệu chỉnh cần phát hành chứng từ Reversal/Adjustment đối ứng.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* M29 DMS Vaulted Documents & Single-Writer Integration */}
+              <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Chứng từ Số Lưu Trữ (M29 DMS Vault Archive)</span>
+                  </h4>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-bold">
+                    DMS Verified
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-1">
+                    <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                      <span className="flex items-center gap-1">
+                        <FileText className="w-3 h-3 text-rose-500" />
+                        <span>Hồ sơ RMA gốc</span>
+                      </span>
+                      <Lock className="w-2.5 h-2.5 text-slate-400" />
+                    </div>
+                    <div className="font-mono font-bold text-slate-800 dark:text-slate-200 text-[11px] truncate">
+                      {selectedRma.vaultDocumentCode || `VAULT-RMA-${selectedRma.id}`}
+                    </div>
+                    <div className="text-[9px] text-emerald-600 dark:text-emerald-400">Niêm phong số hợp lệ</div>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-1">
+                    <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                      <span className="flex items-center gap-1">
+                        <PackageCheck className="w-3 h-3 text-blue-500" />
+                        <span>Biên bản QC M39</span>
+                      </span>
+                      <Lock className="w-2.5 h-2.5 text-slate-400" />
+                    </div>
+                    <div className="font-mono font-bold text-slate-800 dark:text-slate-200 text-[11px] truncate">
+                      {selectedRma.inspectionResult !== 'PENDING' ? `QC-REPORT-${selectedRma.id}` : 'Chờ hoàn tất QC'}
+                    </div>
+                    <div className="text-[9px] text-slate-500 dark:text-slate-400">
+                      {selectedRma.inspectionResult !== 'PENDING' ? 'Đã ký duyệt kỹ thuật' : 'Chưa giám định'}
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-1">
+                    <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                      <span className="flex items-center gap-1">
+                        <DollarSign className="w-3 h-3 text-purple-500" />
+                        <span>Credit Note (AR)</span>
+                      </span>
+                      <Lock className="w-2.5 h-2.5 text-slate-400" />
+                    </div>
+                    <div className="font-mono font-bold text-slate-800 dark:text-slate-200 text-[11px] truncate">
+                      {selectedRma.creditNoteNumber || (selectedRma.disposition !== 'PENDING' ? `CN-${selectedRma.id}` : 'Chờ thực thi')}
+                    </div>
+                    <div className="text-[9px] text-slate-500 dark:text-slate-400">
+                      {selectedRma.disposition !== 'PENDING' ? 'Hạch toán GL 5212/131' : 'Chưa phát hành'}
+                    </div>
+                  </div>
+                </div>
+
+                {vaultedDocs.length > 0 && (
+                  <div className="mt-2 space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Tài liệu đã số hóa:</span>
+                    <div className="space-y-1">
+                      {vaultedDocs.map((vd, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-1.5 rounded bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-[10px]">
+                          <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{vd.documentCode || vd.code}</span>
+                          <span className="text-slate-500">{vd.name}</span>
+                          <span className="font-mono text-emerald-600">{vd.status || 'ARCHIVED'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="px-6 py-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+            <div className="px-6 py-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <div>
+                {selectedRma.isImmutable && (
+                  <button
+                    onClick={() => handleCreateReversal(selectedRma.id)}
+                    className="px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                    title="Tạo chứng từ điều chỉnh / hủy đảo mới (Reversal) do chứng từ đã bất biến"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Tạo Chứng Từ Reversal / Hủy Đảo</span>
+                  </button>
+                )}
+              </div>
               <button
                 onClick={() => setSelectedRma(null)}
                 className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"

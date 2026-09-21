@@ -20,6 +20,7 @@ import { M12NewLeadModal } from './M12NewLeadModal';
 import { M12NewQuotationModal } from './M12NewQuotationModal';
 import { M12ConvertLeadModal } from './M12ConvertLeadModal';
 import { M12LeadDetailModal } from './M12LeadDetailModal';
+import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 
 interface M12CrmLeadsWorkspaceProps {
   onSelectEntity: (entity: SelectedEntityContext) => void;
@@ -31,6 +32,7 @@ export const M12CrmLeadsWorkspace: React.FC<M12CrmLeadsWorkspaceProps> = ({
   onNotify,
 }) => {
   const [loading, setLoading] = useState<boolean>(false);
+  const [confirmDialog, setConfirmDialog] = useState<{isOpen: boolean; title: string; description: string; intent: 'danger' | 'warning' | 'primary'; onConfirm: () => void;} | null>(null);
   const [activeTab, setActiveTab] = useWorkspaceSessionTab<'leads' | 'pipeline' | 'quotations' | 'activities' | 'analytics'>('M12', 'leads');
 
   // Backend States
@@ -220,18 +222,44 @@ export const M12CrmLeadsWorkspace: React.FC<M12CrmLeadsWorkspaceProps> = ({
   };
 
   // Convert Quotation directly to Sales Order (M13)
-  const handleConvertQuotationToSO = async (quotationId: number) => {
+  const executeConversion = async (quotationId: number) => {
+    setConfirmDialog(null);
     try {
-      const res = await fetch(`/api/crm/quotations/${quotationId}/convert-to-so`, {
-        method: 'POST',
-      });
+      const res = await fetch(`/api/crm/quotations/${quotationId}/convert-to-so`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Lỗi chuyển đổi Báo giá sang Đơn bán hàng SO');
-
-      onNotify('success', 'Chốt Đơn Bán Hàng M13 thành công!', data.message);
+      onNotify('success', 'Chốt Đơn Bán Hàng M13 thành công!', data.message || 'Đã tạo Sales Order');
       fetchData();
     } catch (err: any) {
       onNotify('danger', 'Lỗi chuyển đổi sang SO', err.message);
+    }
+  };
+
+  const handleConvertQuotationToSO = async (quotationId: number) => {
+    try {
+      const quote = quotations.find((q) => q.id === quotationId);
+      if (quote && quote.customerId) {
+        const creditRes = await fetch(`/api/customers/${quote.customerId}/credit`);
+        if (creditRes.ok) {
+          const creditData = await creditRes.json();
+          if (creditData && creditData.creditLimit) {
+            const available = creditData.available;
+            if (quote.totalAmount > available) {
+              setConfirmDialog({
+                isOpen: true,
+                title: 'Cảnh Báo Hạn Mức Tín Dụng',
+                description: `Báo giá này (${(quote.totalAmount / 1000000).toLocaleString('vi-VN')} Tr) vượt quá hạn mức tín dụng khả dụng của khách hàng (${(available / 1000000).toLocaleString('vi-VN')} Tr). Bạn có chắc chắn muốn chuyển đổi sang Đơn hàng?`,
+                intent: 'warning',
+                onConfirm: () => executeConversion(quotationId)
+              });
+              return;
+            }
+          }
+        }
+      }
+      executeConversion(quotationId);
+    } catch (e: any) {
+       onNotify('danger', 'Lỗi kiểm tra tín dụng', e.message);
     }
   };
 

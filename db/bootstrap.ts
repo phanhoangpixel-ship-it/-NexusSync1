@@ -10,6 +10,11 @@ import path from "path";
 import { ENTERPRISE_MASTER_PRODUCTS } from "../src/data/enterpriseMaster";
 
 export async function ensureSchemaSynchronized() {
+  try {
+    await client.execute("PRAGMA journal_mode = WAL;");
+    await client.execute("PRAGMA busy_timeout = 10000;");
+  } catch (_) {}
+
   // Ensure all tables defined in schema.ts are created
   for (const key of Object.keys(schema)) {
     const item = (schema as any)[key];
@@ -46,6 +51,7 @@ export async function ensureSchemaSynchronized() {
     `ALTER TABLE bank_accounts ADD COLUMN book_balance REAL DEFAULT 0`,
     `ALTER TABLE bank_accounts ADD COLUMN bank_balance REAL DEFAULT 0`,
     `ALTER TABLE bank_transactions ADD COLUMN bank_ref TEXT`,
+    `ALTER TABLE purchase_requisitions ADD COLUMN mrp_result_id INTEGER`,
     `CREATE TABLE IF NOT EXISTS processed_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_id TEXT NOT NULL,
@@ -151,6 +157,8 @@ export async function ensureSchemaSynchronized() {
     `ALTER TABLE dock_appointments ADD COLUMN notes TEXT`,
     `ALTER TABLE dock_appointments ADD COLUMN created_at INTEGER`,
     `ALTER TABLE dock_appointments ADD COLUMN updated_at INTEGER`,
+    `ALTER TABLE sales_orders ADD COLUMN source_type TEXT`,
+    `ALTER TABLE sales_orders ADD COLUMN source_id INTEGER`,
     // M10 Strategic Sourcing & RFQ (Phase 1) Foundation
     `CREATE TABLE IF NOT EXISTS sourcing_packages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -189,6 +197,38 @@ export async function ensureSchemaSynchronized() {
     `CREATE INDEX IF NOT EXISTS sourcing_awards_bid_id_idx ON sourcing_awards (bid_id)`,
     `CREATE INDEX IF NOT EXISTS sourcing_awards_supplier_id_idx ON sourcing_awards (supplier_id)`,
     `ALTER TABLE srm_rfqs ADD COLUMN current_round INTEGER DEFAULT 1`,
+    // M06 Innovation R&D Stage-Gate & Handover Enhancements
+    `ALTER TABLE rd_projects ADD COLUMN stage TEXT DEFAULT 'DRAFT'`,
+    `ALTER TABLE rd_projects ADD COLUMN target_sku TEXT`,
+    `ALTER TABLE rd_projects ADD COLUMN registered_product_id INTEGER`,
+    `ALTER TABLE rd_projects ADD COLUMN handover_bom_id INTEGER`,
+    `ALTER TABLE rd_projects ADD COLUMN handover_mo_id INTEGER`,
+    `ALTER TABLE rd_projects ADD COLUMN is_confidential INTEGER DEFAULT 0`,
+    `ALTER TABLE rd_projects ADD COLUMN handover_signoff_at TEXT`,
+    `ALTER TABLE rd_projects ADD COLUMN handover_signoff_by TEXT`,
+    `ALTER TABLE rd_projects ADD COLUMN is_locked INTEGER DEFAULT 0`,
+    `CREATE INDEX IF NOT EXISTS idx_rd_formula_versions_project ON rd_formula_versions (project_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_rd_sample_evaluations_project ON rd_sample_evaluations (project_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_rd_compliance_checks_project ON rd_compliance_checks (project_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_rd_handover_checklist_project ON rd_handover_checklist (project_id)`,
+    `CREATE TABLE IF NOT EXISTS rd_experiments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      experiment_code TEXT NOT NULL UNIQUE,
+      project_id INTEGER REFERENCES rd_projects(id),
+      formula_id INTEGER REFERENCES rd_formulas(id),
+      formula_version TEXT,
+      experiment_name TEXT NOT NULL,
+      test_type TEXT NOT NULL,
+      sample_size INTEGER NOT NULL DEFAULT 5,
+      yield_rate REAL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'PASSED',
+      score REAL DEFAULT 0,
+      operator_name TEXT NOT NULL,
+      notes TEXT,
+      conducted_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_rd_experiments_project ON rd_experiments (project_id)`,
     `CREATE TABLE IF NOT EXISTS srm_auction_rounds (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       rfq_id INTEGER NOT NULL REFERENCES srm_rfqs(id),
@@ -203,7 +243,159 @@ export async function ensureSchemaSynchronized() {
       closed_at INTEGER
     )`,
     `CREATE INDEX IF NOT EXISTS srm_auction_rounds_rfq_id_idx ON srm_auction_rounds (rfq_id)`,
-    `CREATE INDEX IF NOT EXISTS srm_auction_rounds_round_num_idx ON srm_auction_rounds (round_number)`
+    `CREATE INDEX IF NOT EXISTS srm_auction_rounds_round_num_idx ON srm_auction_rounds (round_number)`,
+    // M15 Returns & RMA Dispositions Foundation (rmaRequests, rmaItems)
+    `CREATE TABLE IF NOT EXISTS rma_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      rma_number TEXT NOT NULL UNIQUE,
+      order_id INTEGER,
+      order_code TEXT,
+      delivery_code TEXT,
+      customer_id INTEGER,
+      customer_name TEXT NOT NULL,
+      warehouse_id INTEGER,
+      product_code TEXT,
+      product_name TEXT,
+      quantity REAL NOT NULL DEFAULT 1,
+      uom TEXT NOT NULL DEFAULT 'Cái',
+      lot_serial TEXT,
+      reason TEXT NOT NULL,
+      requested_resolution TEXT NOT NULL DEFAULT 'REPLACE (Đổi mới sản phẩm)',
+      status TEXT NOT NULL DEFAULT 'REQUESTED',
+      inspection_result TEXT NOT NULL DEFAULT 'PENDING',
+      disposition TEXT NOT NULL DEFAULT 'PENDING',
+      financial_status TEXT NOT NULL DEFAULT 'PENDING',
+      refund_method TEXT DEFAULT 'CREDIT_NOTE',
+      warranty_status TEXT NOT NULL DEFAULT 'VALID',
+      return_window_days INTEGER NOT NULL DEFAULT 30,
+      fraud_score REAL NOT NULL DEFAULT 0,
+      fraud_flags TEXT,
+      rtv_reference_code TEXT,
+      maintenance_wo_code TEXT,
+      refund_channel TEXT NOT NULL DEFAULT 'CREDIT_NOTE_M31',
+      total_amount REAL NOT NULL DEFAULT 0,
+      refunded_amount REAL NOT NULL DEFAULT 0,
+      credit_note_number TEXT,
+      inspection_notes TEXT,
+      inspected_by INTEGER,
+      inspected_at INTEGER,
+      approved_by INTEGER,
+      approved_at INTEGER,
+      completed_at INTEGER,
+      rejected_at INTEGER,
+      rejection_reason TEXT,
+      request_date TEXT NOT NULL,
+      notes TEXT,
+      metadata TEXT,
+      created_by INTEGER,
+      created_at INTEGER,
+      updated_at INTEGER
+    )`,
+    `CREATE TABLE IF NOT EXISTS rma_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      rma_request_id INTEGER NOT NULL,
+      product_id INTEGER,
+      product_code TEXT NOT NULL,
+      product_name TEXT NOT NULL,
+      quantity REAL NOT NULL DEFAULT 1,
+      uom TEXT NOT NULL DEFAULT 'Cái',
+      uom_id INTEGER,
+      serial_id INTEGER,
+      lot_id INTEGER,
+      lot_serial TEXT,
+      condition TEXT DEFAULT 'DEFECTIVE',
+      unit_price REAL NOT NULL DEFAULT 0,
+      original_unit_cost REAL NOT NULL DEFAULT 0,
+      subtotal REAL NOT NULL DEFAULT 0,
+      reason TEXT,
+      disposition TEXT NOT NULL DEFAULT 'PENDING',
+      disposition_target TEXT NOT NULL DEFAULT 'RESTOCK',
+      inspected_quantity REAL DEFAULT 0,
+      restocked_quantity REAL DEFAULT 0,
+      scrapped_quantity REAL DEFAULT 0,
+      replaced_quantity REAL DEFAULT 0,
+      notes TEXT,
+      created_at INTEGER
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS rma_requests_number_idx ON rma_requests (rma_number)`,
+    `CREATE INDEX IF NOT EXISTS rma_requests_order_id_idx ON rma_requests (order_id)`,
+    `CREATE INDEX IF NOT EXISTS rma_requests_order_code_idx ON rma_requests (order_code)`,
+    `CREATE INDEX IF NOT EXISTS rma_requests_customer_id_idx ON rma_requests (customer_id)`,
+    `CREATE INDEX IF NOT EXISTS rma_requests_warehouse_id_idx ON rma_requests (warehouse_id)`,
+    `CREATE INDEX IF NOT EXISTS rma_requests_status_idx ON rma_requests (status)`,
+    `CREATE INDEX IF NOT EXISTS rma_requests_inspection_result_idx ON rma_requests (inspection_result)`,
+    `CREATE INDEX IF NOT EXISTS rma_requests_disposition_idx ON rma_requests (disposition)`,
+    `CREATE INDEX IF NOT EXISTS rma_requests_financial_status_idx ON rma_requests (financial_status)`,
+    `CREATE INDEX IF NOT EXISTS rma_requests_date_idx ON rma_requests (request_date)`,
+    `CREATE INDEX IF NOT EXISTS rma_requests_warranty_status_idx ON rma_requests (warranty_status)`,
+    `CREATE INDEX IF NOT EXISTS rma_requests_rtv_code_idx ON rma_requests (rtv_reference_code)`,
+    `CREATE INDEX IF NOT EXISTS rma_requests_maintenance_wo_idx ON rma_requests (maintenance_wo_code)`,
+    `CREATE INDEX IF NOT EXISTS rma_requests_refund_channel_idx ON rma_requests (refund_channel)`,
+    `CREATE INDEX IF NOT EXISTS rma_requests_fraud_score_idx ON rma_requests (fraud_score)`,
+    `CREATE INDEX IF NOT EXISTS rma_items_request_id_idx ON rma_items (rma_request_id)`,
+    `CREATE INDEX IF NOT EXISTS rma_items_product_id_idx ON rma_items (product_id)`,
+    `CREATE INDEX IF NOT EXISTS rma_items_product_code_idx ON rma_items (product_code)`,
+    `CREATE INDEX IF NOT EXISTS rma_items_lot_serial_idx ON rma_items (lot_serial)`,
+    `CREATE INDEX IF NOT EXISTS rma_items_serial_id_idx ON rma_items (serial_id)`,
+    `CREATE INDEX IF NOT EXISTS rma_items_lot_id_idx ON rma_items (lot_id)`,
+    `CREATE INDEX IF NOT EXISTS rma_items_disposition_idx ON rma_items (disposition)`,
+    `CREATE INDEX IF NOT EXISTS rma_items_disp_target_idx ON rma_items (disposition_target)`,
+    // M15 Phase 02 Schema Migrations (ALTER TABLE on existing DB)
+    `ALTER TABLE rma_requests ADD COLUMN warranty_status TEXT DEFAULT 'VALID'`,
+    `ALTER TABLE rma_requests ADD COLUMN return_window_days INTEGER DEFAULT 30`,
+    `ALTER TABLE rma_requests ADD COLUMN fraud_score REAL DEFAULT 0`,
+    `ALTER TABLE rma_requests ADD COLUMN fraud_flags TEXT`,
+    `ALTER TABLE rma_requests ADD COLUMN rtv_reference_code TEXT`,
+    `ALTER TABLE rma_requests ADD COLUMN maintenance_wo_code TEXT`,
+    `ALTER TABLE rma_requests ADD COLUMN refund_channel TEXT DEFAULT 'CREDIT_NOTE_M31'`,
+    `ALTER TABLE rma_items ADD COLUMN disposition_target TEXT DEFAULT 'RESTOCK'`,
+    `ALTER TABLE rma_items ADD COLUMN serial_id INTEGER`,
+    `ALTER TABLE rma_items ADD COLUMN lot_id INTEGER`,
+    `ALTER TABLE rma_items ADD COLUMN original_unit_cost REAL DEFAULT 0`,
+    // M14 Sales Commission & Dispute Engine Migrations
+    `ALTER TABLE commission_plans ADD COLUMN split_commission_enabled INTEGER DEFAULT 0`,
+    `ALTER TABLE commission_plans ADD COLUMN manager_override_percent REAL DEFAULT 15.0`,
+    `ALTER TABLE commission_plans ADD COLUMN presales_split_percent REAL DEFAULT 10.0`,
+    `ALTER TABLE commission_plans ADD COLUMN primary_rep_percent REAL DEFAULT 75.0`,
+    `ALTER TABLE commission_plans ADD COLUMN anomaly_threshold_percent REAL DEFAULT 20.0`,
+    `ALTER TABLE commission_calculations ADD COLUMN rma_id INTEGER`,
+    `ALTER TABLE commission_calculations ADD COLUMN rma_code TEXT`,
+    `ALTER TABLE commission_calculations ADD COLUMN calculation_basis TEXT DEFAULT 'REVENUE'`,
+    `ALTER TABLE commission_calculations ADD COLUMN revenue_amount REAL DEFAULT 0`,
+    `ALTER TABLE commission_calculations ADD COLUMN cogs_amount REAL DEFAULT 0`,
+    `ALTER TABLE commission_calculations ADD COLUMN margin_amount REAL DEFAULT 0`,
+    `ALTER TABLE commission_calculations ADD COLUMN margin_percent REAL DEFAULT 0`,
+    `ALTER TABLE commission_calculations ADD COLUMN is_split INTEGER DEFAULT 0`,
+    `ALTER TABLE commission_calculations ADD COLUMN split_role TEXT`,
+    `ALTER TABLE commission_calculations ADD COLUMN split_percent REAL DEFAULT 100`,
+    `ALTER TABLE commission_calculations ADD COLUMN parent_calculation_id INTEGER`,
+    `ALTER TABLE commission_calculations ADD COLUMN parent_sales_rep_id INTEGER`,
+    `ALTER TABLE commission_calculations ADD COLUMN is_anomaly INTEGER DEFAULT 0`,
+    `ALTER TABLE commission_calculations ADD COLUMN anomaly_reason TEXT`,
+    `ALTER TABLE commission_payouts ADD COLUMN payroll_period_id TEXT`,
+    `ALTER TABLE commission_payouts ADD COLUMN dms_document_id TEXT`,
+    `ALTER TABLE commission_payouts ADD COLUMN dms_sha256_hash TEXT`,
+    `CREATE TABLE IF NOT EXISTS commission_disputes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      dispute_code TEXT NOT NULL UNIQUE,
+      calculation_id INTEGER,
+      payout_id INTEGER,
+      sales_person_id INTEGER NOT NULL,
+      disputed_amount REAL NOT NULL DEFAULT 0,
+      expected_amount REAL NOT NULL DEFAULT 0,
+      reason TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'OPEN',
+      resolution_notes TEXT,
+      adjustment_calculation_id INTEGER,
+      resolved_by INTEGER,
+      resolved_at INTEGER,
+      created_by INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_commission_disputes_code ON commission_disputes (dispute_code)`,
+    `CREATE INDEX IF NOT EXISTS idx_commission_disputes_salesperson ON commission_disputes (sales_person_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_commission_disputes_status ON commission_disputes (status)`
   ];
 
   for (const stmt of migrations) {
@@ -336,7 +528,10 @@ export async function bootstrapDatabase() {
       'manufacturing.read', 'manufacturing.write', 'eam.read', 'eam.write', 'eam.wo_create', 'eam.wo_update',
       'quality.read', 'quality.inspect', 'quality.plan_manage',
       'subcontracting.order.view', 'subcontracting.order.create', 'subcontracting.order.approve',
-      'commission.read', 'commission.manage'
+      'commission.read', 'commission.manage',
+      // M06 Innovation R&D & Formulation
+      'rd.project.manage', 'rd.experiment.manage', 'rd.confidential.view', 'rd:confidential',
+      'rd.sample.evaluate', 'rd.handover.approve'
     ];
 
     for (const p of standardPerms) {
@@ -465,11 +660,33 @@ export async function bootstrapDatabase() {
         });
 
         await client.execute({
+          sql: `INSERT OR REPLACE INTO stock_balances (product_id, warehouse_id, location_id, stock_physical, stock_reserved, stock_available) VALUES (?, 1, 10, ?, ?, ?)`,
+          args: [prodId, p.stock, Math.floor(p.stock * 0.1), p.stock - Math.floor(p.stock * 0.1)]
+        });
+        await client.execute({
           sql: `INSERT OR REPLACE INTO stock_balances (product_id, warehouse_id, location_id, stock_physical, stock_reserved, stock_available) VALUES (?, 1, 1, ?, ?, ?)`,
           args: [prodId, p.stock, Math.floor(p.stock * 0.1), p.stock - Math.floor(p.stock * 0.1)]
         });
       }
     }
+
+    // Ensure all products in the database have stock balances initialized for warehouse 1
+    await client.execute(`
+      INSERT OR IGNORE INTO stock_balances (product_id, warehouse_id, location_id, stock_physical, stock_reserved, stock_available)
+      SELECT p.id, 1, 10, COALESCE(p.stock_physical, 50), COALESCE(p.stock_reserved, 5), COALESCE(p.stock_available, 45)
+      FROM products p
+      WHERE NOT EXISTS (
+        SELECT 1 FROM stock_balances sb WHERE sb.product_id = p.id AND sb.warehouse_id = 1 AND sb.location_id = 10
+      )
+    `);
+    await client.execute(`
+      INSERT OR IGNORE INTO stock_balances (product_id, warehouse_id, location_id, stock_physical, stock_reserved, stock_available)
+      SELECT p.id, 1, 1, COALESCE(p.stock_physical, 50), COALESCE(p.stock_reserved, 5), COALESCE(p.stock_available, 45)
+      FROM products p
+      WHERE NOT EXISTS (
+        SELECT 1 FROM stock_balances sb WHERE sb.product_id = p.id AND sb.warehouse_id = 1 AND sb.location_id = 1
+      )
+    `);
 
     // 8. Seed Work Centers & BOMs if none exist
     const wcCount = await client.execute(`SELECT count(*) as count FROM work_centers`);
@@ -862,6 +1079,450 @@ export async function bootstrapDatabase() {
         (2, 'APT-2026-002', 'Dock Bay 02 (Outbound)', 'OUTBOUND', 'Viettel Post Logistics', NULL, 'SO-2026-0120', '10:30 - 12:00', 'SCHEDULED', 1, ${nowSec}),
         (3, 'APT-2026-003', 'Dock Bay 03 (Heavy Duty)', 'INBOUND', 'DHL Global Forwarding', 'PO-2026-0092', NULL, '14:00 - 16:00', 'SCHEDULED', 1, ${nowSec})
       `);
+    }
+
+    // 13. Seed M15 Returns & RMA Dispositions (rmaRequests, rmaItems)
+    const rmaCount = await client.execute(`SELECT COUNT(*) as count FROM rma_requests`);
+    if (Number(rmaCount.rows[0]?.count || 0) === 0) {
+      const nowSec = Math.floor(Date.now() / 1000);
+
+      // Ensure Master Data: Customers
+      const rmaCustomers = [
+        { id: 101, name: 'Công ty Cổ phần Thương mại Kỹ thuật Hưng Thịnh', phone: '024 3881 9922', email: 'contact@hungthinh-tech.vn', address: 'Khu Công Nghiệp Đài Tư, Long Biên, Hà Nội' },
+        { id: 102, name: 'Tập đoàn Chế tạo Máy & Thiết bị Công nghiệp Hòa Phát', phone: '028 3910 8899', email: 'procurement@hoaphat-machinery.vn', address: 'KCN Phố Nối A, Văn Lâm, Hưng Yên' },
+        { id: 103, name: 'Công ty TNHH Cơ điện Lạnh Đông Nam Á', phone: '028 3755 1234', email: 'orders@dongnama-mep.vn', address: 'Lô C12 KCN Tân Tạo, Bình Tân, TP.HCM' },
+        { id: 104, name: 'Công ty TNHH Công nghệ Viễn thông Sao Mai', phone: '024 3792 5566', email: 'it@saomai-telecom.vn', address: 'Tòa nhà Sao Mai, Cầu Giấy, Hà Nội' }
+      ];
+      for (const c of rmaCustomers) {
+        await client.execute({
+          sql: `INSERT OR IGNORE INTO customers (id, name, phone, email, address) VALUES (?, ?, ?, ?, ?)`,
+          args: [c.id, c.name, c.phone, c.email, c.address]
+        });
+      }
+
+      // Ensure Master Data: Products
+      const rmaProducts = [
+        { id: 5, sku: 'SKU-ENG-088', name: 'Bơm thủy lực cao áp P-1000', unit: 'Cái', retailPrice: 18500000, costPrice: 14200000 },
+        { id: 6, sku: 'SKU-AUT-204', name: 'Cụm cảm biến nhiệt độ đa điểm IoT Sensor v3', unit: 'Bộ', retailPrice: 2450000, costPrice: 1800000 },
+        { id: 7, sku: 'SKU-VAL-012', name: 'Van điều áp khí nén 2 chiều SMC-Series', unit: 'Chiếc', retailPrice: 1250000, costPrice: 890000 },
+        { id: 8, sku: 'PRD-001', name: 'Laptop Business 14', unit: 'Chiếc', retailPrice: 28500000, costPrice: 22000000 }
+      ];
+      for (const p of rmaProducts) {
+        await client.execute({
+          sql: `INSERT OR IGNORE INTO products (id, sku, name, base_unit, retail_price, cost_price, status) VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE')`,
+          args: [p.id, p.sku, p.name, p.unit, p.retailPrice, p.costPrice]
+        });
+      }
+
+      // Ensure Master Data: Sales Orders
+      const rmaOrders = [
+        { id: 101, code: 'SO-2026-00120', customerId: 101, totalAmount: 45000000 },
+        { id: 102, code: 'SO-2026-00142', customerId: 102, totalAmount: 32000000 },
+        { id: 103, code: 'SO-2026-00168', customerId: 103, totalAmount: 15500000 },
+        { id: 104, code: 'SO-2026-00195', customerId: 104, totalAmount: 28500000 },
+        { id: 105, code: 'SO-2026-00210', customerId: 102, totalAmount: 22000000 }
+      ];
+      for (const so of rmaOrders) {
+        await client.execute({
+          sql: `INSERT OR IGNORE INTO sales_orders (id, code, customer_id, warehouse_id, status, payment_status, total_amount, final_amount, created_by) VALUES (?, ?, ?, 1, 'ISSUED', 'PAID', ?, ?, 1)`,
+          args: [so.id, so.code, so.customerId, so.totalAmount, so.totalAmount]
+        });
+      }
+
+      // Seed RMA Requests & Items (Backwards-compatible with INITIAL_RMA_SEED)
+      const seedRmas = [
+        {
+          id: 1,
+          rmaNumber: 'RMA-2026-0084',
+          orderId: 101,
+          orderCode: 'SO-2026-00120',
+          deliveryCode: 'DEL-2026-0155',
+          customerId: 101,
+          customerName: 'Công ty Cổ phần Thương mại Kỹ thuật Hưng Thịnh',
+          warehouseId: 1,
+          productCode: 'SKU-ENG-088',
+          productName: 'Bơm thủy lực cao áp P-1000',
+          quantity: 2,
+          uom: 'Cái',
+          lotSerial: 'LOT-2026-X889',
+          reason: 'Áp suất đầu ra không đạt định mức kỹ thuật cam kết',
+          requestedResolution: 'REPLACE (Đổi mới sản phẩm)',
+          status: 'APPROVED',
+          inspectionResult: 'DEFECTIVE',
+          disposition: 'REPLACE',
+          financialStatus: 'CREDIT_NOTE_ISSUED',
+          refundMethod: 'CREDIT_NOTE',
+          totalAmount: 37000000,
+          refundedAmount: 37000000,
+          creditNoteNumber: 'CN-2026-0084',
+          inspectionNotes: 'Kiểm tra áp suất đạt 620 bar thay vì 1000 bar danh định. Xác nhận van bypass rò rỉ cơ học.',
+          inspectedBy: 1,
+          inspectedAt: nowSec - 86400 * 3,
+          approvedBy: 1,
+          approvedAt: nowSec - 86400 * 2,
+          completedAt: null,
+          rejectedAt: null,
+          rejectionReason: null,
+          requestDate: '2026-08-28',
+          items: [
+            {
+              productId: 5,
+              productCode: 'SKU-ENG-088',
+              productName: 'Bơm thủy lực cao áp P-1000',
+              quantity: 2,
+              uom: 'Cái',
+              lotSerial: 'LOT-2026-X889',
+              condition: 'DEFECTIVE',
+              unitPrice: 18500000,
+              subtotal: 37000000,
+              reason: 'Áp suất đầu ra không đạt định mức kỹ thuật cam kết',
+              disposition: 'REPLACE',
+              inspectedQuantity: 2,
+              restockedQuantity: 0,
+              scrappedQuantity: 0,
+              replacedQuantity: 2
+            }
+          ]
+        },
+        {
+          id: 2,
+          rmaNumber: 'RMA-2026-0085',
+          orderId: 102,
+          orderCode: 'SO-2026-00142',
+          deliveryCode: 'DEL-2026-0180',
+          customerId: 102,
+          customerName: 'Tập đoàn Chế tạo Máy & Thiết bị Công nghiệp Hòa Phát',
+          warehouseId: 1,
+          productCode: 'SKU-AUT-204',
+          productName: 'Cụm cảm biến nhiệt độ đa điểm IoT Sensor v3',
+          quantity: 10,
+          uom: 'Bộ',
+          lotSerial: 'LOT-2026-S441',
+          reason: 'Giao nhầm mã chủng loại cảm biến so với hợp đồng',
+          requestedResolution: 'RESTOCK (Nhập kho hoàn trả)',
+          status: 'UNDER_REVIEW',
+          inspectionResult: 'GOOD',
+          disposition: 'RESTOCK',
+          financialStatus: 'PENDING',
+          refundMethod: 'AR_CREDIT',
+          totalAmount: 24500000,
+          refundedAmount: 0,
+          creditNoteNumber: null,
+          inspectionNotes: 'Hàng nguyên seal niêm phong của nhà sản xuất, ngoại quan hoàn hảo, đủ phụ kiện đi kèm.',
+          inspectedBy: 1,
+          inspectedAt: nowSec - 86400 * 1,
+          approvedBy: null,
+          approvedAt: null,
+          completedAt: null,
+          rejectedAt: null,
+          rejectionReason: null,
+          requestDate: '2026-09-02',
+          items: [
+            {
+              productId: 6,
+              productCode: 'SKU-AUT-204',
+              productName: 'Cụm cảm biến nhiệt độ đa điểm IoT Sensor v3',
+              quantity: 10,
+              uom: 'Bộ',
+              lotSerial: 'LOT-2026-S441',
+              condition: 'GOOD',
+              unitPrice: 2450000,
+              subtotal: 24500000,
+              reason: 'Giao nhầm mã chủng loại cảm biến so với hợp đồng',
+              disposition: 'RESTOCK',
+              inspectedQuantity: 10,
+              restockedQuantity: 0,
+              scrappedQuantity: 0,
+              replacedQuantity: 0
+            }
+          ]
+        },
+        {
+          id: 3,
+          rmaNumber: 'RMA-2026-0086',
+          orderId: 103,
+          orderCode: 'SO-2026-00168',
+          deliveryCode: 'DEL-2026-0205',
+          customerId: 103,
+          customerName: 'Công ty TNHH Cơ điện Lạnh Đông Nam Á',
+          warehouseId: 1,
+          productCode: 'SKU-VAL-012',
+          productName: 'Van điều áp khí nén 2 chiều SMC-Series',
+          quantity: 5,
+          uom: 'Chiếc',
+          lotSerial: 'LOT-2026-V112',
+          reason: 'Vỏ van bị trầy xước và biến dạng trong quá trình vận chuyển',
+          requestedResolution: 'CREDIT (Cấn trừ công nợ / Hoàn tiền)',
+          status: 'REQUESTED',
+          inspectionResult: 'DAMAGED',
+          disposition: 'PENDING',
+          financialStatus: 'PENDING',
+          refundMethod: 'CREDIT_NOTE',
+          totalAmount: 6250000,
+          refundedAmount: 0,
+          creditNoteNumber: null,
+          inspectionNotes: 'Chờ đối soát trách nhiệm đơn vị giao nhận Logistics M36 trước khi quyết định bồi thường.',
+          inspectedBy: null,
+          inspectedAt: null,
+          approvedBy: null,
+          approvedAt: null,
+          completedAt: null,
+          rejectedAt: null,
+          rejectionReason: null,
+          requestDate: '2026-09-08',
+          items: [
+            {
+              productId: 7,
+              productCode: 'SKU-VAL-012',
+              productName: 'Van điều áp khí nén 2 chiều SMC-Series',
+              quantity: 5,
+              uom: 'Chiếc',
+              lotSerial: 'LOT-2026-V112',
+              condition: 'DAMAGED',
+              unitPrice: 1250000,
+              subtotal: 6250000,
+              reason: 'Vỏ van bị trầy xước và biến dạng trong quá trình vận chuyển',
+              disposition: 'PENDING',
+              inspectedQuantity: 0,
+              restockedQuantity: 0,
+              scrappedQuantity: 0,
+              replacedQuantity: 0
+            }
+          ]
+        },
+        {
+          id: 4,
+          rmaNumber: 'RMA-2026-0087',
+          orderId: 104,
+          orderCode: 'SO-2026-00195',
+          deliveryCode: 'DEL-2026-0230',
+          customerId: 104,
+          customerName: 'Công ty TNHH Công nghệ Viễn thông Sao Mai',
+          warehouseId: 1,
+          productCode: 'PRD-001',
+          productName: 'Laptop Business 14',
+          quantity: 1,
+          uom: 'Chiếc',
+          lotSerial: 'SN-NB-2026-9812',
+          reason: 'Màn hình chập chờn khi khởi động, cổng Thunderbolt không nhận',
+          requestedResolution: 'REPAIR (Bảo hành sửa chữa kỹ thuật)',
+          status: 'COMPLETED',
+          inspectionResult: 'DEFECTIVE',
+          disposition: 'REPAIR',
+          financialStatus: 'RECONCILED',
+          refundMethod: 'WARRANTY_REPAIR',
+          totalAmount: 28500000,
+          refundedAmount: 0,
+          creditNoteNumber: null,
+          inspectionNotes: 'Đã thay bo mạch I/O cổng Thunderbolt và cáp màn hình eDP. Chạy test 48h liên tục ổn định.',
+          inspectedBy: 1,
+          inspectedAt: nowSec - 86400 * 5,
+          approvedBy: 1,
+          approvedAt: nowSec - 86400 * 4,
+          completedAt: nowSec - 86400 * 1,
+          rejectedAt: null,
+          rejectionReason: null,
+          requestDate: '2026-09-12',
+          items: [
+            {
+              productId: 8,
+              productCode: 'PRD-001',
+              productName: 'Laptop Business 14',
+              quantity: 1,
+              uom: 'Chiếc',
+              lotSerial: 'SN-NB-2026-9812',
+              condition: 'DEFECTIVE',
+              unitPrice: 28500000,
+              subtotal: 28500000,
+              reason: 'Màn hình chập chờn khi khởi động, cổng Thunderbolt không nhận',
+              disposition: 'REPAIR',
+              inspectedQuantity: 1,
+              restockedQuantity: 0,
+              scrappedQuantity: 0,
+              replacedQuantity: 0
+            }
+          ]
+        },
+        {
+          id: 5,
+          rmaNumber: 'RMA-2026-0088',
+          orderId: 105,
+          orderCode: 'SO-2026-00210',
+          deliveryCode: 'DEL-2026-0255',
+          customerId: 102,
+          customerName: 'Tập đoàn Chế tạo Máy & Thiết bị Công nghiệp Hòa Phát',
+          warehouseId: 1,
+          productCode: 'SKU-ENG-088',
+          productName: 'Bơm thủy lực cao áp P-1000',
+          quantity: 1,
+          uom: 'Cái',
+          lotSerial: 'LOT-2026-X892',
+          reason: 'Hao mòn cơ học vượt giới hạn do sử dụng sai hướng dẫn vận hành',
+          requestedResolution: 'REPLACE (Đổi mới sản phẩm)',
+          status: 'REJECTED',
+          inspectionResult: 'REJECTED',
+          disposition: 'SCRAP',
+          financialStatus: 'PENDING',
+          refundMethod: 'NO_REFUND',
+          totalAmount: 18500000,
+          refundedAmount: 0,
+          creditNoteNumber: null,
+          inspectionNotes: 'Phát hiện tạp chất cát lẫn trong buồng dầu gây kẹt piston, từ chối bảo hành theo điều khoản nhà sản xuất.',
+          inspectedBy: 1,
+          inspectedAt: nowSec - 86400 * 1,
+          approvedBy: null,
+          approvedAt: null,
+          completedAt: null,
+          rejectedAt: nowSec - 86400 * 1,
+          rejectionReason: 'Khách hàng sử dụng dầu tái chế có lẫn dị vật, vi phạm quy định vận hành của nhà sản xuất.',
+          requestDate: '2026-09-15',
+          items: [
+            {
+              productId: 5,
+              productCode: 'SKU-ENG-088',
+              productName: 'Bơm thủy lực cao áp P-1000',
+              quantity: 1,
+              uom: 'Cái',
+              lotSerial: 'LOT-2026-X892',
+              condition: 'SCRAP',
+              unitPrice: 18500000,
+              subtotal: 18500000,
+              reason: 'Hao mòn cơ học vượt giới hạn do sử dụng sai hướng dẫn vận hành',
+              disposition: 'SCRAP',
+              inspectedQuantity: 1,
+              restockedQuantity: 0,
+              scrappedQuantity: 1,
+              replacedQuantity: 0
+            }
+          ]
+        }
+      ];
+
+      for (const r of seedRmas) {
+        await client.execute({
+          sql: `INSERT INTO rma_requests (
+            id, rma_number, order_id, order_code, delivery_code, customer_id, customer_name, warehouse_id,
+            product_code, product_name, quantity, uom, lot_serial, reason, requested_resolution,
+            status, inspection_result, disposition, financial_status, refund_method,
+            total_amount, refunded_amount, credit_note_number, inspection_notes,
+            inspected_by, inspected_at, approved_by, approved_at, completed_at, rejected_at, rejection_reason,
+            request_date, created_by, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            r.id, r.rmaNumber, r.orderId, r.orderCode, r.deliveryCode, r.customerId, r.customerName, r.warehouseId,
+            r.productCode, r.productName, r.quantity, r.uom, r.lotSerial, r.reason, r.requestedResolution,
+            r.status, r.inspectionResult, r.disposition, r.financialStatus, r.refundMethod,
+            r.totalAmount, r.refundedAmount, r.creditNoteNumber, r.inspectionNotes,
+            r.inspectedBy, r.inspectedAt, r.approvedBy, r.approvedAt, r.completedAt, r.rejectedAt, r.rejectionReason,
+            r.requestDate, 1, nowSec, nowSec
+          ]
+        });
+
+        for (const it of r.items) {
+          await client.execute({
+            sql: `INSERT INTO rma_items (
+              rma_request_id, product_id, product_code, product_name, quantity, uom, lot_serial,
+              condition, unit_price, subtotal, reason, disposition, inspected_quantity,
+              restocked_quantity, scrapped_quantity, replaced_quantity, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            args: [
+              r.id, it.productId, it.productCode, it.productName, it.quantity, it.uom, it.lotSerial,
+              it.condition, it.unitPrice, it.subtotal, it.reason, it.disposition, it.inspectedQuantity,
+              it.restockedQuantity, it.scrappedQuantity, it.replacedQuantity, nowSec
+            ]
+          });
+        }
+      }
+    }
+
+    // ==========================================
+    // SEED M26 SCM & MRP INITIAL DATA
+    // ==========================================
+    const scmCheck = await client.execute("SELECT count(*) as count FROM scm_forecasts");
+    if ((scmCheck.rows[0] as any)?.count === 0) {
+      console.log("Seeding M26 SCM & MRP initial data...");
+      const scmNow = Math.floor(Date.now() / 1000);
+
+      await client.execute({
+        sql: `INSERT INTO scm_forecasts (
+          id, forecast_code, product_id, product_name, sku, warehouse_id, period,
+          start_date, end_date, historical_avg_demand, forecast_quantity, actual_sales_quantity,
+          forecast_method, accuracy_mae, accuracy_mape, confidence_level, status, notes, created_by, created_at, updated_at
+        ) VALUES 
+        (1, 'FCST-2026-09-001', 1, 'Laptop Business 14', 'PRD-001', 1, 'MONTHLY', '2026-09-01', '2026-09-30', 85, 120, 95, 'EXPONENTIAL_SMOOTHING', 4.8, 4.1, 95.0, 'ACTIVE', 'Dự báo nhu cầu cao điểm doanh nghiệp quý 3/2026', 'SCM Lead Planner', ?, ?),
+        (2, 'FCST-2026-09-002', 2, 'Monitor 27"', 'PRD-002', 1, 'MONTHLY', '2026-09-01', '2026-09-30', 60, 90, 55, 'HOLT_WINTERS', 3.5, 3.8, 92.5, 'ACTIVE', 'Mô hình xu hướng Holt-Winters điều chỉnh mùa vụ', 'SCM Lead Planner', ?, ?),
+        (3, 'FCST-2026-09-003', 5, 'Bơm thủy lực cao áp P-1000', 'SKU-ENG-088', 1, 'MONTHLY', '2026-09-01', '2026-09-30', 30, 45, 28, 'MOVING_AVERAGE', 2.1, 4.5, 90.0, 'ACTIVE', 'Nhu cầu phụ tùng bơm thủy lực dự phòng', 'SCM Lead Planner', ?, ?),
+        (4, 'FCST-2026-09-004', 3, 'Keyboard Mechanical', 'PRD-003', 1, 'MONTHLY', '2026-09-01', '2026-09-30', 110, 150, 120, 'EXPONENTIAL_SMOOTHING', 5.2, 3.5, 95.0, 'ACTIVE', 'Dự báo bàn phím cơ văn phòng', 'SCM Lead Planner', ?, ?)`,
+        args: [scmNow, scmNow, scmNow, scmNow, scmNow, scmNow, scmNow, scmNow]
+      });
+
+      await client.execute({
+        sql: `INSERT INTO mps_schedules (
+          id, mps_code, product_id, product_name, sku, warehouse_id, period,
+          period_start_date, period_end_date, forecast_demand, sales_order_demand, total_gross_demand,
+          projected_available_balance, available_to_promise, planned_production_qty, status, is_frozen, notes, created_at, updated_at
+        ) VALUES
+        (1, 'MPS-2026-W38-001', 1, 'Laptop Business 14', 'PRD-001', 1, 'WEEKLY', '2026-09-15', '2026-09-21', 30, 25, 30, 15, 20, 40, 'COMMITTED', 1, 'Lịch sản xuất cố định tuần 38 (Frozen Window)', ?, ?),
+        (2, 'MPS-2026-W39-002', 2, 'Monitor 27"', 'PRD-002', 1, 'WEEKLY', '2026-09-22', '2026-09-28', 25, 18, 25, 10, 15, 30, 'PLANNED', 0, 'Lịch sản xuất linh hoạt tuần 39 (Liquid Window)', ?, ?),
+        (3, 'MPS-2026-W39-003', 5, 'Bơm thủy lực cao áp P-1000', 'SKU-ENG-088', 1, 'WEEKLY', '2026-09-22', '2026-09-28', 12, 10, 12, 5, 8, 15, 'PLANNED', 0, 'Lịch lắp ráp bơm thủy lực công nghiệp', ?, ?)`,
+        args: [scmNow, scmNow, scmNow, scmNow, scmNow, scmNow]
+      });
+
+      await client.execute({
+        sql: `INSERT INTO mrp_runs (
+          id, run_code, run_type, planning_horizon_days, warehouse_id, status,
+          total_products_analyzed, total_gross_requirements, total_net_requirements,
+          total_purchase_suggestions, total_mo_suggestions, total_exceptions, execution_duration_ms,
+          triggered_by, parameters, created_at
+        ) VALUES (
+          1, 'MRP-20260921-001', 'regenerative', 90, 1, 'COMPLETED',
+          5, 405, 205, 3, 2, 2, 342,
+          'SCM Lead Planner', '{"runType":"regenerative","planningHorizonDays":90,"warehouseId":1}', ?
+        )`,
+        args: [scmNow]
+      });
+
+      await client.execute({
+        sql: `INSERT INTO mrp_results (
+          id, run_id, product_id, sku, product_name, product_type, level, parent_product_id, parent_sku,
+          warehouse_id, gross_requirement, scheduled_receipts, on_hand_stock, reserved_stock, safety_stock,
+          net_requirement, planned_order_receipt, planned_order_release, lead_time_days, suggested_action,
+          suggested_order_qty, required_date, release_date, status, created_at
+        ) VALUES
+        (1, 1, 1, 'PRD-001', 'Laptop Business 14', 'FINISHED_GOOD', 0, NULL, NULL, 1, 120, 20, 50, 10, 10, 40, 40, 40, 5, 'CREATE_MO', 40, '2026-10-05', '2026-09-30', 'PROPOSED', ?),
+        (2, 1, 2, 'PRD-002', 'Monitor 27"', 'FINISHED_GOOD', 0, NULL, NULL, 1, 90, 15, 45, 5, 10, 30, 30, 30, 4, 'CREATE_MO', 30, '2026-10-05', '2026-10-01', 'PROPOSED', ?),
+        (3, 1, 3, 'PRD-003', 'Keyboard Mechanical', 'RAW_MATERIAL', 1, 1, 'PRD-001', 1, 150, 30, 60, 20, 20, 80, 100, 100, 7, 'CREATE_PR', 100, '2026-09-28', '2026-09-21', 'PR_CREATED', ?),
+        (4, 1, 4, 'PRD-004', 'Wireless Mouse', 'RAW_MATERIAL', 1, 1, 'PRD-001', 1, 90, 20, 55, 15, 15, 35, 50, 50, 3, 'CREATE_PR', 50, '2026-09-28', '2026-09-25', 'PR_CREATED', ?),
+        (5, 1, 5, 'SKU-ENG-088', 'Bơm thủy lực cao áp P-1000', 'RAW_MATERIAL', 0, NULL, NULL, 1, 45, 10, 20, 5, 10, 20, 20, 20, 10, 'CREATE_PR', 20, '2026-10-10', '2026-09-30', 'PROPOSED', ?)`,
+        args: [scmNow, scmNow, scmNow, scmNow, scmNow]
+      });
+
+      await client.execute({
+        sql: `INSERT INTO mrp_exceptions (
+          id, run_id, product_id, sku, product_name, exception_type, severity, message, shortage_qty,
+          days_past_due, suggested_remediation, is_resolved, resolved_by, resolved_at, created_at
+        ) VALUES
+        (1, 1, 3, 'PRD-003', 'Keyboard Mechanical', 'CRITICAL_STOCKOUT', 'CRITICAL', 'Cảnh báo thiếu hụt nghiêm trọng: SKU PRD-003 tồn khả dụng (40) không đủ bù đắp nhu cầu sản xuất (150).', 80, 0, 'Phát hành PR đặt mua hàng nhanh với NCC ưu tiên', 0, NULL, NULL, ?),
+        (2, 1, 4, 'PRD-004', 'Wireless Mouse', 'LEAD_TIME_VIOLATION', 'HIGH', 'Vi phạm Lead Time: Thời gian giao hàng (7 ngày) sát ngày yêu cầu lắp ráp.', 35, 2, 'Đàm phán với NCC để rút ngắn Lead Time hoặc điều chuyển kho', 0, NULL, NULL, ?)`,
+        args: [scmNow, scmNow]
+      });
+    }
+
+    const prCheck = await client.execute("SELECT count(*) as count FROM purchase_requisitions");
+    if ((prCheck.rows[0] as any)?.count === 0) {
+      const scmNow = Math.floor(Date.now() / 1000);
+      await client.execute({
+        sql: `INSERT INTO purchase_requisitions (
+          id, pr_number, mrp_run_id, mrp_result_id, product_id, sku, product_name, quantity, uom,
+          estimated_unit_cost, estimated_total_amount, suggested_supplier_id, suggested_supplier_name,
+          warehouse_id, required_date, priority, status, delegated_po_id, delegated_po_code, delegated_at, delegated_by,
+          requested_by, approval_notes, created_at, updated_at
+        ) VALUES
+        (1, 'PR-2026-0001', 1, 3, 3, 'PRD-003', 'Keyboard Mechanical', 100, 'Cái', 450000, 45000000, 1, 'Công ty TNHH Thiết bị Công nghệ Minh Quân', 1, '2026-09-28', 'HIGH', 'PENDING', NULL, NULL, NULL, NULL, 'MRP Engine', 'Nhu cầu lắp ráp Laptop Business 14 đợt 1', ?, ?),
+        (2, 'PR-2026-0002', 1, 4, 4, 'PRD-004', 'Wireless Mouse', 50, 'Cái', 250000, 12500000, 1, 'Công ty TNHH Thiết bị Công nghệ Minh Quân', 1, '2026-09-28', 'NORMAL', 'CONVERTED_TO_PO', 1, 'PO-2026-0001', ?, 'SCM Engine (Delegated to M08)', 'MRP Engine', 'Đã ủy quyền thành công sang M08', ?, ?),
+        (3, 'PR-2026-0003', 1, 5, 5, 'SKU-ENG-088', 'Bơm thủy lực cao áp P-1000', 20, 'Cái', 18500000, 370000000, 2, 'Công ty Cổ phần Thép & Chế tạo Máy Nam Định', 1, '2026-10-10', 'URGENT', 'PENDING', NULL, NULL, NULL, NULL, 'MRP Engine', 'Dự phòng phụ tùng cho khách hàng Hòa Phát', ?, ?)`,
+        args: [scmNow, scmNow, scmNow, scmNow, scmNow, scmNow]
+      });
     }
 
     console.log("Database successfully bootstrapped and verified.");

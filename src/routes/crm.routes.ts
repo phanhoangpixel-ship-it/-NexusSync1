@@ -2,6 +2,7 @@ import { Router } from "express";
 import { client, db } from "../../db/index";
 import * as schema from "../../db/schema";
 import { SalesEngine } from "../services/SalesEngine";
+import { AuditService } from "../../engines/auditService";
 import { eq, desc, sql, and } from "drizzle-orm";
 
 export const crmRouter = Router();
@@ -200,6 +201,7 @@ crmRouter.put("/api/crm/leads/:id", async (req, res) => {
       }).run();
     }
 
+    await AuditService.recordAuditLog({ userId: 1, action: 'UPDATE_LEAD_STATUS', entityType: 'LEAD', entityId: String(id), details: `Lead status updated to ${status}` });
     res.json({ success: true, lead: updated });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -251,6 +253,7 @@ crmRouter.post("/api/crm/leads/:id/convert", async (req, res) => {
       status: "WON"
     }).where(eq(schema.leads.id, id)).run();
 
+    await AuditService.recordAuditLog({ userId: 1, action: 'CONVERT_LEAD_TO_CUSTOMER', entityType: 'CRM_LEAD', entityId: String(id), details: `Lead converted to Customer` });
     // Log Activity
     await db.insert(schema.crmActivities).values({
       leadId: id,
@@ -599,6 +602,7 @@ crmRouter.put("/api/crm/quotations/:id/status", async (req, res) => {
     const { status } = req.body;
 
     await db.update(schema.crmQuotations).set({ status }).where(eq(schema.crmQuotations.id, id)).run();
+    console.log("Updated quote status to CONVERTED_TO_SO for id:", id);
     const updated = await db.select().from(schema.crmQuotations).where(eq(schema.crmQuotations.id, id)).get();
     res.json({ success: true, quotation: updated });
   } catch (err: any) {
@@ -619,6 +623,20 @@ crmRouter.post("/api/crm/quotations/:id/convert-to-so", async (req, res) => {
     if (quotation.status === "CONVERTED_TO_SO") {
       return res.status(400).json({ error: "Báo giá này đã được chuyển đổi thành đơn bán hàng trước đó." });
     }
+
+    if (quotation.customerId) {
+      const cust = await db.select().from(schema.customers).where(eq(schema.customers.id, quotation.customerId)).get();
+      if (cust) {
+        const orders = await db.select().from(schema.salesOrders).where(and(eq(schema.salesOrders.customerId, cust.id), eq(schema.salesOrders.paymentStatus, "UNPAID"))).all();
+        const creditUsed = orders.reduce((sum, o) => sum + (o.finalAmount || 0), 0);
+        const creditLimit = cust.customerGroup === 'B2B' ? 1000000000 : 200000000;
+        const available = creditLimit - creditUsed;
+        if (quotation.grandTotal > available) {
+          return res.status(400).json({ error: `Báo giá này (${(quotation.grandTotal).toLocaleString('vi-VN')} VND) vượt quá hạn mức tín dụng khả dụng của khách hàng (${(available).toLocaleString('vi-VN')} VND).` });
+        }
+      }
+    }
+
 
     let parsedItems = [];
     try {
@@ -655,6 +673,8 @@ crmRouter.post("/api/crm/quotations/:id/convert-to-so", async (req, res) => {
     const orderResult = await SalesEngine.createOrder({
       channel: "B2B",
       source: "CRM_QUOTATION",
+      sourceType: "CRM_QUOTE",
+      sourceId: quotation.id,
       customerId: customerId,
       customerName: quotation.customerName,
       branchId: 1,
@@ -684,7 +704,8 @@ crmRouter.post("/api/crm/quotations/:id/convert-to-so", async (req, res) => {
       status: "CONVERTED_TO_SO",
       convertedSalesOrderId: orderResult.orderId,
       convertedSalesOrderCode: orderResult.orderRef
-    }).where(eq(schema.crmQuotations.id, id)).run();
+    }).where(eq(schema.crmQuotations.id, id)).returning();
+
 
     // Log Activity
     await db.insert(schema.crmActivities).values({
@@ -757,6 +778,38 @@ crmRouter.get("/api/crm/analytics", async (req, res) => {
       stageBreakdown,
       opportunitiesCount: oppsList.length
     });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Feature 5: Stale Lead Alert
+crmRouter.post("/api/crm/leads/scan-stale", async (req, res) => {
+  try {
+    const rawLeads = await db.select().from(schema.leads).all();
+    const now = new Date();
+    const staleLeads = rawLeads.filter(l => {
+      if (l.status === 'WON' || l.status === 'LOST') return false;
+      const createdDate = new Date(l.createdAt);
+      const diffTime = Math.abs(now.getTime() - createdDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays > 30; // 30 days without closing
+    });
+
+    let count = 0;
+    for (const lead of staleLeads) {
+      await db.insert(schema.systemNotifications).values({
+        userId: 1, // Admin or Sales manager
+        title: "Cảnh báo Lead tồn đọng (Stale Lead)",
+        message: `Lead ${lead.leadCode} (${lead.company}) chưa được xử lý trong 30 ngày qua.`,
+        category: "WARNING",
+        read: 0,
+        actionUrl: "/crm",
+      }).run();
+      count++;
+    }
+
+    res.json({ success: true, count, message: `Đã cảnh báo ${count} stale leads.` });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

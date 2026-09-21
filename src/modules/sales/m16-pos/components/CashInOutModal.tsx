@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { X, ArrowDownRight, ArrowUpRight, DollarSign, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { formatVNDCurrency } from '../../../../utils/currencyFormatter';
 
+export type POSCashMovementType = 'FLOAT_IN' | 'SAFE_DROP_OUT' | 'REFUND_OUT' | 'CASH_IN' | 'SAFE_DROP';
+
 interface CashInOutModalProps {
   isOpen: boolean;
   onClose: () => void;
   activeShift: any;
   onSubmit: (params: {
-    type: 'CASH_IN' | 'SAFE_DROP';
+    type: POSCashMovementType;
     amount: number;
     reason: string;
   }) => void;
@@ -19,9 +21,9 @@ export const CashInOutModal: React.FC<CashInOutModalProps> = ({
   activeShift,
   onSubmit
 }) => {
-  const [movementType, setMovementType] = useState<'CASH_IN' | 'SAFE_DROP'>('CASH_IN');
+  const [movementType, setMovementType] = useState<POSCashMovementType>('FLOAT_IN');
   const [amountInput, setAmountInput] = useState<string>('500000');
-  const [reasonInput, setReasonInput] = useState<string>('');
+  const [reasonInput, setReasonInput] = useState<string>('Nạp thêm tiền lẻ phục vụ trả lại khách hàng');
 
   if (!isOpen || !activeShift) return null;
 
@@ -47,12 +49,18 @@ export const CashInOutModal: React.FC<CashInOutModalProps> = ({
         <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white ${
-              movementType === 'CASH_IN' ? 'bg-emerald-600' : 'bg-amber-600'
+              movementType === 'FLOAT_IN' || movementType === 'CASH_IN'
+                ? 'bg-emerald-600'
+                : (movementType === 'REFUND_OUT' ? 'bg-rose-600' : 'bg-amber-600')
             }`}>
-              {movementType === 'CASH_IN' ? <ArrowDownRight className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
+              {movementType === 'FLOAT_IN' || movementType === 'CASH_IN' ? (
+                <ArrowDownRight className="w-4 h-4" />
+              ) : (
+                <ArrowUpRight className="w-4 h-4" />
+              )}
             </div>
             <div>
-              <h3 className="text-sm font-bold">Nộp / Rút Tiền Két Giữa Ca (Cash In/Out)</h3>
+              <h3 className="text-sm font-bold">Chuyển Động Tiền Két (Cash Movement)</h3>
               <p className="text-[11px] text-slate-400">
                 Ca #{activeShift.shiftNo ?? activeShift.id} • Két #{activeShift.cashDrawerId ?? 1}
               </p>
@@ -69,36 +77,51 @@ export const CashInOutModal: React.FC<CashInOutModalProps> = ({
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {/* Movement Type Tabs */}
-          <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+          <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
             <button
               type="button"
               onClick={() => {
-                setMovementType('CASH_IN');
-                if (!reasonInput) setReasonInput('Nạp thêm tiền lẻ đầu/giữa ca (Float Top-up)');
+                setMovementType('FLOAT_IN');
+                setReasonInput('Nạp thêm tiền lẻ phục vụ trả lại khách hàng (FLOAT_IN)');
               }}
-              className={`min-h-[44px] py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                movementType === 'CASH_IN'
+              className={`min-h-[44px] py-2 px-2 rounded-lg text-[11px] font-bold transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                movementType === 'FLOAT_IN' || movementType === 'CASH_IN'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <ArrowDownRight className="w-4 h-4" />
-              <span>Nộp tiền két (Cash In)</span>
+              <ArrowDownRight className="w-3.5 h-3.5" />
+              <span>Nạp tiền lẻ</span>
             </button>
             <button
               type="button"
               onClick={() => {
-                setMovementType('SAFE_DROP');
-                if (!reasonInput) setReasonInput('Rút tiền mặt cất vào két an toàn (Safe Drop)');
+                setMovementType('SAFE_DROP_OUT');
+                setReasonInput('Rút tiền mặt nộp két an toàn giảm rủi ro két (SAFE_DROP_OUT)');
               }}
-              className={`min-h-[44px] py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                movementType === 'SAFE_DROP'
+              className={`min-h-[44px] py-2 px-2 rounded-lg text-[11px] font-bold transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                movementType === 'SAFE_DROP_OUT' || movementType === 'SAFE_DROP'
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <ArrowUpRight className="w-4 h-4" />
-              <span>Rút tiền két (Safe Drop)</span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
+              <span>Rút nộp két</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMovementType('REFUND_OUT');
+                setReasonInput('Chi tiền mặt bồi hoàn trả hàng cho khách (REFUND_OUT)');
+              }}
+              className={`min-h-[44px] py-2 px-2 rounded-lg text-[11px] font-bold transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                movementType === 'REFUND_OUT'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <ArrowUpRight className="w-3.5 h-3.5" />
+              <span>Chi bồi hoàn</span>
             </button>
           </div>
 
@@ -156,7 +179,7 @@ export const CashInOutModal: React.FC<CashInOutModalProps> = ({
           <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-[11px] text-amber-900 dark:text-amber-200 flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              Giao dịch này sẽ được ghi nhận trực tiếp vào sổ nhật ký két và tự động cập nhật số dư kỳ vọng <span className="font-mono font-bold">reconstructedExpectedCash</span> của ca làm việc.
+              Giao dịch này sẽ được ghi nhận trực tiếp vào <span className="font-mono font-bold">cash_movements</span> và tự động cập nhật số dư kỳ vọng <span className="font-mono font-bold">expectedCash</span> của ca làm việc.
             </div>
           </div>
 
@@ -173,12 +196,14 @@ export const CashInOutModal: React.FC<CashInOutModalProps> = ({
               type="submit"
               disabled={!amountInput || Number(amountInput) <= 0 || !reasonInput.trim()}
               className={`min-h-[44px] flex-1 py-2 px-4 rounded-xl text-xs font-bold text-white shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                movementType === 'CASH_IN' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'
+                movementType === 'FLOAT_IN' || movementType === 'CASH_IN'
+                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : (movementType === 'REFUND_OUT' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700')
               }`}
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>
-                Xác nhận {movementType === 'CASH_IN' ? 'Nộp Tiền' : 'Rút Tiền'} ({formatVNDCurrency(Number(amountInput) || 0)})
+                Xác nhận {movementType === 'FLOAT_IN' || movementType === 'CASH_IN' ? 'Nộp Tiền Lẻ' : (movementType === 'REFUND_OUT' ? 'Chi Bồi Hoàn' : 'Rút Nộp Két')} ({formatVNDCurrency(Number(amountInput) || 0)})
               </span>
             </button>
           </div>

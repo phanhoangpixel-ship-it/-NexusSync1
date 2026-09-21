@@ -410,7 +410,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     permissions: ['admin', 'manager'],
     description: 'Nghiên cứu & phát triển sản phẩm mới R&D, quản lý công thức & thử nghiệm.',
     iconName: 'Sparkles',
-    workspaceId: 'WS05_INVENTORY'
+    workspaceId: 'WS23_RD'
   },
   {
     moduleId: 'M25',

@@ -221,19 +221,49 @@ export const WorkOrderInspectionModal: React.FC<WorkOrderInspectionModalProps> =
     setConfirmDialog({
       isOpen: true,
       title: `Hoàn Tất & Nghiệm Thu Lệnh ${order.code}?`,
-      message: `Hệ thống sẽ đóng Lệnh sản xuất, khóa xuất/nhập, tập hợp chi phí phân bổ vào TK 154 và kết chuyển giá thành sang TK 155.`,
+      message: `Hệ thống sẽ thực hiện kiểm tra QC Hold (M39), nhập kho thành phẩm TK 155 qua InventoryService (M17), và kết chuyển giá thành sản xuất TK 154 qua Costing Engine (M42).`,
       variant: 'primary',
       onConfirm: async () => {
         try {
-          const res = await fetch(`/api/manufacturing/orders/${order.id}/complete`, { method: 'POST' });
+          const res = await fetch(`/api/manufacturing/work-orders/${order.id}/complete`, { method: 'POST' });
+          const d = await res.json().catch(() => ({}));
           if (res.ok) {
-            if (onNotify) onNotify('success', 'Hoàn Tất Lệnh Sản Xuất', `Lệnh ${order.code} đã được đóng và kết chuyển giá thành.`);
+            if (onNotify) onNotify('success', 'Hoàn Tất Lệnh Sản Xuất', d.message || `Lệnh ${order.code} đã được đóng và kết chuyển giá thành.`);
             setOrder((prev: any) => ({ ...prev, status: 'COMPLETED' }));
             if (onOrderUpdated) onOrderUpdated({ ...order, status: 'COMPLETED' });
             fetchOrderAndHistory(true);
           } else {
-            const d = await res.json().catch(() => ({}));
-            if (onNotify) onNotify('danger', 'Lỗi Đóng Lệnh', d.error || 'Không thể đóng lệnh.');
+            if (d.error === 'QC_HOLD_ACTIVE') {
+              if (onNotify) onNotify('danger', 'Cảnh Báo QC Cách Ly (M39)', d.message);
+            } else {
+              if (onNotify) onNotify('danger', 'Lỗi Đóng Lệnh', d.error || 'Không thể hoàn tất lệnh.');
+            }
+          }
+        } catch (e: any) {
+          if (onNotify) onNotify('danger', 'Lỗi Kết Nối API', e.message);
+        }
+      }
+    });
+  };
+
+  const handleCancelOrder = () => {
+    if (!order) return;
+    setConfirmDialog({
+      isOpen: true,
+      title: `Hủy Lệnh Sản Xuất ${order.code}?`,
+      message: `Hệ thống sẽ chuyển trạng thái Lệnh sang CANCELLED và tự động hoàn trả giải phóng toàn bộ vật tư giữ chỗ trong kho qua M17. Hành động này không thể hoàn tác.`,
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/manufacturing/work-orders/${order.id}/cancel`, { method: 'POST' });
+          const d = await res.json().catch(() => ({}));
+          if (res.ok) {
+            if (onNotify) onNotify('warning', 'Hủy Lệnh Thành Công', d.message || `Lệnh ${order.code} đã bị hủy.`);
+            setOrder((prev: any) => ({ ...prev, status: 'CANCELLED' }));
+            if (onOrderUpdated) onOrderUpdated({ ...order, status: 'CANCELLED' });
+            fetchOrderAndHistory(true);
+          } else {
+            if (onNotify) onNotify('danger', 'Lỗi Hủy Lệnh', d.error || 'Không thể hủy lệnh.');
           }
         } catch (e: any) {
           if (onNotify) onNotify('danger', 'Lỗi Kết Nối API', e.message);
@@ -556,13 +586,25 @@ export const WorkOrderInspectionModal: React.FC<WorkOrderInspectionModalProps> =
                         </button>
                       )}
 
-                      {order?.status === 'IN_PROGRESS' && produced >= planned && (
+                      {(order?.status === 'IN_PROGRESS' || order?.status === 'RELEASED') && (
                         <button
                           onClick={handleCompleteOrder}
                           className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                          title="Hoàn tất nghiệm thu, nhập kho thành phẩm TK 155 (M17) và kết chuyển giá thành TK 154 (M42)"
                         >
                           <ShieldCheck className="w-4 h-4" />
-                          <span>4. Đóng Hoàn Tất Lệnh &amp; Kết Chuyển Giá Thành</span>
+                          <span>4. Hoàn Tất Lệnh &amp; Nghiệm Thu (M17+M42)</span>
+                        </button>
+                      )}
+
+                      {order?.status !== 'COMPLETED' && order?.status !== 'CANCELLED' && (
+                        <button
+                          onClick={handleCancelOrder}
+                          className="px-4 py-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                          title="Hủy lệnh sản xuất và giải phóng vật tư giữ chỗ (M17)"
+                        >
+                          <X className="w-4 h-4" />
+                          <span>Hủy Lệnh Sản Xuất</span>
                         </button>
                       )}
                     </div>

@@ -2,7 +2,8 @@ import React from 'react';
 import { 
   X, Download, Receipt, CreditCard, Truck, Boxes, 
   ShieldCheck, CheckCircle2, Clock, AlertCircle, FileText, 
-  Building2, Hash, Calendar, DollarSign, UserCheck, AlertTriangle
+  Building2, Hash, Calendar, DollarSign, UserCheck, AlertTriangle,
+  RotateCcw, XCircle
 } from 'lucide-react';
 import { safeNumber } from '../../../../utils/salesOrderDataNormalizer';
 import { parseNumber } from '../../../../utils/numberFormat';
@@ -16,6 +17,9 @@ interface M13OrderDetailModalProps {
   onOpenPaymentModal: (order: any) => void;
   onDownloadVatPdf: (order: any) => void;
   onUpdateFulfillment: (orderId: string, nextStatus: string) => void;
+  onCancelOrder?: (order: any) => void;
+  onApproveOrder?: (order: any) => void;
+  onReserveOrder?: (order: any) => void;
   masterCustomers?: any[];
 }
 
@@ -27,9 +31,41 @@ export const M13OrderDetailModal: React.FC<M13OrderDetailModalProps> = ({
   onOpenPaymentModal,
   onDownloadVatPdf,
   onUpdateFulfillment,
+  onCancelOrder,
+  onApproveOrder,
+  onReserveOrder,
   masterCustomers = []
 }) => {
   if (!isOpen || !order) return null;
+
+  // Semantic Status Color helper conforming strictly to Rule #19 / Section 4.4
+  const getSemanticStatusClasses = (status: string) => {
+    switch (status) {
+      case 'COMPLETED':
+      case 'FULFILLED':
+      case 'APPROVED':
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800';
+      case 'PENDING_APPROVAL':
+      case 'BACKORDER':
+      case 'WAITING_PAYMENT':
+        return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800';
+      case 'CANCELLED':
+      case 'REJECTED':
+      case 'BLOCKED':
+        return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800';
+      case 'CONFIRMED':
+      case 'RESERVED':
+      case 'PROCESSING':
+      case 'SHIPPED':
+        return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800';
+      case 'INVOICED':
+      case 'ALLOCATED':
+        return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800';
+      case 'DRAFT':
+      default:
+        return 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+    }
+  };
 
   const items = order.items ?? [];
   const itemsTotal = items.reduce((sum: number, it: any) => {
@@ -66,11 +102,16 @@ export const M13OrderDetailModal: React.FC<M13OrderDetailModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold tracking-wide font-mono tabular-nums">{order.id}</h3>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono tabular-nums ${
-                  order.status === 'CONFIRMED' || order.status === 'INVOICED' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                }`}>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono tabular-nums border ${getSemanticStatusClasses(
+                  order.status
+                )}`}>
                   {order.status}
                 </span>
+                {order.reservationStatus && (
+                  <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-bold font-mono tabular-nums">
+                    ATP: {order.reservationStatus}
+                  </span>
+                )}
                 {isPos && (
                   <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono">
                     M16 POS OMNICHANNEL
@@ -89,6 +130,24 @@ export const M13OrderDetailModal: React.FC<M13OrderDetailModalProps> = ({
         </div>
 
         <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto text-xs">
+          {/* Phase 7: CANCELLED & Reservation Released Banner */}
+          {order.status === 'CANCELLED' && (
+            <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
+                <div>
+                  <h5 className="font-bold text-rose-900 dark:text-rose-200">Đơn Hàng Đã Bị Hủy (CANCELLED)</h5>
+                  <p className="text-[11px] text-rose-700 dark:text-rose-300">
+                    Toàn bộ tồn kho giữ chỗ (stockReserved) đã được tự động hoàn trả về tồn khả dụng (stockAvailable) qua M17 InventoryService.releaseReservation(). Chứng từ gốc được lưu vết đầy đủ trong hệ thống.
+                  </p>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-200 dark:bg-rose-900 text-rose-800 dark:text-rose-200 shrink-0">
+                Kho: RELEASED
+              </span>
+            </div>
+          )}
+
           {/* 4 Status KPI Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-1">
@@ -126,9 +185,9 @@ export const M13OrderDetailModal: React.FC<M13OrderDetailModalProps> = ({
             <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 space-y-1">
               <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-400 uppercase">Kho WMS & Giữ Chỗ</span>
               <p className="text-xs font-mono tabular-nums font-bold text-indigo-800 dark:text-indigo-300">
-                {order.reservationStatus || 'RESERVED'}
+                {order.reservationStatus || (order.status === 'CANCELLED' ? 'RELEASED' : 'RESERVED')}
               </p>
-              <p className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400">Fulfillment: {order.fulfillmentStatus || 'PENDING'}</p>
+              <p className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400">Status: {order.status}</p>
             </div>
           </div>
 
@@ -240,25 +299,112 @@ export const M13OrderDetailModal: React.FC<M13OrderDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Electronic Invoice Card */}
-          {order.vatStatus === 'ISSUED' ? (
-            <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 flex items-center justify-between">
+          {/* Goods Issue & Costing Card (Phase 5: M17/M24 Fulfillment & M42 COGS) */}
+          {(order.fulfillmentStatus === 'SHIPPED' || order.status === 'FULFILLED' || order.goodsIssueRef) && (
+            <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Receipt className="w-5 h-5 text-purple-700 dark:text-purple-400 shrink-0" />
+                <Truck className="w-5 h-5 text-emerald-700 dark:text-emerald-400 shrink-0" />
                 <div>
-                  <h5 className="font-bold text-purple-900 dark:text-purple-200">Hóa Đơn Điện Tử VAT Đã Được Cấp Mã CQT</h5>
-                  <p className="text-[11px] text-purple-700 dark:text-purple-300">
-                    Số HĐ: {order.vatInvoiceNumber} • Ký hiệu {order.vatSerial || '1C26TAA'} • Mã CQT: {order.cqtCode}
+                  <h5 className="font-bold text-emerald-900 dark:text-emerald-200">
+                    Đã Xuất Kho Giao Hàng (Goods Issue - M17/M24)
+                  </h5>
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                    Mã PXK: <span className="font-mono font-bold">{order.goodsIssueRef || `GI-${order.id}`}</span> • Đã trừ đồng thời <span className="font-mono font-semibold">stockPhysical</span> &amp; <span className="font-mono font-semibold">stockReserved</span>
+                    {order.cogsAmount ? ` • Giá vốn COGS (M42): ${Number(order.cogsAmount).toLocaleString('vi-VN')} ₫` : ''}
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => onDownloadVatPdf(order)}
-                className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer"
-              >
-                <Download className="w-4 h-4" />
-                <span>Tải Bản PDF NĐ123</span>
-              </button>
+              <div className="text-right shrink-0">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 font-mono">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  FULFILLED
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Electronic Invoice Card & VAS GL Integration */}
+          {order.vatStatus === 'ISSUED' || order.status === 'INVOICED' ? (
+            <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <Receipt className="w-5 h-5 text-purple-700 dark:text-purple-400 shrink-0" />
+                  <div>
+                    <h5 className="font-bold text-purple-900 dark:text-purple-200 flex items-center gap-2">
+                      Hóa Đơn Điện Tử VAT Đã Cấp Mã CQT (Nghị định 123/2020/NĐ-CP)
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-200 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 font-bold">
+                        ĐÃ KÝ HSM
+                      </span>
+                    </h5>
+                    <p className="text-[11px] text-purple-700 dark:text-purple-300 font-mono">
+                      Số HĐ: {order.vatInvoiceNumber} • Ký hiệu {order.vatSerial || '1C26TAA'} • Mã CQT: {order.cqtCode}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => onDownloadVatPdf(order)}
+                  className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Tải Bản PDF NĐ123</span>
+                </button>
+              </div>
+
+              {/* VAS Accounting Entries (Sổ cái M30) */}
+              <div className="mt-2 pt-2.5 border-t border-purple-200/60 dark:border-purple-800/60">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-purple-600" />
+                    Định Khoản Kế Toán Chuẩn VAS (M30 General Ledger Integration)
+                  </span>
+                  <span className="text-[10px] font-mono text-purple-700 dark:text-purple-300">
+                    Thẩm quyền duy nhất: AccountingService.postJournal()
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  {/* Entry 1: Doanh thu */}
+                  <div className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-purple-100 dark:border-purple-900/50">
+                    <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">1. Ghi nhận Doanh thu</div>
+                    <div className="text-xs font-mono font-bold text-purple-800 dark:text-purple-300 mt-0.5">
+                      Nợ TK 1311 / Có TK 5111
+                    </div>
+                    <div className="text-xs font-mono tabular-nums text-right font-bold text-slate-800 dark:text-slate-100 mt-1">
+                      {parseNumber(order.subtotalAmount || (order.totalAmount ? Math.round(Number(String(order.totalAmount).replace(/[^0-9]/g, '')) / 1.1) : 0)).toLocaleString('vi-VN')} ₫
+                    </div>
+                    {order.glRevenueRef && (
+                      <div className="text-[9px] font-mono text-slate-400 mt-0.5 text-right">{order.glRevenueRef}</div>
+                    )}
+                  </div>
+
+                  {/* Entry 2: Thuế GTGT */}
+                  <div className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-purple-100 dark:border-purple-900/50">
+                    <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">2. Ghi nhận Thuế GTGT đầu ra</div>
+                    <div className="text-xs font-mono font-bold text-purple-800 dark:text-purple-300 mt-0.5">
+                      Nợ TK 1311 / Có TK 33311
+                    </div>
+                    <div className="text-xs font-mono tabular-nums text-right font-bold text-slate-800 dark:text-slate-100 mt-1">
+                      {parseNumber(order.taxAmount || (order.totalAmount ? Number(String(order.totalAmount).replace(/[^0-9]/g, '')) - Math.round(Number(String(order.totalAmount).replace(/[^0-9]/g, '')) / 1.1) : 0)).toLocaleString('vi-VN')} ₫
+                    </div>
+                    {order.glTaxRef && (
+                      <div className="text-[9px] font-mono text-slate-400 mt-0.5 text-right">{order.glTaxRef}</div>
+                    )}
+                  </div>
+
+                  {/* Entry 3: Giá vốn */}
+                  <div className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-purple-100 dark:border-purple-900/50">
+                    <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">3. Ghi nhận Giá vốn (M42 COGS)</div>
+                    <div className="text-xs font-mono font-bold text-purple-800 dark:text-purple-300 mt-0.5">
+                      Nợ TK 632 / Có TK 1561
+                    </div>
+                    <div className="text-xs font-mono tabular-nums text-right font-bold text-emerald-700 dark:text-emerald-400 mt-1">
+                      {order.cogsAmount ? `${parseNumber(order.cogsAmount).toLocaleString('vi-VN')} ₫` : 'Đã xác định theo FIFO/WA'}
+                    </div>
+                    {order.glCogsRef && (
+                      <div className="text-[9px] font-mono text-slate-400 mt-0.5 text-right">{order.glCogsRef}</div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 flex items-center justify-between">
@@ -287,8 +433,36 @@ export const M13OrderDetailModal: React.FC<M13OrderDetailModalProps> = ({
 
         {/* Footer Actions */}
         <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            {remaining > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Approval for PENDING_APPROVAL (Credit Limit Exception) */}
+            {order.status === 'PENDING_APPROVAL' && onApproveOrder && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onApproveOrder(order);
+                }}
+                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>Phê Duyệt Đơn (Vượt Hạn Mức Tín Dụng)</span>
+              </button>
+            )}
+
+            {/* Manual Stock Reservation if CONFIRMED but not yet RESERVED */}
+            {order.status === 'CONFIRMED' && order.reservationStatus !== 'RESERVED' && onReserveOrder && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onReserveOrder(order);
+                }}
+                className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Boxes className="w-3.5 h-3.5" />
+                <span>Giữ Chỗ Tồn Kho ATP (M17)</span>
+              </button>
+            )}
+
+            {remaining > 0 && order.status !== 'CANCELLED' && order.status !== 'PENDING_APPROVAL' && (
               <button
                 onClick={() => {
                   onClose();
@@ -300,7 +474,7 @@ export const M13OrderDetailModal: React.FC<M13OrderDetailModalProps> = ({
                 <span>Thu Tiền ({remaining.toLocaleString('vi-VN')} đ)</span>
               </button>
             )}
-            {order.fulfillmentStatus !== 'SHIPPED' && order.fulfillmentStatus !== 'COMPLETED' && (
+            {order.fulfillmentStatus !== 'SHIPPED' && order.fulfillmentStatus !== 'COMPLETED' && order.status !== 'CANCELLED' && (
               <button
                 onClick={() => {
                   onUpdateFulfillment(order.id, 'SHIPPED');
@@ -310,6 +484,33 @@ export const M13OrderDetailModal: React.FC<M13OrderDetailModalProps> = ({
               >
                 <Truck className="w-3.5 h-3.5" />
                 <span>Xuất Kho WMS (Goods Issue)</span>
+              </button>
+            )}
+            {/* Phase 7: Guided M15 RMA for INVOICED Orders */}
+            {(order.status === 'INVOICED' || order.vatStatus === 'ISSUED') && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onCancelOrder?.(order);
+                }}
+                className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200 border border-amber-300 dark:border-amber-700 rounded-xl font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                title="Đơn hàng đã xuất HĐ VAT, kích hoạt luồng M15 RMA Credit Note để hoàn trả an toàn"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Kích hoạt M15 RMA Credit Note</span>
+              </button>
+            )}
+            {/* Phase 7: Cancellation & Stock Reservation Release for Non-Invoiced Orders */}
+            {order.status !== 'CANCELLED' && order.status !== 'COMPLETED' && order.status !== 'INVOICED' && order.vatStatus !== 'ISSUED' && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onCancelOrder?.(order);
+                }}
+                className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-xl font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+                <span>Hủy Đơn & Giải Phóng Kho</span>
               </button>
             )}
           </div>

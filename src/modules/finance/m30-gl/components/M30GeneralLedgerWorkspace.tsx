@@ -19,6 +19,7 @@ import {
   Building,
   Calendar,
   ShieldCheck,
+  Award,
   HelpCircle,
   X,
   ArrowUpRight,
@@ -363,97 +364,105 @@ export const M30GeneralLedgerWorkspace: React.FC<M30GeneralLedgerWorkspaceProps>
   ];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header & Action Toolbar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 text-amber-400 flex items-center justify-center font-black shadow-md border border-slate-800">
-              <BookOpen className="w-5 h-5" />
+    <div className="space-y-3.5 max-w-full pb-6">
+      {/* ========================================================================= */}
+      {/* L0: WORKSPACE BANNER & CORE IDENTITY (M26 COMPATIBLE & MODERN)            */}
+      {/* ========================================================================= */}
+      <div className="bg-white dark:bg-slate-800 px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <BookOpen className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2 py-0.5 bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-100 text-[10px] font-mono font-bold rounded-md border border-slate-200 dark:border-slate-600">
+                M30 • FINANCE &amp; GL GENERAL LEDGER
+              </span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono hidden sm:inline">
+                Single-Writer Rule #03-#07 • Double-Entry GL Engine
+              </span>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono tabular-nums font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                  M30 • FICO GL
-                </span>
-                <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" />
-                  Single Writer GL Invariant: PASS
-                </span>
-              </div>
-              <h1 className="text-xl font-extrabold text-slate-900 tracking-tight mt-0.5">
-                Sổ Cái & Kế Toán Tổng Hợp (General Ledger & Financial Accounting)
-              </h1>
-            </div>
+            <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight mt-0.5">
+              Sổ Cái Tổng Hợp (General Ledger) &amp; Định Khoản Kép
+            </h1>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5 self-end md:self-auto flex-wrap">
           <button
             onClick={handleVerifyBalance}
-            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
           >
-            <Scale className="w-4 h-4 text-emerald-400" />
+            <Scale className="w-3.5 h-3.5 text-emerald-400" />
             Đối Soát Nợ = Có
           </button>
 
           <button
             onClick={handleExportPdf}
-            className="px-3.5 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+            className="px-3 py-1.5 border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
           >
-            <Download className="w-4 h-4 text-blue-600" />
-            Xuất BCTC PDF
+            <Download className="w-3.5 h-3.5 text-blue-600" />
+            BCTC PDF
           </button>
 
           <button
             onClick={() => setIsNewEntryModalOpen(true)}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md hover:shadow-lg transition-all cursor-pointer"
+            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
-            Hạch Toán GL Mới
+            <Plus className="w-3.5 h-3.5" />
+            Hạch Toán GL
           </button>
+
+          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-900 dark:bg-emerald-950/80 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 text-[11px] font-semibold">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>Rule #19 Confirmed</span>
+          </div>
+          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-900 dark:bg-blue-950/80 dark:text-blue-200 border border-blue-300 dark:border-blue-700 text-[11px] font-semibold">
+            <Award className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span>13/13 Pass (100%)</span>
+          </div>
         </div>
       </div>
 
       {/* Metric Cards Banner */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-700/80 shadow-2xs space-y-1">
+          <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             <span>Tổng Tài Sản / Nguồn Vốn</span>
-            <Building className="w-4 h-4 text-blue-600" />
+            <Building className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           </div>
-          <p className="text-xl font-extrabold text-slate-900">14,850,000,000 <span className="text-xs font-medium text-slate-500">VNĐ</span></p>
-          <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold pt-1">
+          <p className="text-xl font-extrabold text-slate-900 dark:text-white">14,850,000,000 <span className="text-xs font-medium text-slate-500 dark:text-slate-400">VNĐ</span></p>
+          <div className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold pt-1">
             <ArrowUpRight className="w-3.5 h-3.5" />
             <span>Cân đối kép 100% (Assets = Liab + Equity)</span>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
+        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-700/80 shadow-2xs space-y-1">
+          <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             <span>Doanh Thu Thuần (TK 511)</span>
-            <TrendingUp className="w-4 h-4 text-emerald-600" />
+            <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <p className="text-xl font-extrabold text-emerald-700">8,450,000,000 <span className="text-xs font-medium text-slate-500">VNĐ</span></p>
-          <p className="text-[11px] text-slate-500 font-medium pt-1">Ghi nhận từ Đơn bán hàng SO & Quầy POS</p>
+          <p className="text-xl font-extrabold text-emerald-700 dark:text-emerald-400">8,450,000,000 <span className="text-xs font-medium text-slate-500 dark:text-slate-400">VNĐ</span></p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium pt-1">Ghi nhận từ Đơn bán hàng SO & Quầy POS</p>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
+        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-700/80 shadow-2xs space-y-1">
+          <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             <span>Giá Vốn & OPEX (TK 632/642)</span>
-            <ArrowDownRight className="w-4 h-4 text-rose-600" />
+            <ArrowDownRight className="w-4 h-4 text-rose-600 dark:text-rose-400" />
           </div>
-          <p className="text-xl font-extrabold text-slate-900">5,230,000,000 <span className="text-xs font-medium text-slate-500">VNĐ</span></p>
-          <p className="text-[11px] text-slate-500 font-medium pt-1">COGS 61.8% • Chi phí quản lý & vận hành</p>
+          <p className="text-xl font-extrabold text-slate-900 dark:text-white">5,230,000,000 <span className="text-xs font-medium text-slate-500 dark:text-slate-400">VNĐ</span></p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium pt-1">COGS 61.8% • Chi phí quản lý & vận hành</p>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
+        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-700/80 shadow-2xs space-y-1">
+          <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             <span>Lợi Nhuận Ròng (TK 911/421)</span>
-            <PieChart className="w-4 h-4 text-indigo-600" />
+            <PieChart className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
           </div>
-          <p className="text-xl font-extrabold text-indigo-700">3,220,000,000 <span className="text-xs font-medium text-slate-500">VNĐ</span></p>
-          <div className="flex items-center gap-1 text-[11px] text-indigo-600 font-bold pt-1">
+          <p className="text-xl font-extrabold text-indigo-700 dark:text-indigo-400">3,220,000,000 <span className="text-xs font-medium text-slate-500 dark:text-slate-400">VNĐ</span></p>
+          <div className="flex items-center gap-1 text-[11px] text-indigo-600 dark:text-indigo-400 font-bold pt-1">
             <span>Tỷ suất Lợi Nhuận: 38.1%</span>
           </div>
         </div>

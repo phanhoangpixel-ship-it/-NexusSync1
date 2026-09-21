@@ -19,7 +19,8 @@ import {
   Save,
   Lock,
   Unlock,
-  Sliders
+  Sliders,
+  Truck
 } from 'lucide-react';
 import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import { ConfirmDialogState, SelectedEntityContext } from '../../../../types';
@@ -82,8 +83,89 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
   onNotify,
   currentUser,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'allocation' | 'pools' | 'simulation' | 'notifications' | 'costing_method'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'allocation' | 'pools' | 'simulation' | 'notifications' | 'costing_method' | 'landed_cost'>('overview');
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+
+  // Landed Cost state
+  const [costLayersList, setCostLayersList] = useState<any[]>([]);
+  const [selectedLayerIds, setSelectedLayerIds] = useState<number[]>([]);
+  const [landedCostForm, setLandedCostForm] = useState({
+    allocationRunCode: `LCA-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-01`,
+    expenseType: 'FREIGHT' as 'FREIGHT' | 'CUSTOMS_DUTY' | 'INSURANCE' | 'HANDLING' | 'OTHER',
+    allocationMethod: 'VALUE' as 'VALUE' | 'WEIGHT' | 'VOLUME' | 'QUANTITY',
+    totalLandedCost: 15000000,
+    receiptId: 1,
+  });
+  const [isAllocatingLanded, setIsAllocatingLanded] = useState(false);
+  const [allocationResult, setAllocationResult] = useState<any>(null);
+
+  useEffect(() => {
+    if (activeTab === 'landed_cost') {
+      fetch('/api/costing/layers')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.data) {
+            setCostLayersList(data.data);
+            if (data.data.length > 0 && selectedLayerIds.length === 0) {
+              setSelectedLayerIds(data.data.slice(0, 3).map((l: any) => l.id));
+            }
+          }
+        })
+        .catch(err => console.warn('Failed to fetch cost layers:', err));
+    }
+  }, [activeTab]);
+
+  const handleExecuteLandedCostAllocation = async () => {
+    if (selectedLayerIds.length === 0) {
+      onNotify('warning', 'Chưa chọn lớp chi phí', 'Vui lòng chọn ít nhất một lớp chi phí nhập kho (Cost Layer) để phân bổ Landed Cost.');
+      return;
+    }
+    if (landedCostForm.totalLandedCost <= 0) {
+      onNotify('error', 'Lỗi số tiền', 'Tổng chi phí Landed Cost phải lớn hơn 0.');
+      return;
+    }
+
+    const items = costLayersList
+      .filter(l => selectedLayerIds.includes(l.id))
+      .map(l => ({
+        layerId: l.id,
+        productId: l.productId,
+        quantity: l.quantityRemaining,
+        weight: 15,
+        volume: 0.2,
+        customsValue: l.totalCost
+      }));
+
+    setIsAllocatingLanded(true);
+    try {
+      const res = await fetch('/api/costing/landed-cost/allocate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          allocationRunCode: landedCostForm.allocationRunCode,
+          receiptId: landedCostForm.receiptId,
+          allocationMethod: landedCostForm.allocationMethod,
+          totalLandedCost: landedCostForm.totalLandedCost,
+          expenseType: landedCostForm.expenseType,
+          items
+        })
+      });
+      const data = await res.json();
+      setIsAllocatingLanded(false);
+      if (data.success) {
+        setAllocationResult(data.data);
+        onNotify('success', 'Phân bổ Landed Cost thành công', data.message);
+        const layersRes = await fetch('/api/costing/layers');
+        const layersData = await layersRes.json();
+        if (layersData.success) setCostLayersList(layersData.data);
+      } else {
+        onNotify('error', 'Lỗi phân bổ Landed Cost', data.error || 'Có lỗi xảy ra khi phân bổ chi phí.');
+      }
+    } catch (e: any) {
+      setIsAllocatingLanded(false);
+      onNotify('error', 'Lỗi hệ thống', e.message);
+    }
+  };
 
   // Filter & Search state
   const [searchTerm, setSearchTerm] = useState('');
@@ -457,103 +539,58 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
           </div>
         )}
 
-        {/* Navigation Sub-Tabs (M41 Master Spec) */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs p-1.5 flex items-center justify-between gap-2.5 min-w-0 mt-6">
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1 min-w-0 py-0.5">
-            <button
-              type="button"
-              onClick={() => setActiveTab('overview')}
-              className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
-                activeTab === 'overview'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <TrendingUp className="w-4 h-4 shrink-0" />
-              <span>Tổng quan COGS &amp; Biên LN</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('allocation')}
-              className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
-                activeTab === 'allocation'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <Layers className="w-4 h-4 shrink-0" />
-              <span>Phân Bổ Chi Phí Gián Tiếp</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('pools')}
-              className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
-                activeTab === 'pools'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <PieChart className="w-4 h-4 shrink-0" />
-              <span>Trung Tâm Chi Phí (Cost Pools)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('simulation')}
-              className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
-                activeTab === 'simulation'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <Calculator className="w-4 h-4 shrink-0" />
-              <span>Mô Phỏng Biên Lợi Nhuận</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('notifications')}
-              className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
-                activeTab === 'notifications'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <FileText className="w-4 h-4 shrink-0" />
-              <span>Thông Báo Quản Lý</span>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold shrink-0 ${
-                activeTab === 'notifications' ? 'bg-blue-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-              }`}>
-                {currentPeriodData.managerNotifications?.length || 0}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('costing_method')}
-              className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
-                activeTab === 'costing_method'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <Sliders className="w-4 h-4 shrink-0 text-amber-500" />
-              <span>Phương Pháp Giá Vốn</span>
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold shrink-0 ${
-                activeTab === 'costing_method' ? 'bg-blue-700 text-white' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300'
-              }`}>
-                CFO
-              </span>
-            </button>
-          </div>
+        {/* Navigation Sub-Tabs (M41 Master Spec & TabButton List Pattern) */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs p-2 mt-6">
+          <div className="flex items-center justify-between gap-2">
+            <nav className="flex items-center gap-1.5 overflow-x-auto py-1 scroll-smooth scrollbar-none flex-1">
+              {[
+                { id: 'overview', label: 'Tổng quan COGS & Biên LN', icon: TrendingUp, badge: null },
+                { id: 'allocation', label: 'Phân Bổ Chi Phí Gián Tiếp', icon: Layers, badge: null },
+                { id: 'pools', label: 'Trung Tâm Chi Phí (Cost Pools)', icon: PieChart, badge: costPools.length },
+                { id: 'simulation', label: 'Mô Phỏng Biên Lợi Nhuận', icon: Calculator, badge: null },
+                { id: 'notifications', label: 'Thông Báo Quản Lý', icon: FileText, badge: currentPeriodData.managerNotifications?.length || 0, badgeColor: 'bg-amber-500 text-white' },
+                { id: 'costing_method', label: 'Phương Pháp Giá Vốn', icon: Sliders, badge: 'CFO', badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300' },
+                { id: 'landed_cost', label: 'Phân Bổ Landed Cost', icon: Truck, badge: 'M42', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300' }
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id as any)}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+                      isActive
+                        ? 'bg-slate-950 text-white dark:bg-slate-950 dark:text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700/60'
+                    }`}
+                  >
+                    <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                    <span>{tab.label}</span>
+                    {tab.badge !== null && tab.badge !== undefined && (
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                          tab.badgeColor || (isActive ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200')
+                        }`}
+                      >
+                        {tab.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
 
-          {/* Right Info Strip */}
-          <div className="hidden 2xl:flex items-center gap-3 px-3 py-1 text-xs text-slate-500 dark:text-slate-400 shrink-0 border-l border-slate-200 dark:border-slate-800 pl-3">
-            <span className="flex items-center gap-1.5 font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              Costing Authority
-            </span>
-            <span className="h-3 w-px bg-slate-200 dark:bg-slate-700"></span>
-            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[11px] font-semibold border border-slate-200/80 dark:border-slate-700/80">
-              Landed Cost Allocation
-            </span>
+            <div className="hidden 2xl:flex items-center gap-3 px-3 py-1 text-xs text-slate-500 dark:text-slate-400 shrink-0 border-l border-slate-200 dark:border-slate-700 pl-3">
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Costing Authority
+              </span>
+              <span className="h-3 w-px bg-slate-200 dark:bg-slate-700"></span>
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[11px] font-semibold border border-slate-200/80 dark:border-slate-700/80">
+                Landed Cost Allocation
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -927,6 +964,182 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
               currentUser={currentUser}
               onNotify={onNotify}
             />
+          </div>
+        )}
+
+        {activeTab === 'landed_cost' && (
+          <div className="space-y-6">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Truck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> Động cơ Phân bổ Landed Cost (Thuế, Cước, Bảo hiểm vào Giá trị Nhập kho)
+                  </h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                    Phân bổ chi phí mua hàng phát sinh sau thông quan (Freight, Customs Duty, Insurance, Handling) vào các lớp chi phí (Cost Layers) để tính giá vốn đích thực FIFO / Bình quân theo Single-Writer Authority.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="px-3 py-1 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 rounded-xl font-mono text-xs font-bold border border-indigo-200 dark:border-indigo-800">
+                    Single-Writer: CostingEngine
+                  </span>
+                </div>
+              </div>
+
+              {/* Form Config */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">Mã Đợt Phân Bổ (Run Code)</label>
+                  <input
+                    type="text"
+                    value={landedCostForm.allocationRunCode}
+                    onChange={(e) => setLandedCostForm({ ...landedCostForm, allocationRunCode: e.target.value })}
+                    className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1 flex items-center justify-between">
+                    <span>Loại Chi Phí (Expense Type)</span>
+                    <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-normal lowercase" title="Chi phí mua hàng phát sinh sau thông quan cần vốn hóa vào giá trị hàng tồn kho">ℹ️ giải thích</span>
+                  </label>
+                  <select
+                    value={landedCostForm.expenseType}
+                    onChange={(e) => setLandedCostForm({ ...landedCostForm, expenseType: e.target.value as any })}
+                    className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="FREIGHT">Cước vận chuyển (Freight In) — Phí vận tải quốc tế/nội địa đưa hàng về kho</option>
+                    <option value="CUSTOMS_DUTY">Thuế nhập khẩu (Customs Duty) — Thuế và lệ phí hải quan phải nộp</option>
+                    <option value="INSURANCE">Bảo hiểm hàng hóa (Insurance) — Phí bảo hiểm vận chuyển lô hàng</option>
+                    <option value="HANDLING">Phí bốc xếp / kho bãi (Handling) — Phí xếp dỡ, nâng hạ, lưu kho cảng</option>
+                    <option value="OTHER">Chi phí khác (Other) — Các khoản chi phí phát sinh hợp lệ khác</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">Phương pháp Phân bổ</label>
+                  <select
+                    value={landedCostForm.allocationMethod}
+                    onChange={(e) => setLandedCostForm({ ...landedCostForm, allocationMethod: e.target.value as any })}
+                    className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="VALUE">Theo Giá trị (Value / Customs Value)</option>
+                    <option value="WEIGHT">Theo Trọng lượng (Weight - kg)</option>
+                    <option value="VOLUME">Theo Thể tích (Volume - m³)</option>
+                    <option value="QUANTITY">Theo Số lượng (Quantity)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1 flex items-center justify-between">
+                    <span>Tổng Chi Phí Landed (VND)</span>
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">font-mono</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={landedCostForm.totalLandedCost}
+                    onChange={(e) => setLandedCostForm({ ...landedCostForm, totalLandedCost: Number(e.target.value) })}
+                    className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-mono font-bold text-indigo-700 dark:text-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 tabular-nums"
+                  />
+                </div>
+              </div>
+
+              {/* Cost Layers Selection */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">Chọn các Lớp Chi Phí Nhập Kho (Active Cost Layers) để phân bổ:</h4>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">Đã chọn: {selectedLayerIds.length} / {costLayersList.length} lớp</span>
+                </div>
+
+                <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">
+                        <th className="py-3 px-4 text-center w-12">Chọn</th>
+                        <th className="py-3 px-4">Layer ID &amp; SKU / Sản phẩm</th>
+                        <th className="py-3 px-4">Kho (Warehouse)</th>
+                        <th className="py-3 px-4 text-right">SL Còn Lại</th>
+                        <th className="py-3 px-4 text-right">Đơn Giá Vốn Cũ</th>
+                        <th className="py-3 px-4 text-right">Tổng Giá Trị</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+                      {costLayersList.map((layer) => {
+                        const isSelected = selectedLayerIds.includes(layer.id);
+                        return (
+                          <tr key={layer.id} className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors ${isSelected ? 'bg-indigo-50/30 dark:bg-indigo-950/30' : ''}`}>
+                            <td className="py-3 px-4 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedLayerIds([...selectedLayerIds, layer.id]);
+                                  } else {
+                                    setSelectedLayerIds(selectedLayerIds.filter(id => id !== layer.id));
+                                  }
+                                }}
+                                className="w-4 h-4 text-indigo-600 rounded border-slate-300 dark:border-slate-700 focus:ring-indigo-500 cursor-pointer"
+                              />
+                            </td>
+                            <td className="py-3 px-4 font-mono font-semibold text-slate-800 dark:text-slate-200">
+                              Layer #{layer.id} • SP #{layer.productId}
+                              <div className="text-xs text-slate-500 dark:text-slate-400 font-sans font-normal">{layer.sourceReferenceNo || layer.sourceDocumentType}</div>
+                            </td>
+                            <td className="py-3 px-4 text-slate-600 dark:text-slate-400">Kho #{layer.warehouseId}</td>
+                            <td className="py-3 px-4 text-right font-mono text-slate-800 dark:text-slate-200">{layer.quantityRemaining}</td>
+                            <td className="py-3 px-4 text-right font-mono text-slate-800 dark:text-slate-200">{formatCurrency(layer.unitCost)}</td>
+                            <td className="py-3 px-4 text-right font-mono font-bold text-slate-900 dark:text-white">{formatCurrency(layer.totalCost)}</td>
+                          </tr>
+                        );
+                      })}
+                      {costLayersList.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-slate-500 dark:text-slate-400">
+                            Chưa có lớp chi phí (Cost Layers) nào trong hệ thống. Hãy thực hiện Nhập kho (Goods Receipt) để phát sinh cost layers.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={handleExecuteLandedCostAllocation}
+                    disabled={isAllocatingLanded || selectedLayerIds.length === 0}
+                    className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isAllocatingLanded ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
+                    <span>{isAllocatingLanded ? 'Đang phân bổ Landed Cost...' : 'Thực hiện phân bổ Landed Cost & Ghi GL'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Allocation Result Display */}
+              {allocationResult && (
+                <div className="mt-6 p-5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-bold">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" /> Phân bổ Landed Cost Thành công (Mã đợt: {allocationResult.allocationRunCode})
+                    </div>
+                    <span className="px-2.5 py-1 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 text-xs font-mono font-bold rounded-lg">
+                      GL Journal Posted: {allocationResult.glJournalPosted ? 'YES (M30)' : 'NO'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-emerald-700 dark:text-emerald-400">
+                    Đã phân bổ tổng chi phí <strong className="font-mono">{formatCurrency(allocationResult.totalAllocated)}</strong> vào <strong className="font-mono">{allocationResult.adjustedLayersCount}</strong> lớp chi phí kho. Đơn giá vốn SKU đã tự động cập nhật theo phương pháp Bình quân di động.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                    {(allocationResult.adjustedLayers || []).map((adj: any) => (
+                      <div key={adj.layerId} className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-emerald-200 dark:border-emerald-900/50 shadow-2xs font-mono text-xs space-y-1">
+                        <div className="font-bold text-slate-900 dark:text-white">Layer #{adj.layerId} (SP #{adj.productId})</div>
+                        <div className="text-slate-600 dark:text-slate-400">Đơn giá cũ: {formatCurrency(adj.oldUnitCost)}</div>
+                        <div className="text-emerald-700 dark:text-emerald-400 font-bold">Đơn giá mới: {formatCurrency(adj.newUnitCost)}</div>
+                        <div className="text-indigo-600 dark:text-indigo-400">Vốn hóa thêm: +{formatCurrency(adj.varianceAmount)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

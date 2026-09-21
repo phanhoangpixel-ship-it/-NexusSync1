@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, relations } from "drizzle-orm";
 import { sqliteTable, text, integer, real, primaryKey, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 
 // 1. Identity & RBAC
@@ -746,6 +746,8 @@ export const salesOrders = sqliteTable("sales_orders", {
   amountPaid: real("amount_paid").notNull().default(0),
   dueDate: integer("due_date", { mode: 'timestamp' }),
   notes: text("notes"),
+  sourceType: text("source_type"), // CRM_QUOTE, EXTERNAL
+  sourceId: integer("source_id"), // Reference to quote ID
   createdBy: integer("created_by").notNull().references(() => users.id),
   createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
@@ -1129,6 +1131,18 @@ export const routings = sqliteTable("routings", {
   description: text("description"),
 });
 
+export const routingOperations = sqliteTable("routing_operations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  routingId: integer("routing_id").notNull().references(() => routings.id),
+  sequence: integer("sequence").notNull().default(10),
+  operationCode: text("operation_code").notNull(),
+  operationName: text("operation_name").notNull(),
+  workCenterId: integer("work_center_id").references(() => workCenters.id),
+  setupTimeMinutes: real("setup_time_minutes").default(15),
+  runTimeMinutes: real("run_time_minutes").default(45),
+  description: text("description"),
+});
+
 export const manufacturingOrders = sqliteTable("manufacturing_orders", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   code: text("code").notNull().unique(), // MO-XXXXXX
@@ -1153,6 +1167,29 @@ export const manufacturingOrders = sqliteTable("manufacturing_orders", {
   approvedBy: text("approved_by"),
   createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
   updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const workOrders = manufacturingOrders; // alias for M25 compatibility
+
+export const workOrderItems = sqliteTable("work_order_items", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  moId: integer("mo_id").notNull().references(() => manufacturingOrders.id),
+  materialProductId: integer("material_product_id").notNull().references(() => products.id),
+  requiredQuantity: real("required_quantity").notNull(),
+  issuedQuantity: real("issued_quantity").notNull().default(0),
+  uom: text("uom").notNull().default("Pcs"),
+  status: text("status").notNull().default("PENDING"),
+});
+
+export const workOrderOperations = sqliteTable("work_order_operations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  moId: integer("mo_id").notNull().references(() => manufacturingOrders.id),
+  sequence: integer("sequence").notNull().default(10),
+  operationName: text("operation_name").notNull(),
+  workCenterId: integer("work_center_id").references(() => workCenters.id),
+  status: text("status").notNull().default("PENDING"), // PENDING, IN_PROGRESS, COMPLETED
+  actualTimeMinutes: real("actual_time_minutes").default(0),
+  notes: text("notes"),
 });
 
 export const materialReservations = sqliteTable("material_reservations", {
@@ -1719,6 +1756,149 @@ export const supplyPlans = sqliteTable("supply_plans", {
   recommendedTransferQty: real("recommended_transfer_qty").notNull().default(0),
   status: text("status").notNull().default("DRAFT"), // DRAFT, APPROVED, EXECUTED
   createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+// ==========================================
+// M26: SUPPLY CHAIN PLANNING & MRP (SCP)
+// ==========================================
+export const scmForecasts = sqliteTable("scm_forecasts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  forecastCode: text("forecast_code").notNull().unique(), // FST-2026-001
+  productId: integer("product_id").notNull().references(() => products.id),
+  productName: text("product_name"),
+  sku: text("sku"),
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  period: text("period").notNull().default("MONTHLY"), // WEEKLY, MONTHLY, QUARTERLY
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date").notNull(),
+  historicalAvgDemand: real("historical_avg_demand").default(100),
+  forecastQuantity: real("forecast_quantity").notNull(),
+  actualSalesQuantity: real("actual_sales_quantity").default(0),
+  forecastMethod: text("forecast_method").notNull().default("EXPONENTIAL_SMOOTHING"), // MOVING_AVERAGE, EXPONENTIAL_SMOOTHING, HOLT_WINTERS, SEASONAL_DECOMPOSITION, CONSENSUS
+  accuracyMae: real("accuracy_mae").default(5),
+  accuracyMape: real("accuracy_mape").default(4.2), // %
+  confidenceLevel: real("confidence_level").default(95.0),
+  status: text("status").notNull().default("ACTIVE"), // DRAFT, ACTIVE, ARCHIVED
+  notes: text("notes"),
+  createdBy: text("created_by").default("SCM Planner"),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const mpsSchedules = sqliteTable("mps_schedules", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  mpsCode: text("mps_code").notNull().unique(), // MPS-2026-W38-001
+  productId: integer("product_id").notNull().references(() => products.id),
+  productName: text("product_name"),
+  sku: text("sku"),
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  period: text("period").notNull().default("WEEKLY"), // WEEKLY, BI_WEEKLY, MONTHLY
+  periodStartDate: text("period_start_date").notNull(),
+  periodEndDate: text("period_end_date").notNull(),
+  forecastDemand: real("forecast_demand").notNull().default(0),
+  salesOrderDemand: real("sales_order_demand").notNull().default(0),
+  totalGrossDemand: real("total_gross_demand").notNull().default(0),
+  projectedAvailableBalance: real("projected_available_balance").notNull().default(0), // PAB
+  availableToPromise: real("available_to_promise").notNull().default(0), // ATP
+  plannedProductionQty: real("planned_production_qty").notNull().default(0), // MPS Planned Order
+  status: text("status").notNull().default("PLANNED"), // DRAFT, PLANNED, COMMITTED, RELEASED
+  isFrozen: integer("is_frozen", { mode: 'boolean' }).notNull().default(false), // Frozen production window
+  notes: text("notes"),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const mrpRuns = sqliteTable("mrp_runs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  runCode: text("run_code").notNull().unique(), // MRP-20260921-001
+  runType: text("run_type").notNull().default("regenerative"), // 'regenerative' | 'net-change'
+  planningHorizonDays: integer("planning_horizon_days").notNull().default(90),
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  status: text("status").notNull().default("COMPLETED"), // RUNNING, COMPLETED, FAILED
+  totalProductsAnalyzed: integer("total_products_analyzed").default(0),
+  totalGrossRequirements: real("total_gross_requirements").default(0),
+  totalNetRequirements: real("total_net_requirements").default(0),
+  totalPurchaseSuggestions: integer("total_purchase_suggestions").default(0),
+  totalMoSuggestions: integer("total_mo_suggestions").default(0),
+  totalExceptions: integer("total_exceptions").default(0),
+  executionDurationMs: integer("execution_duration_ms").default(0),
+  triggeredBy: text("triggered_by").default("System"),
+  parameters: text("parameters"), // JSON
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const mrpResults = sqliteTable("mrp_results", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  runId: integer("run_id").notNull().references(() => mrpRuns.id, { onDelete: 'cascade' }),
+  productId: integer("product_id").notNull().references(() => products.id),
+  sku: text("sku").notNull(),
+  productName: text("product_name").notNull(),
+  productType: text("product_type").notNull().default("RAW_MATERIAL"), // FINISHED_GOOD, RAW_MATERIAL, SEMI_FINISHED
+  level: integer("level").notNull().default(0), // Low level code: 0 = Finished Good, 1 = Sub-assembly, 2 = Component
+  parentProductId: integer("parent_product_id").references(() => products.id),
+  parentSku: text("parent_sku"),
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  grossRequirement: real("gross_requirement").notNull().default(0),
+  scheduledReceipts: real("scheduled_receipts").notNull().default(0),
+  onHandStock: real("on_hand_stock").notNull().default(0),
+  reservedStock: real("reserved_stock").notNull().default(0),
+  safetyStock: real("safety_stock").notNull().default(0),
+  netRequirement: real("net_requirement").notNull().default(0),
+  plannedOrderReceipt: real("planned_order_receipt").notNull().default(0),
+  plannedOrderRelease: real("planned_order_release").notNull().default(0),
+  leadTimeDays: integer("lead_time_days").notNull().default(3),
+  suggestedAction: text("suggested_action").notNull().default("NONE"), // CREATE_PR, CREATE_MO, EXPEDITE, DEFER, CANCEL, NONE
+  suggestedOrderQty: real("suggested_order_qty").default(0),
+  requiredDate: text("required_date"),
+  releaseDate: text("release_date"),
+  status: text("status").notNull().default("PROPOSED"), // PROPOSED, PR_CREATED, MO_CREATED, DISMISSED
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const mrpExceptions = sqliteTable("mrp_exceptions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  runId: integer("run_id").notNull().references(() => mrpRuns.id, { onDelete: 'cascade' }),
+  productId: integer("product_id").notNull().references(() => products.id),
+  sku: text("sku").notNull(),
+  productName: text("product_name").notNull(),
+  exceptionType: text("exception_type").notNull(), // CRITICAL_STOCKOUT, LEAD_TIME_VIOLATION, EXCESS_INVENTORY, PAST_DUE_ORDER, CAPACITY_OVERLOAD, NO_BOM_FOUND, NO_SUPPLIER_DEFINED
+  severity: text("severity").notNull().default("HIGH"), // CRITICAL, HIGH, MEDIUM, LOW
+  message: text("message").notNull(),
+  shortageQty: real("shortage_qty").default(0),
+  daysPastDue: integer("days_past_due").default(0),
+  suggestedRemediation: text("suggested_remediation"),
+  isResolved: integer("is_resolved", { mode: 'boolean' }).notNull().default(false),
+  resolvedBy: text("resolved_by"),
+  resolvedAt: text("resolved_at"),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const purchaseRequisitions = sqliteTable("purchase_requisitions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  prNumber: text("pr_number").notNull().unique(), // PR-2026-0001
+  mrpRunId: integer("mrp_run_id").references(() => mrpRuns.id),
+  mrpResultId: integer("mrp_result_id").references(() => mrpResults.id),
+  productId: integer("product_id").notNull().references(() => products.id),
+  sku: text("sku").notNull(),
+  productName: text("product_name").notNull(),
+  quantity: real("quantity").notNull(),
+  uom: text("uom").notNull().default("Cái"),
+  estimatedUnitCost: real("estimated_unit_cost").default(0),
+  estimatedTotalAmount: real("estimated_total_amount").default(0),
+  suggestedSupplierId: integer("suggested_supplier_id").references(() => suppliers.id),
+  suggestedSupplierName: text("suggested_supplier_name"),
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  requiredDate: text("required_date").notNull(),
+  priority: text("priority").notNull().default("NORMAL"), // LOW, NORMAL, HIGH, URGENT
+  status: text("status").notNull().default("PENDING"), // PENDING, APPROVED, REJECTED, CONVERTED_TO_PO, CANCELLED
+  delegatedPoId: integer("delegated_po_id").references(() => purchaseOrders.id),
+  delegatedPoCode: text("delegated_po_code"),
+  delegatedAt: integer("delegated_at", { mode: 'timestamp' }),
+  delegatedBy: text("delegated_by"),
+  requestedBy: text("requested_by").notNull().default("MRP Engine"),
+  approvalNotes: text("approval_notes"),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
 
 export const systemConfigs = sqliteTable("system_configs", {
@@ -2299,12 +2479,17 @@ export const commissionPlans = sqliteTable("commission_plans", {
   planCode: text("plan_code").notNull().unique(), // e.g. COM-PLAN-2026-001
   name: text("name").notNull(),
   description: text("description"),
-  calculationBasis: text("calculation_basis").notNull().default("ORDER_CONFIRMED"), // ORDER_CONFIRMED, INVOICE_ISSUED, PAYMENT_COLLECTED
+  calculationBasis: text("calculation_basis").notNull().default("ORDER_CONFIRMED"), // ORDER_CONFIRMED, INVOICE_ISSUED, PAYMENT_COLLECTED, GROSS_MARGIN
   payoutFrequency: text("payout_frequency").notNull().default("MONTHLY"), // MONTHLY, QUARTERLY, ANNUAL, TRANSACTIONAL
   status: text("status").notNull().default("ACTIVE"), // ACTIVE, INACTIVE, DRAFT
   validFrom: integer("valid_from", { mode: 'timestamp' }),
   validTo: integer("valid_to", { mode: 'timestamp' }),
   isDefault: integer("is_default", { mode: 'boolean' }).notNull().default(false),
+  splitCommissionEnabled: integer("split_commission_enabled", { mode: 'boolean' }).notNull().default(false),
+  managerOverridePercent: real("manager_override_percent").notNull().default(15.0), // % of commission allocated to direct Manager/Leader
+  presalesSplitPercent: real("presales_split_percent").notNull().default(10.0), // % of commission allocated to Pre-sales/Tech support
+  primaryRepPercent: real("primary_rep_percent").notNull().default(75.0), // % of commission allocated to primary Sales Rep
+  anomalyThresholdPercent: real("anomaly_threshold_percent").notNull().default(20.0),
   createdBy: integer("created_by").notNull().references(() => users.id),
   createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
   updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
@@ -2314,8 +2499,8 @@ export const commissionRules = sqliteTable("commission_rules", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   planId: integer("plan_id").notNull().references(() => commissionPlans.id),
   ruleName: text("rule_name").notNull(),
-  ruleType: text("rule_type").notNull().default("TIERED_AMOUNT"), // FLAT_RATE, TIERED_AMOUNT, TIERED_PERCENT, PRODUCT_CATEGORY, ACCELERATOR
-  minThreshold: real("min_threshold").notNull().default(0), // Min amount or units for tier
+  ruleType: text("rule_type").notNull().default("TIERED_AMOUNT"), // FLAT_RATE, TIERED_AMOUNT, TIERED_PERCENT, PRODUCT_CATEGORY, ACCELERATOR, MARGIN_PERCENT
+  minThreshold: real("min_threshold").notNull().default(0), // Min amount, units or margin % for tier
   maxThreshold: real("max_threshold"), // Nullable for infinity tier
   ratePercent: real("rate_percent").notNull().default(0), // e.g. 5.0 for 5%
   fixedAmount: real("fixed_amount").notNull().default(0), // e.g. 500000 VND per unit
@@ -2353,20 +2538,53 @@ export const commissionCalculations = sqliteTable("commission_calculations", {
   invoiceId: integer("invoice_id").references(() => invoices.id),
   paymentId: integer("payment_id"), // Ref customerPayments
   salesReturnId: integer("sales_return_id"), // Ref salesReturns for clawbacks
+  rmaId: integer("rma_id").references(() => rmaRequests.id), // Ref rmaRequests (M15)
+  rmaCode: text("rma_code"), // Loose code ref for fast queries
   salesPersonId: integer("sales_person_id").notNull().references(() => users.id),
   planId: integer("plan_id").references(() => commissionPlans.id),
   ruleId: integer("rule_id").references(() => commissionRules.id),
-  baseAmount: real("base_amount").notNull().default(0), // Order or Invoice Amount subject to commission
+  calculationBasis: text("calculation_basis").notNull().default("REVENUE"), // 'REVENUE' | 'GROSS_MARGIN'
+  revenueAmount: real("revenue_amount").notNull().default(0), // Total Revenue
+  cogsAmount: real("cogs_amount").notNull().default(0), // COGS from M42 (READ-ONLY)
+  marginAmount: real("margin_amount").notNull().default(0), // Gross Margin (Revenue - COGS)
+  marginPercent: real("margin_percent").notNull().default(0), // Margin Percentage ((Margin / Revenue) * 100)
+  baseAmount: real("base_amount").notNull().default(0), // Amount subject to commission rate (Revenue or Margin)
   ratePercent: real("rate_percent").notNull().default(0),
   acceleratorMultiplier: real("accelerator_multiplier").notNull().default(1.0),
   commissionAmount: real("commission_amount").notNull().default(0), // Can be negative for clawback
   isClawback: integer("is_clawback", { mode: 'boolean' }).notNull().default(false),
-  triggerEvent: text("trigger_event").notNull().default("ORDER_CONFIRMED"), // ORDER_CONFIRMED, INVOICE_ISSUED, PAYMENT_COLLECTED, RETURN_PROCESSED
+  isSplit: integer("is_split", { mode: 'boolean' }).notNull().default(false),
+  splitRole: text("split_role"), // 'PRIMARY_REP', 'SALES_LEADER', 'SALES_MANAGER', 'PRESALES_SUPPORT'
+  splitPercent: real("split_percent").default(100), // e.g. 75.0, 15.0, 10.0
+  parentCalculationId: integer("parent_calculation_id"), // Ref parent commissionCalculations.id if this is a split child
+  parentSalesRepId: integer("parent_sales_rep_id").references(() => users.id),
+  isAnomaly: integer("is_anomaly", { mode: 'boolean' }).notNull().default(false),
+  anomalyReason: text("anomaly_reason"),
+  triggerEvent: text("trigger_event").notNull().default("ORDER_CONFIRMED"), // ORDER_CONFIRMED, INVOICE_ISSUED, PAYMENT_COLLECTED, RETURN_PROCESSED, DISPUTE_ADJUSTMENT, MANUAL_OVERRIDE
   status: text("status").notNull().default("ACCRUED"), // ACCRUED, ELIGIBLE, SETTLED, CLAWED_BACK, VOIDED
   calculationDate: integer("calculation_date", { mode: 'timestamp' }).$defaultFn(() => new Date()),
   payoutId: integer("payout_id"), // Ref commissionPayouts when included in a batch
   notes: text("notes"),
   createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const commissionDisputes = sqliteTable("commission_disputes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  disputeCode: text("dispute_code").notNull().unique(), // e.g. DISP-2026-00001
+  calculationId: integer("calculation_id").references(() => commissionCalculations.id),
+  payoutId: integer("payout_id").references(() => commissionPayouts.id),
+  salesPersonId: integer("sales_person_id").notNull().references(() => users.id),
+  disputedAmount: real("disputed_amount").notNull().default(0),
+  expectedAmount: real("expected_amount").notNull().default(0),
+  reason: text("reason").notNull(),
+  status: text("status").notNull().default("OPEN"), // OPEN, UNDER_REVIEW, RESOLVED_ADJUSTED, RESOLVED_REJECTED, CANCELLED
+  resolutionNotes: text("resolution_notes"),
+  resolvedBy: integer("resolved_by").references(() => users.id),
+  resolvedAt: integer("resolved_at", { mode: 'timestamp' }),
+  adjustmentCalculationId: integer("adjustment_calculation_id").references(() => commissionCalculations.id),
+  createdBy: integer("created_by").notNull().references(() => users.id),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
 
 export const commissionPayouts = sqliteTable("commission_payouts", {
@@ -2382,6 +2600,9 @@ export const commissionPayouts = sqliteTable("commission_payouts", {
   totalBeneficiaries: integer("total_beneficiaries").notNull().default(0),
   status: text("status").notNull().default("DRAFT"), // DRAFT, REVIEWED, APPROVED, PAID, CANCELLED
   paymentMethod: text("payment_method").notNull().default("BANK_TRANSFER"), // BANK_TRANSFER, CASH, PAYROLL_INTEGRATION
+  payrollPeriodId: text("payroll_period_id"),
+  dmsDocumentId: text("dms_document_id"),
+  dmsSha256Hash: text("dms_sha256_hash"),
   approvedBy: integer("approved_by").references(() => users.id),
   approvedAt: integer("approved_at", { mode: 'timestamp' }),
   paidBy: integer("paid_by").references(() => users.id),
@@ -2832,8 +3053,6 @@ export const srmBidItems = sqliteTable("srm_bid_items", {
 // ORCHESTRATION LAYER TABLES
 // -------------------------------------------------------------
 
-import { relations } from "drizzle-orm";
-
 export const functionalGroups = sqliteTable("functional_groups", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   code: text("code").notNull().unique(),
@@ -3279,6 +3498,7 @@ export const rdProjects = sqliteTable("rd_projects", {
   category: text("category").notNull(), // Bán dẫn & Phần cứng, Công nghệ Xanh, Phần mềm AI, Công nghệ Sinh học
   lead: text("lead").notNull(),
   status: text("status").notNull().default("IN_PROGRESS"), // PLANNING, IN_PROGRESS, TESTING, COMPLETED, ON_HOLD
+  stage: text("stage").notNull().default("DRAFT"), // DRAFT, TRIAL, SAMPLE_EVALUATION, APPROVED, HANDED_OVER, REJECTED
   progress: integer("progress").notNull().default(0), // 0 - 100
   budget: real("budget").notNull().default(0),
   spentBudget: real("spent_budget").notNull().default(0),
@@ -3287,6 +3507,14 @@ export const rdProjects = sqliteTable("rd_projects", {
   deadline: text("deadline").notNull(),
   trlLevel: integer("trl_level").notNull().default(3), // TRL 1 - 9
   riskLevel: text("risk_level").notNull().default("MEDIUM"), // LOW, MEDIUM, HIGH
+  targetSku: text("target_sku"),
+  registeredProductId: integer("registered_product_id").references(() => products.id),
+  handoverBomId: integer("handover_bom_id").references(() => boms.id),
+  handoverMoId: integer("handover_mo_id").references(() => manufacturingOrders.id),
+  isConfidential: integer("is_confidential", { mode: 'boolean' }).notNull().default(false),
+  handoverSignoffAt: text("handover_signoff_at"),
+  handoverSignoffBy: text("handover_signoff_by"),
+  isLocked: integer("is_locked", { mode: 'boolean' }).notNull().default(false),
   description: text("description"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at"),
@@ -3305,6 +3533,69 @@ export const rdFormulas = sqliteTable("rd_formulas", {
   testBatchSize: real("test_batch_size").notNull().default(10.0),
   approvedBy: text("approved_by"),
   approvedAt: text("approved_at"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const rdFormulaVersions = sqliteTable("rd_formula_versions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull().references(() => rdProjects.id),
+  formulaCode: text("formula_code").notNull(), // e.g. FORM-01
+  versionNumber: integer("version_number").notNull().default(1),
+  versionLabel: text("version_label").notNull().default("v1.0"),
+  formulaName: text("formula_name").notNull(),
+  author: text("author").notNull(),
+  components: text("components").notNull(), // JSON string: [{ productId, name, qty, unit, unitCost }]
+  yieldRate: real("yield_rate").notNull().default(100.0),
+  testBatchSize: real("test_batch_size").notNull().default(10.0),
+  estimatedUnitCost: real("estimated_unit_cost").default(0),
+  status: text("status").notNull().default("DRAFT"), // DRAFT, ACTIVE, REVISED, ARCHIVED
+  changeLog: text("change_log"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const rdSampleEvaluations = sqliteTable("rd_sample_evaluations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull().references(() => rdProjects.id),
+  sampleCode: text("sample_code").notNull().unique(), // e.g. SMP-2026-001
+  formulaVersion: text("formula_version").notNull().default("v1.0"),
+  evaluationType: text("evaluation_type").notNull().default("TECHNICAL"), // SENSORY, TECHNICAL, AQL_LAB, PACKAGING
+  evaluatorName: text("evaluator_name").notNull(),
+  evaluationScore: real("evaluation_score").default(0),
+  result: text("result").notNull().default("PENDING"), // PASS, FAIL, PENDING
+  qcPlanId: integer("qc_plan_id").references(() => qcPlans.id),
+  sensoryFeedback: text("sensory_feedback"),
+  technicalParameters: text("technical_parameters"), // JSON string
+  notes: text("notes"),
+  evaluatedAt: text("evaluated_at").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const rdComplianceChecks = sqliteTable("rd_compliance_checks", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull().references(() => rdProjects.id),
+  checkCode: text("check_code").notNull().unique(), // e.g. ECO-2026-001
+  standardName: text("standard_name").notNull(), // RoHS 2011/65/EU, REACH, ISO 14001, Eco-Design
+  status: text("status").notNull().default("PENDING"), // PASS, FAIL, PENDING
+  testedParametersJson: text("tested_parameters_json"), // JSON
+  certificationDocRef: text("certification_doc_ref"),
+  checkedBy: text("checked_by").notNull(),
+  notes: text("notes"),
+  checkedAt: text("checked_at").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const rdHandoverChecklist = sqliteTable("rd_handover_checklist", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull().references(() => rdProjects.id),
+  bomReady: integer("bom_ready", { mode: 'boolean' }).notNull().default(false),
+  sampleEvaluationPassed: integer("sample_evaluation_passed", { mode: 'boolean' }).notNull().default(false),
+  ecoCompliancePassed: integer("eco_compliance_passed", { mode: 'boolean' }).notNull().default(false),
+  costingApproved: integer("costing_approved", { mode: 'boolean' }).notNull().default(false),
+  skuRegistered: integer("sku_registered", { mode: 'boolean' }).notNull().default(false),
+  pilotBatchApproved: integer("pilot_batch_approved", { mode: 'boolean' }).notNull().default(false),
+  signoffNotes: text("signoff_notes"),
+  signedBy: text("signed_by"),
+  signedAt: text("signed_at"),
   createdAt: text("created_at").notNull(),
 });
 
@@ -3336,6 +3627,24 @@ export const rdLabTrials = sqliteTable("rd_lab_trials", {
   performedBy: text("performed_by").notNull(),
   resultNotes: text("result_notes"),
   conductedAt: text("conducted_at").notNull(),
+});
+
+export const rdExperiments = sqliteTable("rd_experiments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  experimentCode: text("experiment_code").notNull().unique(), // e.g. EXP-2026-001
+  projectId: integer("project_id").references(() => rdProjects.id),
+  formulaId: integer("formula_id").references(() => rdFormulas.id),
+  formulaVersion: text("formula_version"),
+  experimentName: text("experiment_name").notNull(),
+  testType: text("test_type").notNull(),
+  sampleSize: integer("sample_size").notNull().default(5),
+  yieldRate: real("yield_rate").default(0),
+  status: text("status").notNull().default("PASSED"),
+  score: real("score").default(0),
+  operatorName: text("operator_name").notNull(),
+  notes: text("notes"),
+  conductedAt: text("conducted_at").notNull(),
+  createdAt: text("created_at").notNull(),
 });
 
 // ==========================================
@@ -3696,6 +4005,178 @@ export const scoringConfig = sqliteTable("scoring_config", {
   updatedBy: text("updated_by"),
   updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
+
+// =========================================================================
+// M15: RETURNS & RMA DISPOSITIONS (rmaRequests, rmaItems)
+// =========================================================================
+
+export const rmaRequests = sqliteTable("rma_requests", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  rmaNumber: text("rma_number").notNull().unique(), // e.g. "RMA-2026-0084"
+  orderId: integer("order_id").references(() => salesOrders.id),
+  orderCode: text("order_code"), // e.g. "SO-2026-00120"
+  deliveryCode: text("delivery_code"), // e.g. "DEL-2026-0155"
+  customerId: integer("customer_id").references(() => customers.id),
+  customerName: text("customer_name").notNull(),
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  
+  // Backward-compatible single-item fields matching INITIAL_RMA_SEED directly
+  productCode: text("product_code"), // e.g. "SKU-ENG-088"
+  productName: text("product_name"), // e.g. "Bơm thủy lực cao áp P-1000"
+  quantity: real("quantity").notNull().default(1),
+  uom: text("uom").notNull().default("Cái"),
+  lotSerial: text("lot_serial"), // e.g. "LOT-2026-X889"
+  reason: text("reason").notNull(), // e.g. "Áp suất đầu ra không đạt định mức kỹ thuật cam kết"
+  requestedResolution: text("requested_resolution").notNull().default("REPLACE (Đổi mới sản phẩm)"),
+  
+  // Lifecycle Status & Dispositions
+  status: text("status").notNull().default("REQUESTED"), // 'REQUESTED' | 'UNDER_REVIEW' | 'APPROVED' | 'COMPLETED' | 'REJECTED'
+  inspectionResult: text("inspection_result").notNull().default("PENDING"), // 'PENDING' | 'GOOD' | 'DEFECTIVE' | 'DAMAGED' | 'PASSED' | 'REJECTED'
+  disposition: text("disposition").notNull().default("PENDING"), // 'PENDING' | 'RESTOCK' | 'REPAIR' | 'REPLACE' | 'SCRAP' | 'RETURN_TO_VENDOR' | 'CREDIT'
+  financialStatus: text("financial_status").notNull().default("PENDING"), // 'PENDING' | 'CREDIT_NOTE_ISSUED' | 'REFUNDED' | 'RECONCILED'
+  refundMethod: text("refund_method").default("CREDIT_NOTE"), // 'CREDIT_NOTE' | 'BANK_TRANSFER' | 'CASH'
+  
+  // Warranty, Fraud & Cross-Domain Tracking (M13, M23, M27, M08/M11, M31/M32)
+  warrantyStatus: text("warranty_status").notNull().default("VALID"), // 'VALID' | 'EXPIRED' | 'VOID_TAMPERED'
+  returnWindowDays: integer("return_window_days").notNull().default(30), // Return window policy (defaults to 30 days)
+  fraudScore: real("fraud_score").notNull().default(0), // Fraud risk assessment score (0 - 100)
+  fraudFlags: text("fraud_flags", { mode: 'json' }), // Automated & manual fraud detection flags (JSON)
+  rtvReferenceCode: text("rtv_reference_code"), // Return-To-Vendor reference for M08/M11 SRM
+  maintenanceWoCode: text("maintenance_wo_code"), // EAM Work Order reference code for M27
+  refundChannel: text("refund_channel").notNull().default("CREDIT_NOTE_M31"), // 'CASH_M32' | 'CREDIT_NOTE_M31'
+  
+  // Financial & Credit Notes
+  totalAmount: real("total_amount").notNull().default(0),
+  refundedAmount: real("refunded_amount").notNull().default(0),
+  creditNoteNumber: text("credit_note_number"),
+  
+  // QC Inspection & Approvals Auditing
+  inspectionNotes: text("inspection_notes"),
+  inspectedBy: integer("inspected_by").references(() => users.id),
+  inspectedAt: integer("inspected_at", { mode: 'timestamp' }),
+  approvedBy: integer("approved_by").references(() => users.id),
+  approvedAt: integer("approved_at", { mode: 'timestamp' }),
+  completedAt: integer("completed_at", { mode: 'timestamp' }),
+  rejectedAt: integer("rejected_at", { mode: 'timestamp' }),
+  rejectionReason: text("rejection_reason"),
+  
+  // Date compatibility with INITIAL_RMA_SEED format ('YYYY-MM-DD')
+  requestDate: text("request_date").notNull(),
+  
+  notes: text("notes"),
+  metadata: text("metadata", { mode: 'json' }),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }),
+}, (t) => ({
+  rmaNumberIdx: uniqueIndex("rma_requests_number_idx").on(t.rmaNumber),
+  orderIdIdx: index("rma_requests_order_id_idx").on(t.orderId),
+  orderCodeIdx: index("rma_requests_order_code_idx").on(t.orderCode),
+  customerIdIdx: index("rma_requests_customer_id_idx").on(t.customerId),
+  warehouseIdIdx: index("rma_requests_warehouse_id_idx").on(t.warehouseId),
+  statusIdx: index("rma_requests_status_idx").on(t.status),
+  inspectionResultIdx: index("rma_requests_inspection_result_idx").on(t.inspectionResult),
+  dispositionIdx: index("rma_requests_disposition_idx").on(t.disposition),
+  financialStatusIdx: index("rma_requests_financial_status_idx").on(t.financialStatus),
+  requestDateIdx: index("rma_requests_date_idx").on(t.requestDate),
+  warrantyStatusIdx: index("rma_requests_warranty_status_idx").on(t.warrantyStatus),
+  rtvReferenceCodeIdx: index("rma_requests_rtv_code_idx").on(t.rtvReferenceCode),
+  maintenanceWoCodeIdx: index("rma_requests_maintenance_wo_idx").on(t.maintenanceWoCode),
+  refundChannelIdx: index("rma_requests_refund_channel_idx").on(t.refundChannel),
+  fraudScoreIdx: index("rma_requests_fraud_score_idx").on(t.fraudScore),
+}));
+
+export const rmaItems = sqliteTable("rma_items", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  rmaRequestId: integer("rma_request_id").notNull().references(() => rmaRequests.id, { onDelete: 'cascade' }),
+  productId: integer("product_id").references(() => products.id),
+  productCode: text("product_code").notNull(),
+  productName: text("product_name").notNull(),
+  quantity: real("quantity").notNull().default(1),
+  uom: text("uom").notNull().default("Cái"),
+  uomId: integer("uom_id").references(() => productUoms.id),
+  serialId: integer("serial_id").references(() => serialNumbers.id),
+  lotId: integer("lot_id").references(() => lots.id),
+  lotSerial: text("lot_serial"),
+  condition: text("condition").default("DEFECTIVE"), // 'GOOD' | 'DEFECTIVE' | 'DAMAGED' | 'SCRAP'
+  unitPrice: real("unit_price").notNull().default(0),
+  originalUnitCost: real("original_unit_cost").notNull().default(0), // Cost basis preserved from M42
+  subtotal: real("subtotal").notNull().default(0),
+  reason: text("reason"),
+  disposition: text("disposition").notNull().default("PENDING"), // 'PENDING' | 'RESTOCK' | 'REPAIR' | 'REPLACE' | 'SCRAP' | 'RETURN_TO_VENDOR' | 'CREDIT'
+  dispositionTarget: text("disposition_target").notNull().default("RESTOCK"), // 'RESTOCK' | 'REPAIR' | 'SCRAP' | 'RETURN_TO_VENDOR'
+  inspectedQuantity: real("inspected_quantity").default(0),
+  restockedQuantity: real("restocked_quantity").default(0),
+  scrappedQuantity: real("scrapped_quantity").default(0),
+  replacedQuantity: real("replaced_quantity").default(0),
+  notes: text("notes"),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+}, (t) => ({
+  rmaRequestIdIdx: index("rma_items_request_id_idx").on(t.rmaRequestId),
+  productIdIdx: index("rma_items_product_id_idx").on(t.productId),
+  productCodeIdx: index("rma_items_product_code_idx").on(t.productCode),
+  lotSerialIdx: index("rma_items_lot_serial_idx").on(t.lotSerial),
+  serialIdIdx: index("rma_items_serial_id_idx").on(t.serialId),
+  lotIdIdx: index("rma_items_lot_id_idx").on(t.lotId),
+  dispositionIdx: index("rma_items_disposition_idx").on(t.disposition),
+  dispositionTargetIdx: index("rma_items_disp_target_idx").on(t.dispositionTarget),
+}));
+
+export const rmaRequestsRelations = relations(rmaRequests, ({ one, many }) => ({
+  order: one(salesOrders, {
+    fields: [rmaRequests.orderId],
+    references: [salesOrders.id],
+  }),
+  customer: one(customers, {
+    fields: [rmaRequests.customerId],
+    references: [customers.id],
+  }),
+  warehouse: one(warehouses, {
+    fields: [rmaRequests.warehouseId],
+    references: [warehouses.id],
+  }),
+  creator: one(users, {
+    fields: [rmaRequests.createdBy],
+    references: [users.id],
+  }),
+  approver: one(users, {
+    fields: [rmaRequests.approvedBy],
+    references: [users.id],
+  }),
+  inspector: one(users, {
+    fields: [rmaRequests.inspectedBy],
+    references: [users.id],
+  }),
+  items: many(rmaItems),
+}));
+
+export const rmaItemsRelations = relations(rmaItems, ({ one }) => ({
+  request: one(rmaRequests, {
+    fields: [rmaItems.rmaRequestId],
+    references: [rmaRequests.id],
+  }),
+  product: one(products, {
+    fields: [rmaItems.productId],
+    references: [products.id],
+  }),
+  uom: one(productUoms, {
+    fields: [rmaItems.uomId],
+    references: [productUoms.id],
+  }),
+  serial: one(serialNumbers, {
+    fields: [rmaItems.serialId],
+    references: [serialNumbers.id],
+  }),
+  lot: one(lots, {
+    fields: [rmaItems.lotId],
+    references: [lots.id],
+  }),
+}));
+
+export type RmaRequest = typeof rmaRequests.$inferSelect;
+export type NewRmaRequest = typeof rmaRequests.$inferInsert;
+export type RmaItem = typeof rmaItems.$inferSelect;
+export type NewRmaItem = typeof rmaItems.$inferInsert;
 
 
 

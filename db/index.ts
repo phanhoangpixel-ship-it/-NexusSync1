@@ -10,6 +10,11 @@ export let client = createClient({
   url: dbPath,
 });
 
+try {
+  client.execute("PRAGMA journal_mode = WAL;");
+  client.execute("PRAGMA busy_timeout = 10000;");
+} catch (_) {}
+
 export let db = drizzle(client, { schema });
 
 export function recreateDatabaseClient() {
@@ -24,6 +29,10 @@ export function recreateDatabaseClient() {
     });
   }
   client = createClient({ url: dbPath });
+  try {
+    client.execute("PRAGMA journal_mode = WAL;");
+    client.execute("PRAGMA busy_timeout = 10000;");
+  } catch (_) {}
   db = drizzle(client, { schema });
   return { client, db };
 }

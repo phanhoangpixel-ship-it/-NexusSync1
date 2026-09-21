@@ -35,6 +35,7 @@ import authRouter from "./src/routes/auth.routes";
 import workspaceRouter from "./src/routes/workspace.routes";
 import masterDataRouter from "./src/routes/masterData.routes";
 import inventoryRouter from "./src/routes/inventory.routes";
+import returnsRouter from "./src/routes/returns.routes";
 import salesRouter from "./src/routes/sales.routes";
 import purchasesRouter from "./src/routes/purchases.routes";
 import financeRouter from "./src/routes/finance.routes";
@@ -62,6 +63,7 @@ import { settingsRouter } from "./src/routes/settings.routes";
 import { industryProfilesRouter } from "./src/routes/industryProfiles.routes";
 import { orgWorkflowRouter } from "./src/routes/orgWorkflow.routes";
 import wmsExtendedRouter from "./src/routes/wmsExtended.routes";
+import { commissionRouter } from "./src/routes/commission.routes";
 import { auditRouter } from "./src/routes/audit.routes";
 import { AuditService } from "./engines/auditService";
 import { CostingShadowRunner } from "./engines/costingShadowRunner";
@@ -91,6 +93,7 @@ async function startServer() {
   app.use(workspaceRouter);
   app.use(masterDataRouter);
   app.use(inventoryRouter);
+  app.use(returnsRouter);
   app.use(salesRouter);
   app.use(purchasesRouter);
   app.use(financeRouter);
@@ -109,7 +112,7 @@ async function startServer() {
   app.use(analyticsRouter);
   app.use(qualityRouter);
   app.use(pricingRouter);
-  app.use("/api/shift", shiftRouter);
+  app.use(["/api/shift", "/api/pos/shifts", "/api/pos"], shiftRouter);
   app.use(sourcingRouter);
   app.use(crmRouter);
   app.use(eventsRouter);
@@ -119,6 +122,7 @@ async function startServer() {
   app.use(settingsRouter);
   app.use(industryProfilesRouter);
   app.use(orgWorkflowRouter);
+  app.use(commissionRouter);
 
   // --- PHASE 6: M24 WMS EXTENDED ROUTER (WAVE PICKING, LPN, DOCK SCHEDULING, SERVICE ENGINES) ---
   app.use(wmsExtendedRouter);
@@ -266,6 +270,169 @@ async function startServer() {
     }
   });
 
+  // --- LANDED COST ALLOCATION ENDPOINTS (M42 Cost Allocation & COGS) ---
+  app.get("/api/costing/layers", async (req, res) => {
+    try {
+      const layers = await db.select().from(schema.costLayers).where(eq(schema.costLayers.status, 'ACTIVE')).orderBy(desc(schema.costLayers.id)).limit(50);
+      res.json({ success: true, data: layers });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post("/api/costing/landed-cost/allocate", async (req, res) => {
+    try {
+      const { allocationRunCode, receiptId, allocationMethod, totalLandedCost, expenseType, items } = req.body;
+      const user = (req as any).user || { id: 1, username: 'admin', role: 'SUPER_ADMIN' };
+
+      if (!totalLandedCost || Number(totalLandedCost) <= 0 || !items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ success: false, error: 'BAD_REQUEST: Tổng chi phí phân bổ và danh sách các lớp chi phí (items) là bắt buộc và phải > 0.' });
+      }
+
+      const result = await db.transaction(async (tx) => {
+        return await costingEngine.allocateLandedCost({
+          allocationRunCode: allocationRunCode || `LCA-${Date.now()}`,
+          receiptId: receiptId ? Number(receiptId) : undefined,
+          allocationMethod: allocationMethod || 'VALUE',
+          totalLandedCost: Number(totalLandedCost),
+          expenseType: expenseType || 'FREIGHT',
+          items: items.map((it: any) => ({
+            layerId: Number(it.layerId),
+            productId: Number(it.productId),
+            quantity: Number(it.quantity),
+            weight: it.weight ? Number(it.weight) : 10,
+            volume: it.volume ? Number(it.volume) : 0.1,
+            customsValue: it.customsValue ? Number(it.customsValue) : (Number(it.quantity) * 100000)
+          })),
+          appliedByUserId: user.id || 1
+        }, tx);
+      });
+
+      res.json({
+        success: true,
+        message: `Đã phân bổ thành công chi phí nhập hàng ${Number(totalLandedCost).toLocaleString()} ₫ vào ${result.adjustedLayersCount} lớp chi phí kho.`,
+        data: result
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // --- UNIFIED COGS & LANDED COST ENDPOINTS (M42 Single-Writer Architecture) ---
+  app.get("/api/cogs/transactions", async (req, res) => {
+    try {
+      const txs = await db.select().from(schema.cogsTransactions).orderBy(desc(schema.cogsTransactions.id)).limit(100);
+      res.json({ success: true, data: txs });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get("/api/cogs/cost-layers", async (req, res) => {
+    try {
+      const layers = await db.select().from(schema.costLayers).where(eq(schema.costLayers.status, 'ACTIVE')).orderBy(desc(schema.costLayers.id)).limit(100);
+      res.json({ success: true, data: layers });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get("/api/cogs/allocation", async (req, res) => {
+    try {
+      const layers = await db.select().from(schema.costLayers).where(eq(schema.costLayers.status, 'ACTIVE')).orderBy(desc(schema.costLayers.id)).limit(100);
+      const txs = await db.select().from(schema.cogsTransactions).orderBy(desc(schema.cogsTransactions.id)).limit(50);
+      const config = await costingEngine.getCostingConfig();
+      res.json({
+        success: true,
+        data: {
+          layers,
+          transactions: txs,
+          config,
+          status: 'ACTIVE_AUTHORITATIVE'
+        }
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post("/api/cogs/calculate-order", async (req, res) => {
+    try {
+      const { productId, warehouseId, quantity, salesOrderId, userId } = req.body;
+      if (!productId || !warehouseId || !quantity) {
+        return res.status(400).json({ success: false, error: 'BAD_REQUEST: productId, warehouseId, and quantity are required.' });
+      }
+      const result = await costingEngine.calculateIssue({
+        productId: Number(productId),
+        warehouseId: Number(warehouseId),
+        quantity: Number(quantity),
+        salesOrderId: salesOrderId ? Number(salesOrderId) : undefined,
+        createdBy: userId ? Number(userId) : 1
+      });
+      res.json({ success: true, message: 'Đã tính toán COGS thành công qua CostingEngine', data: result });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get("/api/cogs/settings", async (req, res) => {
+    try {
+      const config = await costingEngine.getCostingConfig();
+      res.json({ success: true, data: config });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.put("/api/cogs/settings", async (req, res) => {
+    try {
+      const { method, reason } = req.body;
+      const user = (req as any).user || { id: 1, username: 'admin', role: 'SUPER_ADMIN' };
+      const allowedRoles = ['CFO', 'CHIEF_ACCOUNTANT', 'FINANCE_ADMIN', 'SUPER_ADMIN', 'ADMIN'];
+      if (!allowedRoles.includes(user.role)) {
+        return res.status(403).json({ success: false, error: `FORBIDDEN: Chỉ CFO hoặc Kế toán trưởng mới có quyền thay đổi phương pháp định giá.` });
+      }
+      const result = await costingEngine.updateCostingMethod({
+        method,
+        userId: user.id || 1,
+        username: user.username || 'admin',
+        userRole: user.role || 'SUPER_ADMIN',
+        reason: reason || 'Cập nhật phương pháp định giá qua API M42'
+      });
+      res.json({ success: true, message: `Đã cập nhật phương pháp định giá: ${method}`, data: result });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post("/api/cogs/landed-cost", async (req, res) => {
+    try {
+      const { allocationRunCode, receiptId, allocationMethod, totalLandedCost, expenseType, items } = req.body;
+      const user = (req as any).user || { id: 1, username: 'admin', role: 'SUPER_ADMIN' };
+      const result = await db.transaction(async (tx) => {
+        return await costingEngine.allocateLandedCost({
+          allocationRunCode: allocationRunCode || `LCA-${Date.now()}`,
+          receiptId: receiptId ? Number(receiptId) : undefined,
+          allocationMethod: allocationMethod || 'VALUE',
+          totalLandedCost: Number(totalLandedCost),
+          expenseType: expenseType || 'FREIGHT',
+          items: (items || []).map((it: any) => ({
+            layerId: Number(it.layerId),
+            productId: Number(it.productId),
+            quantity: Number(it.quantity),
+            weight: it.weight ? Number(it.weight) : 10,
+            volume: it.volume ? Number(it.volume) : 0.1,
+            customsValue: it.customsValue ? Number(it.customsValue) : (Number(it.quantity) * 100000)
+          })),
+          appliedByUserId: user.id || 1
+        }, tx);
+      });
+      res.json({ success: true, message: `Phân bổ Landed Cost thành công`, data: result });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
 
   // Health check
   // Auth: Simulated Login & Session
@@ -386,7 +553,6 @@ async function startServer() {
     "/api/srm/scorecards",
     "/api/quality/plans",
     "/api/reports/summary",
-    "/api/commission/plans",
   ];
 
   for (const ep of fallbackEndpoints) {

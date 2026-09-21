@@ -54,6 +54,46 @@ This document defines the strict business rules, workflows, and constraints of t
   - An Invoice can be `ISSUED` but remain `UNPAID`.
 - **Accounting Generation:** An `ISSUED` invoice generates an AR (Accounts Receivable) GL entry. A `Payment` generates a Cash GL entry to clear the AR.
 
+### 2.1. Sales Orders & Order-to-Cash (O2C) Core Rules (Module M13)
+
+**Lifecycle Pipeline:** `1. Ingestion (SO Created) ➔ 2. Pricing & Discounts (M41) ➔ 3. Credit Guard (M07) ➔ 4. Stock Reservation (M17 ATP) ➔ 5. WMS Fulfillment (M24) ➔ 6. Decree 123/2020 VAT Invoicing & Triple VAS GL (M30) ➔ 7. Payment Clearing & RMA Protection (M15)`
+
+**Strict Domain Rules & Invariants:**
+1. **Single-Writer Inventory Authority (M17 SSOT):**
+   - Sales Orders NEVER directly modify `stock_balances` or `stock_ledger`.
+   - **Reservation Stage:** Calls `InventoryService.postTransaction()` / `reserveStock()`: increments `stockReserved`, decrements `stockAvailable`, leaving `stockPhysical` unchanged until actual dispatch.
+   - **Fulfillment Stage:** Calls `InventoryService.postTransaction()` with `deductReserved=true`: decrements both `stockPhysical` and `stockReserved` atomically, preserving available stock invariants.
+   - **Cancellation Stage:** If an order has status `RESERVED`, cancellation automatically invokes `InventoryService.releaseReservation()` to restore `stockAvailable`.
+2. **Customer Credit Limit & Exception Clearance Guard (M07 Integration):**
+   - The system checks available credit limit (`creditLimit - currentDebt`) and checks for overdue invoices (>30 days).
+   - Orders exceeding customer credit limits are automatically routed to `PENDING_APPROVAL` with `creditApprovalRequired=true`.
+   - An authorized Credit Manager must approve the order (`POST /api/sales/orders/:id/approve`), transitioning status to `CONFIRMED` and automatically triggering stock reservation.
+3. **Pricing & Promotional Discount Matrix (M41 SSOT):**
+   - Base selling prices are resolved exclusively from `PricingEngine` (M41).
+   - Tiered quantity breaks (e.g., Tier 1: 0-10 units @ 0%, Tier 2: 11-50 units @ 5%, Tier 3: >50 units @ 10%) are automatically calculated.
+   - Promotional discount rules enforce minimum order thresholds and maximum discount percentage caps to prevent negative gross margins.
+4. **Decree 123/2020/ND-CP & Circular 78/2021/TT-BTC Electronic Invoicing:**
+   - Orders with confirmed fulfillment and legal customer profile can issue official VAT e-invoices.
+   - Issuance triggers Cloud HSM digital signature validation, formats the electronic tax payload, generates the official Tax Authority Code (`Mã CQT`), and updates `vatStatus='ISSUED'`.
+   - Generates bilingual Decree 123 compliant PDF with embedded QR verification code.
+5. **Triple VAS General Ledger Accounting Postings (M30 Single-Writer):**
+   - Upon VAT invoice issuance, the system automatically posts 3 balanced VAS journal entries via `AccountingService`:
+     - **Revenue Recognition:** Debit 1311 (Phải thu khách hàng) / Credit 5111 (Doanh thu bán hàng).
+     - **Output VAT Liability:** Debit 1311 (Phải thu khách hàng) / Credit 33311 (Thuế GTGT đầu ra).
+     - **Cost of Goods Sold (COGS):** Debit 632 (Giá vốn hàng bán) / Credit 1561 (Hàng hóa), valued via M42 Costing Engine.
+6. **Omnichannel M16 POS Sync & 1-Click Corporate VAT Conversion:**
+   - Retail orders generated from M16 POS registers are ingested into M13 with `sourceModule='M16_POS'`.
+   - Allows instant conversion into corporate VAT electronic invoices with corporate tax code, address, and legal buyer name.
+7. **Immutable Document Protection & M15 RMA Delegation:**
+   - **Direct Cancellation Prohibition:** Orders with `vatStatus='ISSUED'` or `status='INVOICED'` CANNOT be directly canceled or deleted.
+   - **RMA Credit Note Workflow:** Any post-invoice returns, defect claims, or cancellations MUST be handled via Module M15 (RMA Dispositions) through an official Return Docket (`POST /api/sales/orders/:id/returns`) and VAT Credit Note adjustment, preserving legal auditability.
+8. **Idempotency & Concurrent Stress Hardening:**
+   - All state-changing endpoints enforce `X-Idempotency-Key` or body `idempotencyKey`. Replayed network requests return cached outcomes without duplicate order creation or double stock reservations.
+   - Atomic reservation guards eliminate race conditions when multiple users compete for limited inventory stock.
+9. **UI/UX Enterprise Standards (Rule #19 & Rule #20):**
+   - Zero `window.confirm/alert/prompt`. All destructive, approval, or critical actions use `ConfirmDialog.tsx` with semantic risk levels (Danger for Cancel, Warning for Credit Override, Primary for Reserve/Fulfill).
+   - All financial amounts, quantities, SKUs, and document codes formatted with `font-mono tabular-nums`.
+
 ## 3. Costing & COGS (Cost of Goods Sold)
 
 **Workflow:** `Inventory Issue/Sales -> Central Costing Engine -> COGS Transaction`
@@ -467,20 +507,43 @@ Product
 - **Sản phẩm vừa có Lô vừa có Serial**: `Product + Warehouse + Location + Lot + Serial`
 *Quy tắc này giúp tránh sinh dữ liệu Lot/Serial giả và đảm bảo DB schema gọn nhẹ, chính xác theo thuộc tính thực tế.*
 
-### 8.21. Quy Tắc Nghiệp Vụ Hoa Hồng & Quyết Toán Bán Hàng (Module 34 Commission Engine)
-1. **Đánh Giá & Tính Toán Tự Động (Evaluation & Tiered Calculations)**:
-   - Hệ thống tự động tính hoa hồng ngay khi Đơn Bán Hàng (B2B/POS) đạt điều kiện cơ sở (`ORDER_CONFIRMED`, `INVOICE_ISSUED`, `PAYMENT_COLLECTED`).
-   - Tỷ lệ % và số tiền cố định được tính theo ma trận bậc thang doanh số lũy kế trong kỳ (`commission_rules`).
-   - Ghi nhận bút toán vào `commission_calculations` với trạng thái ban đầu `ACCRUED` hoặc `ELIGIBLE`.
-2. **Thưởng Vượt Quota & Hệ Số Accelerator (KPI Attainment)**:
-   - Khi nhân viên kinh doanh đạt tỷ lệ hoàn thành KPI Quota `>= 100%`, hệ số tăng tốc `acceleratorMultiplier` (ví dụ: `1.2x`, `1.5x`) được áp dụng tự động cho phần doanh số thặng dư.
-3. **Quy Trình Khấu Trừ Thu Hồi (Return Clawbacks)**:
-   - Khi đơn hàng phát sinh Trả hàng bán (`sales_returns`) hoặc Hủy chứng từ, hệ thống tự động ghi nhận bản ghi Clawback âm (`isClawback = true`).
-   - Số tiền Clawback sẽ tự động cấn trừ vào đợt quyết toán kế tiếp của nhân viên đó để bảo đảm doanh nghiệp không bị chi trả thừa.
-4. **Hạch Toán Chuẩn Mực Kế Toán Kép (VAS Double-Entry Accounting)**:
-   - **Phê duyệt Đợt quyết toán (Accrual)**: Tự động ghi nhận trích trước chi phí hoa hồng: **Nợ TK 6418 (Chi phí bán hàng) / Có TK 3388 (Phải trả khác - Hoa hồng)**.
-   - **Chi trả Quyết toán (Payment)**: Tự động ghi nhận thanh toán tiền: **Nợ TK 3388 (Phải trả khác) / Có TK 1121 (Tiền gửi ngân hàng) hoặc TK 1111 (Tiền mặt)**.
-   - Chuyển trạng thái toàn bộ các bản ghi `commission_calculations` liên quan sang `SETTLED`.
+### 8.21. Quy Tắc Nghiệp Vụ Hoa Hồng & Quyết Toán Bán Hàng (M14 Sales Commission Engine)
+1. **Thẩm Quyền Đơn Nhất & Tích Hợp Đa Module (Domain Authorities & Non-Authority Protection)**:
+   - **M14 Không Phải Single-Writer**: M14 là module điều phối (Orchestration Engine). M14 KHÔNG được trực tiếp ghi vào bảng tồn kho (`stock_ledger`), sổ cái kế toán (`accounting_entries`), bảng lương (`payrolls`), giá vốn (`cost_layers`), hoặc chứng từ trả hàng (`rma_requests`).
+   - **Đọc Giá Vốn Thật Từ M42 (COGS Authority SSOT)**: Mọi phép tính hoa hồng theo Lợi nhuận gộp (Gross Margin) BẮT BUỘC phải đọc giá vốn thực tế từ `cogs_transactions` (hoặc `cost_layers`) do M42 Costing Engine sở hữu. CẤM tự ý ước lượng, hardcode hoặc tự nhân giá vốn giả định trong M14.
+   - **Ủy Quyền Kế Toán Cho M30 (Accounting SSOT)**: Toàn bộ bút toán trích trước chi phí hoa hồng và chi trả BẮT BUỘC thực hiện qua `AccountingEngine.postJournal()` (M30).
+   - **Ủy Quyền Trả Hàng Cho M15 (Returns SSOT)**: Dữ liệu thu hồi hoa hồng (Clawback) lấy từ `rma_requests` (M15) qua EventBus `returns.rma.completed`.
+   - **Ủy Quyền Chi Lương Cho M28 (Payroll SSOT)**: Khi chọn phương thức chi trả qua kỳ lương (`PAYROLL_INTEGRATION`), M14 ủy quyền ghi nhận vào bảng lương M28 và hạch toán Nợ 3388 / Có 3341.
+
+2. **Cơ Chế Tính Toán Theo Doanh Thu & Lợi Nhuận Gộp (Revenue & Gross Margin Basis)**:
+   - **Doanh thu (Revenue Basis)**: `Hoa hồng = (Doanh số * Tỷ lệ % + Định mức cố định) * Hệ số Accelerator`.
+   - **Lợi nhuận gộp (Gross Margin Basis)**: `Gross Margin = Doanh thu - Giá vốn M42`. `Hoa hồng = (Gross Margin * Tỷ lệ % + Định mức) * Hệ số Accelerator`.
+   - **Bậc thang (Tiered Rules)**: Tỷ lệ % và thưởng áp dụng theo ma trận lũy kế hoặc ngưỡng giá trị đơn hàng trong `commission_rules`.
+
+3. **Phân Bổ Hoa Hồng Phân Cấp & Đội Ngũ (Split Commission & Hierarchy Overrides)**:
+   - Tự động truy vấn cây phân cấp tổ chức từ M28 HR Management (`employees.manager_id`, `departments.manager_employee_id`).
+   - Phân bổ theo tỷ lệ chuẩn: Nhân viên kinh doanh trực tiếp hưởng **75%**, Trưởng nhóm / Quản lý bán hàng hưởng **15%**, Presales / Chuyên gia giải pháp hưởng **10%**.
+
+4. **Thưởng Vượt Quota & Hệ Số Accelerator (KPI Attainment Engine)**:
+   - Khi tỷ lệ hoàn thành KPI Quota trong kỳ đạt `>= 100%`, hệ số tăng tốc `acceleratorMultiplier` (1.2x - 1.5x) tự động áp dụng để khuyến khích bán hàng vượt mục tiêu.
+
+5. **Khấu Trừ Thu Hồi Hoa Hồng Do Trả Hàng (Return Clawback Invariant)**:
+   - Khi phát sinh đơn trả hàng RMA hoàn tất từ M15, hệ thống tự động sinh bản ghi hoa hồng âm (`isClawback = true`).
+   - Khoản Clawback được tự động trừ lùi vào đợt quyết toán kế tiếp của NVKD và quản lý liên quan, bảo toàn ngân sách doanh nghiệp.
+
+6. **Xử Lý Khiếu Nại & Bút Toán Điều Chỉnh (Dispute & Adjustment Workflow)**:
+   - NVKD có thể gửi khiếu nại kèm số tiền chênh lệch và bằng chứng.
+   - Khi Quản lý phê duyệt `RESOLVED_ADJUSTED`, hệ thống tự động phát hành bản ghi `commission_calculations` loại `DISPUTE_ADJUSTMENT` để bù/trừ số tiền chênh lệch vào đợt quyết toán gần nhất.
+
+7. **Chuẩn Mực Hạch Toán Kế Toán Kép VAS (Double-Entry VAS Integration)**:
+   - **Phê duyệt Đợt quyết toán (Accrual)**: Tự động ghi nhận trích trước chi phí: **Nợ TK 6418 (Chi phí bán hàng) / Có TK 3388 (Phải trả khác - Hoa hồng)**.
+   - **Chi trả trực tiếp (Payment/Treasury)**: Ghi nhận thanh toán: **Nợ TK 3388 / Có TK 1121 (Ngân hàng) hoặc TK 1111 (Tiền mặt)**.
+   - **Chi trả qua Bảng lương (Payroll Transfer)**: Ghi nhận kết chuyển lương: **Nợ TK 3388 / Có TK 3341 (Phải trả người lao động)**.
+   - Chuyển trạng thái toàn bộ chứng từ `commission_calculations` trong đợt sang `SETTLED`.
+
+8. **Cơ Chế Bảo Vệ Bất Thường & Tamper-Proof Audit (Anomaly Guard & M02 Audit Trail)**:
+   - Tự động phát hiện và cảnh báo các giao dịch có tỷ lệ hoa hồng bất thường (>20%) hoặc đơn hàng có biên lợi nhuận thấp (<5%).
+   - Mọi giao dịch tính toán, phân bổ, khấu trừ và quyết toán đều được ghi vết bất biến vào `audit_logs` (M02) kèm chữ ký số SHA-256. Chứng từ quyết toán được lưu trữ vĩnh viễn vào kho lưu trữ M29 DMS Vault.
 
 ## 9. WMS Extended Rules (M24: Wave Picking, LPN, Dock Scheduling)
 
@@ -527,6 +590,134 @@ Product
 - **SHA-256 Seal**: Approved batch releases and Certificate of Analysis (COA) documents are cryptographically sealed with SHA-256 hashes.
 - **DMS Vault Storage**: Final QA certificates and inspection dossiers are permanently archived into the M29 DMS vault under strict read-only immutability.
 - **Multi-Step Approval Workflow**: All batch release certificates require sign-off through M28 multi-tier approval matrices prior to physical warehouse dispatch.
+
+## 11. Logistics & Fleet Transportation Rules (M36 TMS)
+
+### 11.1. Single-Writer Authority & Non-Authority Protection
+- **No Direct Inventory Mutation**: M36 is NOT a Single-Writer Inventory Authority. M36 performs read-only checks against `stock_balances` and fulfillment status in M13 / M17. M36 CANNOT directly execute SQL UPDATEs or INSERTs into `stock_balances` or `stock_ledger`.
+- **Delegated Costing (M42 SSOT)**: All Landed Cost allocation for inbound freight MUST be delegated exclusively to `CostingEngine.allocateLandedCost()` (M42). M36 never writes directly to `cost_layers`.
+- **Delegated Accounting (M30 SSOT)**: All Freight GL entries (Debit 6417 / Credit 331), Toll BOT reconciliations (Debit 6417 / Credit 1121), and COD Cash receipts (Debit 1111 / Credit 131) MUST route strictly through `AccountingEngine.postJournal()` (M30). M36 never writes directly to `accounting_entries`.
+
+### 11.2. Shipment Lifecycle & Immutability Invariant
+- **Immutable State Machine**: Once a shipment or transport order reaches `DELIVERED` or `CLOSED`, it becomes strictly read-only and immutable. No retrospective modifications to driver, vehicle, or cargo are permitted.
+- **Exception & Failed Delivery (M15 Integration)**: Delivery failures cannot overwrite historical shipping milestones. Failed delivery transitions order status to `FAILED` and automatically delegates the generation of an official RMA docket (`RMA-YYYY-XXXX`) to Module M15 (Returns & RMA). Re-attempts create subsequent dispatch orders.
+
+### 11.3. Cryptographic DMS Archival & Audit Trail (M29 & M02 Compliance)
+- **DMS Vault Archival**: Every issued Waybill and electronic Proof of Delivery (e-POD) must be cryptographically hashed (SHA-256) and archived directly into the M29 DMS Vault (`dms_documents`). Standalone document storage silos are strictly prohibited.
+- **Unified Audit Trail**: All lifecycle transitions (`CREATE_VEHICLE`, `CREATE_DRIVER`, `CREATE_TRANSPORT_ORDER`, `ASSIGN_DRIVER_VEHICLE`, `DISPATCH_SHIPMENT`, `TRACK_UPDATE`, `OPTIMIZE_ROUTE`, `POD_CONFIRM`, `FAIL_DELIVERY`, `SETTLE_COD`, `LOG_FUEL_REFUEL`) MUST be recorded into M02 via `AuditService.recordAuditLog()`. No local audit log tables.
+
+### 11.4. Idempotency & Concurrency Protection
+- All state-mutating logistics operations (consolidated shipment dispatch, COD settlement, e-POD recording) must accept and enforce unique `idempotencyKey` headers to protect against network replays and duplicate dispatches.
+
+## 12. Innovation R&D & Formulation Rules (M06)
+
+### 12.1. Single-Writer Authority & Non-Authority Protection
+- **No Direct Inventory Mutation (M17 SSOT)**: M06 is NOT a Single-Writer Inventory Authority. Material requisitions for laboratory experiments or prototype builds MUST be delegated exclusively to `InventoryService.postTransaction()` (`POST /api/rd/projects/:id/material-requisition` -> movement type `OUTBOUND_ISSUE`). M06 CANNOT directly execute SQL UPDATEs or INSERTs on `stock_balances` or `stock_ledger`.
+- **Delegated Costing (M42 SSOT)**: Formula cost estimation (`GET /api/rd/projects/:id/cost-estimate`) MUST read live component costs directly from M42 `cost_layers` or M07 `products.costPrice`. M06 is strictly prohibited from inventing or hardcoding synthetic raw material costs, and CANNOT mutate cost layers.
+- **Delegated Master Item Registration (M07 SSOT)**: Commercial SKU generation upon project approval MUST be delegated to M07 Item Master (`POST /api/products` via `POST /api/rd/projects/:id/register-sku`) with `sourceType = 'RD_PROJECT'`. M06 CANNOT create isolated orphan product tables.
+- **Delegated Production Execution (M25 MES SSOT)**: Prototype BOM handover (`POST /api/rd/boms`) and pilot production work orders (`POST /api/rd/projects/:id/pilot-batch`) MUST delegate to M25 MES (`boms`, `bomItems`, `manufacturingOrders`). M06 never executes manufacturing floor operations directly.
+
+### 12.2. Stage-Gate Lifecycle Invariant & Immutability Guard
+- **Strict 5-Stage Lifecycle**: Every R&D project strictly adheres to the progressive lifecycle: `DRAFT` -> `TRIAL` -> `SAMPLE_EVALUATION` -> `APPROVED` -> `HANDED_OVER` (or terminal `REJECTED`).
+- **Immutable Lock on Completion**: Once a project reaches `HANDED_OVER` or `REJECTED`, the project record and its associated formula recipes become permanently locked and immutable (`isLocked = true`). Any subsequent modifications must be initiated under a new R&D project or an explicit new formulation revision (`v2.0`). Retrospective edits to locked projects are strictly blocked with HTTP 403.
+- **5-Gate Handover Pre-requisites**: Handover Sign-Off (`POST /api/rd/projects/:id/handover-signoff`) strictly requires:
+  1. At least one prototype sample evaluation with status `PASS`.
+  2. Eco-Design compliance verification with status `PASS`.
+  3. Commercial SKU registered in M07 Item Master (`targetSkuId != null`).
+  4. Active BOM release prepared for M25 MES.
+
+### 12.3. Formula Version Control & Confidentiality Guard (RBAC)
+- **Zero-Overwrite Policy**: Formula edits never overwrite existing versions in-place. Every revision creates an incremented version record (`v1.0`, `v1.1`, `v2.0`), preserving full historical recipes and active formulation pointers.
+- **Confidentiality Masking (RBAC)**: Detailed ingredient percentages, exact chemical formulas, and confidential ratios are restricted to users holding `rd:confidential` or `rd.confidential.view` permissions. For non-authorized users, confidential component percentages and proprietary specifications are masked or omitted.
+
+### 12.4. Cross-Module Delegation & Archival (M39 QMS, M08/M09 P2P, M29 DMS, M02 Audit)
+- **Quality Control Linkage (M39)**: Sample evaluation (`POST /api/rd/samples/evaluate`) automatically creates an incoming inspection record (`qc_inspections`) and ties into M39 QMS sampling plans (`qc_plans`).
+- **Procurement Requisition (M08/M09)**: Lab sample raw material purchasing requests (`POST /api/rd/projects/:id/sample-po`) delegate directly to M08 Purchase Orders (`schema.purchaseOrders`), establishing complete P2P traceability.
+- **Cryptographic DMS Vaulting (M29)**: Test reports, Eco-Design certifications, and technical handover dossiers must be cryptographically hashed with SHA-256 and archived to M29 DMS Vault (`schema.dmsDocuments`).
+- **Audit Logging (M02 SSOT)**: All 8 critical lifecycle milestones (`CREATE_PROJECT`, `LOG_EXPERIMENT`, `EVALUATE_SAMPLE`, `ECO_COMPLIANCE_CHECK`, `STAGE_TRANSITION`, `PILOT_BATCH`, `HANDOVER_SIGNOFF`, `REJECT`) MUST be logged via `AuditService.recordAuditLog()`. No local audit log tables are permitted.
+
+## 13. Manufacturing Execution & BOM Rules (M25 MES)
+
+### 13.1. Single-Writer Authority & Non-Authority Protection
+- **No Direct Inventory Mutation (M17 SSOT):** M25 is NOT a Single-Writer Inventory Authority. All raw material issues (`PRODUCTION_CONSUMPTION`, manual or backflush) and finished goods receipts (`PRODUCTION_RECEIPT`) MUST be posted exclusively via `InventoryService.postTransaction()`. M25 CANNOT execute direct SQL UPDATEs or INSERTs on `stock_balances` or `stock_ledger`.
+- **Costing Authority (M42 SSOT):** M25 is NOT a costing authority. Standard unit costs and actual cost allocations are resolved strictly through `CostingEngine` (M42). M25 provides a read-only comparison of standard vs actual cost variance and CANNOT mutate frozen costing layers or costing tables.
+- **Quality Quarantine Authority (M39 SSOT):** Quarantine holds for WIP or finished goods must route strictly through M39 QMS (`qc_inspections`, `quality_holds`). M25 CANNOT release quarantined stock or complete a work order under active QC hold without an authorized QC release certificate.
+- **Traceability Authority (M22 / M23 SSOT):** Finished goods lot numbers (`product_lots`) and serial numbers (`product_serials`) are registered via M22 and M23 with backward genealogy linking consumed raw material lots.
+
+### 13.2. Work Order Lifecycle State Machine & Immutability Invariant
+- **Strict Lifecycle Transitions:** Every Manufacturing Order (MO) follows the deterministic state machine:
+  `DRAFT` $\rightarrow$ `RELEASED` $\rightarrow$ `IN_PROGRESS` $\rightarrow$ `QC_HOLD` / `QC_RELEASE` $\rightarrow$ `COMPLETED` (or terminal `CANCELLED`).
+- **Stock Reservation Boundary:** Releasing an MO (`POST /api/manufacturing/work-orders/:id/release`) reserves required raw materials in M17. Cancelling an MO releases all active stock reservations.
+- **Terminal Immutability Invariant:** Once an order reaches `COMPLETED` or `CANCELLED`, it is permanently frozen and immutable. Retrospective changes to quantity, consumed materials, or costs are strictly prohibited. Errors or scrap variances must be resolved via a new corrective or rework order (`REWORK_MO`).
+
+### 13.3. BOM Version Control & Zero-Overwrite Policy
+- **Multi-Version Architecture:** Bills of Materials (BOM) follow a strict lifecycle (`DRAFT` $\rightarrow$ `APPROVED` $\rightarrow$ `ACTIVE` $\rightarrow$ `ARCHIVED`).
+- **Zero-Overwrite Policy:** Revisions never overwrite existing BOM baselines in-place. Every engineering change creates a new record in `bom_versions` with incremented version numbers (`V1.0`, `V1.1`, `V2.0`) and effective date intervals (`effective_from`, `effective_to`).
+
+### 13.4. Material Consumption: Manual vs Backflush
+- **Manual Issue:** Operators issue raw materials staged on the shop floor via `POST /api/manufacturing/work-orders/:id/issue-materials`, decrementing stock strictly through M17 `InventoryService.postTransaction()`.
+- **Backflush Issue:** On MO completion (`POST /api/manufacturing/work-orders/:id/backflush`), the system calculates exact standard quantities from the active BOM version, verifying warehouse availability before atomically posting consumption via M17.
+
+### 13.5. Scrap & Yield Tracking
+- **Yield Calculation:** Yield % is computed as `(goodQuantity / (goodQuantity + scrapQuantity)) * 100`.
+- **Scrap Reporting:** Actual scrap quantities are tracked per operation against expected BOM scrap rates (`scrapRate`). Discrepancies exceeding standard tolerance require mandatory scrap reason codes (`DEFECTIVE_MATERIAL`, `OPERATOR_ERROR`, `MACHINE_MALFUNCTION`, `CALIBRATION_LOSS`).
+
+### 13.6. MRP Planned Order Conversion (M26 SCM)
+- Planned production orders generated from M26 MRP netting runs are ingested via `POST /api/manufacturing/orders/from-mrp`, creating MOs with reference to `mrpPlanId` for seamless cross-module supply chain visibility.
+
+### 13.7. Centralized Audit Trail & Cryptographic DMS Vaulting (M02 & M29)
+- **Centralized Tamper-Evident Audit (M02 SSOT):** All 8 lifecycle transitions (`CREATE_BOM`, `NEW_BOM_VERSION`, `RELEASE_MO`, `ISSUE_MATERIAL`, `BACKFLUSH_MATERIAL`, `QC_HOLD`, `QC_RELEASE`, `COMPLETE_MO`, `CANCEL_MO`) are recorded via `AuditService.recordAuditLog()`.
+- **DMS Vaulting (M29 SSOT):** Production travelers, material routing sheets, and quality release dossiers are cryptographically hashed (SHA-256) and archived into M29 DMS (`dms_documents`).
+
+---
+
+## 14. M26 — Supply Chain Planning & MRP Netting (SCP)
+
+### 14.1. Single-Writer Authority & Delegation Guards
+- **Strict Non-Authority for PO and MO:** M26 is an analytical planning and netting engine; it is **NEVER** a Single-Writer authority for purchase orders or manufacturing orders.
+- **Purchase Requisitions (PR) -> M08 Purchase Orders:** M26 generates suggestions stored in `purchase_requisitions`. Conversion to an actual Purchase Order MUST delegate exclusively to M08 via `POST /api/purchase-orders` (or atomic internal delegation transaction), writing to `purchase_orders`. M26 never directly creates or mutates records in `purchase_orders`.
+- **MO Suggestions -> M25 Manufacturing Orders:** M26 generates manufacturing suggestions stored in `mrp_results`. Conversion to an actual Manufacturing Order MUST delegate exclusively to M25 via `POST /api/manufacturing/work-orders` or `POST /api/manufacturing/orders/from-mrp`, writing to `manufacturing_orders`. M26 never directly creates or mutates records in `manufacturing_orders`.
+
+### 14.2. Demand Netting Hierarchy & Inventory Truth
+- **Gross Demand Calculation:** Gross demand is evaluated per product by taking the maximum of active customer Sales Orders (M13 `sales_orders` with status `DRAFT`, `CONFIRMED`, or `RESERVED`) and active statistical demand forecasts / MPS commitments, plus dependent demands exploded from higher-level assembly MOs:
+  `GrossRequirement = Max(SalesOrderDemand, ForecastDemand) + DependentDemandFromParentBOM`
+- **Single-Writer Inventory Truth (M17):** Available inventory MUST be computed strictly from real stock balances in M17 (`stock_balances` and `products`), without estimations or local overrides:
+  `AvailableStock = Max(0, OnHandStock - ReservedStock)`
+- **Net Requirement Netting Formula:**
+  `NetRequirement = Max(0, GrossRequirement + SafetyStock - (AvailableStock + ScheduledReceipts))`
+  where `ScheduledReceipts = OpenPurchaseOrders (M08) + OpenManufacturingOrders (M25)`.
+
+### 14.3. Multi-Level BOM Explosion & Lead Time Offsetting
+- **Multi-Level Explosion:** For finished goods with a net requirement > 0, the MRP engine queries active BOMs (`boms`, `bom_items` in M25) and recursively explodes requirements down to low-level codes (Level 0 FG -> Level 1 Sub-Assembly -> Level 2 Raw Material/Component).
+- **Scrap Rate Incorporation:** Dependent gross component demand is scaled by the BOM scrap rate:
+  `DependentComponentDemand = ParentPlannedOrderReceipt * BOMQuantity * (1 + ScrapRate / 100)`
+- **Lead Time Offsetting:** Planned order release dates are backward-scheduled from the required delivery date using item or supplier lead times:
+  `PlannedOrderReleaseDate = RequiredDate - LeadTimeDays`
+- **Lead Time Violation Guard:** If `PlannedOrderReleaseDate < CurrentDate`, the engine flags an immediate `LEAD_TIME_VIOLATION` exception message to alert planners.
+
+### 14.4. MRP Execution Modes, Immutability & Idempotency
+- **Regenerative Run:** Analyzes all active products in the system, recomputing gross/net requirements from a clean baseline.
+- **Net-Change Run:** Only analyzes items affected by recent transactions (new/modified SOs, inventory changes, or active forecast updates).
+- **Run Immutability:** Each completed MRP run (`mrp_runs`) is immutable and acts as an audit trail snapshot. Subsequent runs generate new sequential run codes (`MRP-YYYYMMDD-XXX`) and new records in `mrp_runs`, `mrp_results`, and `mrp_exceptions`. Old runs are NEVER overwritten in-place.
+- **Idempotency Guard:** If duplicate MRP run triggers are received within a 30-second window with identical parameters, the engine returns the active or cached run to prevent race conditions and duplicate order generation.
+
+### 14.5. Exception Classification Engine
+The engine continuously evaluates planning discrepancies and categorizes them into standard ERP exception types:
+1. `CRITICAL_STOCKOUT`: Net requirement > 0 and available stock is zero or negative.
+2. `LEAD_TIME_VIOLATION`: Planned order release date is in the past (`ReleaseDate < Today`).
+3. `EXCESS_INVENTORY`: Projected on-hand stock exceeds 2x the Reorder Point or maximum stocking limit.
+4. `PAST_DUE_ORDER`: Open PO or MO has a promised delivery date prior to today with unreceived balances.
+5. `NO_BOM_FOUND`: Product marked as manufactured has no active BOM in M25.
+6. `NO_SUPPLIER_DEFINED`: Purchased item has no preferred supplier mapped in M09/M07.
+
+### 14.6. Full Pegging Lineage Traceability (M13 O2C)
+- Every planned order and component net requirement retains a pegging chain back to the originating customer Sales Order (`soId`, `soCode`, customer name, required delivery date).
+- Planners can trace from raw material shortages directly to the customer impact and potential revenue at risk.
+
+### 14.7. Centralized Audit Trail & Cryptographic DMS Vaulting (M02 & M29)
+- **Centralized Tamper-Evident Audit (M02 SSOT):** All 6 planning lifecycle events (`FORECAST_CREATE`, `MPS_SCHEDULE`, `MRP_RUN_EXECUTE`, `PR_DELEGATE_PO`, `MO_SUGGEST_CREATE`, `EXCEPTION_RESOLVE`) are recorded via `AuditService.recordAuditLog()`.
+- **DMS Vaulting (M29 SSOT):** MRP run summaries, supply-demand balance matrices, and exception reports are cryptographically hashed (SHA-256) and archived into M29 DMS (`dms_documents`) under category `SUPPLY_CHAIN_REPORT`.
+
 
 
 

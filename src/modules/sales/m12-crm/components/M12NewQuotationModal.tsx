@@ -33,7 +33,38 @@ export const M12NewQuotationModal: React.FC<M12NewQuotationModalProps> = ({
   const [salespersonName, setSalespersonName] = useState('Trần Minh Đức');
   const [notes, setNotes] = useState('Bao gồm bảo hành 12 tháng và hỗ trợ kỹ thuật trực tiếp.');
 
+  const [availableProducts, setAvailableProducts] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Feature 2: Sync SKU/Price from M07 and M41
+    const fetchProductsAndPrices = async () => {
+      try {
+        const [prodRes, priceRes] = await Promise.all([
+          fetch('/api/products'),
+          fetch('/api/pricing/items')
+        ]);
+        if (prodRes.ok && priceRes.ok) {
+          const prodData = await prodRes.json();
+          const priceData = await priceRes.json();
+          const merged = prodData.map((p: any) => {
+            const pr = priceData.find((x: any) => x.productId === p.id);
+            return {
+              ...p,
+              unitPrice: pr ? pr.basePrice : 50000000
+            };
+          });
+          setAvailableProducts(merged);
+        }
+      } catch (e) {
+        console.error('Failed to load products', e);
+      }
+    };
+    if (isOpen) {
+      fetchProductsAndPrices();
+    }
+  }, [isOpen]);
   const [items, setItems] = useState<QuotationLineItem[]>([
+
     {
       productId: 1,
       sku: 'SW-ERP-ENT',
@@ -88,13 +119,13 @@ export const M12NewQuotationModal: React.FC<M12NewQuotationModalProps> = ({
     setItems([
       ...items,
       {
-        productId: items.length + 1,
-        sku: `PROD-ITEM-00${items.length + 1}`,
-        name: 'Sản phẩm / Dịch vụ B2B',
+        productId: availableProducts[0]?.id || items.length + 1,
+        sku: availableProducts[0]?.sku || `PROD-ITEM-00${items.length + 1}`,
+        name: availableProducts[0]?.name || 'Sản phẩm / Dịch vụ B2B',
         quantity: 1,
-        unitPrice: 50000000,
+        unitPrice: availableProducts[0]?.unitPrice || 50000000,
         discountPercent: 0,
-        total: 50000000,
+        total: availableProducts[0]?.unitPrice || 50000000,
       },
     ]);
   };
@@ -285,21 +316,33 @@ export const M12NewQuotationModal: React.FC<M12NewQuotationModalProps> = ({
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                   {items.map((it, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-750">
+                      <td className="py-2 px-3 text-slate-500 font-mono text-xs">{it.sku}</td>
                       <td className="py-2 px-3">
-                        <input
-                          type="text"
-                          value={it.sku}
-                          onChange={(e) => updateItem(idx, 'sku', e.target.value)}
-                          className="w-full px-2 py-1 font-mono text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
-                        />
-                      </td>
-                      <td className="py-2 px-3">
-                        <input
-                          type="text"
-                          value={it.name}
-                          onChange={(e) => updateItem(idx, 'name', e.target.value)}
-                          className="w-full px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
-                        />
+                        <select
+                          value={it.productId}
+                          onChange={(e) => {
+                            const pId = Number(e.target.value);
+                            const p = availableProducts.find(x => x.id === pId);
+                            if(p) {
+                              const newItems = [...items];
+                              newItems[idx] = {
+                                ...newItems[idx],
+                                productId: p.id,
+                                sku: p.sku,
+                                name: p.name,
+                                unitPrice: p.unitPrice,
+                                total: (newItems[idx].quantity || 1) * p.unitPrice * (1 - (newItems[idx].discountPercent || 0)/100)
+                              };
+                              setItems(newItems);
+                            }
+                          }}
+                          className="w-full px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                        >
+                          <option value={it.productId}>{it.name}</option>
+                          {availableProducts.map(ap => (
+                            <option key={ap.id} value={ap.id}>{ap.name}</option>
+                          ))}
+                        </select>
                       </td>
                       <td className="py-2 px-3">
                         <input

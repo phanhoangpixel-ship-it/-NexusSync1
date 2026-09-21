@@ -220,9 +220,13 @@ router.get("/api/invoices", async (req, res) => {
       });
 
       const typeFilter = req.query.type as string;
+      const orderIdFilter = (req.query.orderId || req.query.salesOrderId) as string;
       let finalResult = enrichedInvoices;
       if (typeFilter) {
-        finalResult = enrichedInvoices.filter((i: any) => i.type === typeFilter);
+        finalResult = finalResult.filter((i: any) => i.type === typeFilter);
+      }
+      if (orderIdFilter) {
+        finalResult = finalResult.filter((i: any) => String(i.orderId) === String(orderIdFilter));
       }
 
       res.json(finalResult);

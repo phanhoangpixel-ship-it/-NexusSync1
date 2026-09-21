@@ -54,6 +54,62 @@ router.get("/api/finance/accounts", async (req, res) => {
     }
   });
 
+router.get(["/api/accounting/summary", "/api/finance/accounting/summary"], async (req, res) => {
+  try {
+    const entries = await db.select().from(schema.accountingEntries).all();
+    let totalDebit = 0;
+    let totalCredit = 0;
+    const accountBalances: Record<string, { debit: number; credit: number }> = {};
+    for (const e of entries) {
+      const amt = Number(e.amount || 0);
+      totalDebit += amt;
+      totalCredit += amt;
+      if (e.debitAccount) {
+        if (!accountBalances[e.debitAccount]) accountBalances[e.debitAccount] = { debit: 0, credit: 0 };
+        accountBalances[e.debitAccount].debit += amt;
+      }
+      if (e.creditAccount) {
+        if (!accountBalances[e.creditAccount]) accountBalances[e.creditAccount] = { debit: 0, credit: 0 };
+        accountBalances[e.creditAccount].credit += amt;
+      }
+    }
+    res.json({
+      success: true,
+      totalEntries: entries.length,
+      totalDebit,
+      totalCredit,
+      isBalanced: totalDebit === totalCredit,
+      variance: totalDebit - totalCredit,
+      accountBalances,
+      recentEntries: entries.slice(-10)
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get(["/api/accounting/ledger", "/api/finance/accounting/ledger"], async (req, res) => {
+  try {
+    const { referenceNo, sourceReferenceNo, orderCode } = req.query;
+    let entries = await db.select().from(schema.accountingEntries).orderBy(desc(schema.accountingEntries.id)).all();
+    if (referenceNo || sourceReferenceNo || orderCode) {
+      const ref = String(referenceNo || sourceReferenceNo || orderCode);
+      entries = entries.filter(e => 
+        (e.sourceReferenceNo && e.sourceReferenceNo.includes(ref)) || 
+        (e.entryCode && e.entryCode.includes(ref)) || 
+        (e.description && e.description.includes(ref))
+      );
+    }
+    res.json({
+      success: true,
+      count: entries.length,
+      entries
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.get("/api/finance/entries", async (req, res) => {
     try {
       let entries = await db.select().from(schema.accountingEntries).limit(100).all();

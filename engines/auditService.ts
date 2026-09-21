@@ -371,97 +371,114 @@ export class AuditService {
     try {
       await currentMutex;
 
-      // 1. Fetch latest record for prevHash and blockNumber
-      const [latestRecord] = await db
-        .select({
-          id: schema.auditLogs.id,
-          blockNumber: schema.auditLogs.blockNumber,
-          sha256Checksum: schema.auditLogs.sha256Checksum,
-          auditCode: schema.auditLogs.auditCode
-        })
-        .from(schema.auditLogs)
-        .orderBy(desc(schema.auditLogs.id))
-        .limit(1);
+      const executeWrite = async () => {
+        // 1. Fetch latest record for prevHash and blockNumber
+        const [latestRecord] = await db
+          .select({
+            id: schema.auditLogs.id,
+            blockNumber: schema.auditLogs.blockNumber,
+            sha256Checksum: schema.auditLogs.sha256Checksum,
+            auditCode: schema.auditLogs.auditCode
+          })
+          .from(schema.auditLogs)
+          .orderBy(desc(schema.auditLogs.id))
+          .limit(1);
 
-      const prevHash = latestRecord?.sha256Checksum || this.GENESIS_HASH;
-      const nextBlockNumber = (latestRecord?.blockNumber || latestRecord?.id || 0) + 1;
-      const timestamp = input.createdAt || new Date();
-      const auditCode = input.auditCode || `AUD-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(nextBlockNumber).padStart(6, '0')}`;
+        const prevHash = latestRecord?.sha256Checksum || this.GENESIS_HASH;
+        const nextBlockNumber = (latestRecord?.blockNumber || latestRecord?.id || 0) + 1;
+        const timestamp = input.createdAt || new Date();
+        const auditCode = input.auditCode || `AUD-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(nextBlockNumber).padStart(6, '0')}`;
 
-      // 2. Prepare beforeData / afterData
-      const rawBefore = input.beforeData
-        ? typeof input.beforeData === 'string'
-          ? input.beforeData
-          : JSON.stringify(input.beforeData)
-        : null;
-      const rawAfter = input.afterData
-        ? typeof input.afterData === 'string'
-          ? input.afterData
-          : JSON.stringify(input.afterData)
-        : null;
+        // 2. Prepare beforeData / afterData
+        const rawBefore = input.beforeData
+          ? typeof input.beforeData === 'string'
+            ? input.beforeData
+            : JSON.stringify(input.beforeData)
+          : null;
+        const rawAfter = input.afterData
+          ? typeof input.afterData === 'string'
+            ? input.afterData
+            : JSON.stringify(input.afterData)
+          : null;
 
-      // 3. Detect sensitive fields
-      const maskedKeys: string[] = [];
-      this.detectSensitiveFields(input.beforeData, maskedKeys);
-      this.detectSensitiveFields(input.afterData, maskedKeys);
-      const uniqueMaskedKeys = Array.from(new Set(maskedKeys));
+        // 3. Detect sensitive fields
+        const maskedKeys: string[] = [];
+        this.detectSensitiveFields(input.beforeData, maskedKeys);
+        this.detectSensitiveFields(input.afterData, maskedKeys);
+        const uniqueMaskedKeys = Array.from(new Set(maskedKeys));
 
-      // 4. Compute SHA-256 Checksum on UNMASKED canonical data
-      const sha256Checksum = this.computeCanonicalHash(prevHash, {
-        auditCode,
-        timestamp: timestamp.getTime(),
-        userId: input.userId || 1,
-        username: input.username || 'SYSTEM',
-        module: input.module || 'SYS',
-        action: input.action,
-        entityType: input.entityType,
-        entityId: String(input.entityId),
-        result: input.result || 'SUCCESS',
-        beforeData: rawBefore,
-        afterData: rawAfter
-      });
-
-      // 5. Insert into immutable audit_logs
-      const [inserted] = await db
-        .insert(schema.auditLogs)
-        .values({
+        // 4. Compute SHA-256 Checksum on UNMASKED canonical data
+        const sha256Checksum = this.computeCanonicalHash(prevHash, {
           auditCode,
+          timestamp: timestamp.getTime(),
           userId: input.userId || 1,
-          username: input.username || 'system',
-          userName: input.userName || (input.username === 'system' ? 'Hệ Thống Tự Động' : 'Người Dùng'),
-          role: input.role || 'USER',
-          branchId: input.branchId || 1,
-          branchName: input.branchName || 'Trụ Sở Chính (HQ)',
-          warehouseId: input.warehouseId || null,
-          warehouseName: input.warehouseName || null,
+          username: input.username || 'SYSTEM',
+          module: input.module || 'SYS',
           action: input.action,
           entityType: input.entityType,
           entityId: String(input.entityId),
-          module: input.module,
-          ipAddress: input.ipAddress || '127.0.0.1',
-          deviceId: input.deviceId || 'SRV-NODE-01',
-          deviceType: input.deviceType || 'WEB',
-          appVersion: input.appVersion || '1.0.0',
-          browser: input.browser || 'Chrome/NexusSync-Client',
-          sessionId: input.sessionId || null,
-          requestId: input.requestId || null,
-          correlationId: input.correlationId || `CORR-${auditCode}`,
-          beforeData: rawBefore,
-          afterData: rawAfter,
-          changedFields: input.changedFields ? (typeof input.changedFields === 'string' ? input.changedFields : JSON.stringify(input.changedFields)) : null,
           result: input.result || 'SUCCESS',
-          reason: input.reason || null,
-          metadata: input.metadata ? (typeof input.metadata === 'string' ? input.metadata : JSON.stringify(input.metadata)) : null,
-          prevHash,
-          sha256Checksum,
-          tamperStatus: 'VALID',
-          maskedFields: uniqueMaskedKeys.length > 0 ? JSON.stringify(uniqueMaskedKeys) : null,
-          blockNumber: nextBlockNumber,
-          createdAt: timestamp
-        })
-        .returning();
+          beforeData: rawBefore,
+          afterData: rawAfter
+        });
 
-      return inserted;
+        // 5. Insert into immutable audit_logs
+        const [inserted] = await db
+          .insert(schema.auditLogs)
+          .values({
+            auditCode,
+            userId: input.userId || 1,
+            username: input.username || 'system',
+            userName: input.userName || (input.username === 'system' ? 'Hệ Thống Tự Động' : 'Người Dùng'),
+            role: input.role || 'USER',
+            branchId: input.branchId || 1,
+            branchName: input.branchName || 'Trụ Sở Chính (HQ)',
+            warehouseId: input.warehouseId || null,
+            warehouseName: input.warehouseName || null,
+            action: input.action,
+            entityType: input.entityType,
+            entityId: String(input.entityId),
+            module: input.module,
+            ipAddress: input.ipAddress || '127.0.0.1',
+            deviceId: input.deviceId || 'SRV-NODE-01',
+            deviceType: input.deviceType || 'WEB',
+            appVersion: input.appVersion || '1.0.0',
+            browser: input.browser || 'Chrome/NexusSync-Client',
+            sessionId: input.sessionId || null,
+            requestId: input.requestId || null,
+            correlationId: input.correlationId || `CORR-${auditCode}`,
+            beforeData: rawBefore,
+            afterData: rawAfter,
+            changedFields: input.changedFields ? (typeof input.changedFields === 'string' ? input.changedFields : JSON.stringify(input.changedFields)) : null,
+            result: input.result || 'SUCCESS',
+            reason: input.reason || null,
+            metadata: input.metadata ? (typeof input.metadata === 'string' ? input.metadata : JSON.stringify(input.metadata)) : null,
+            prevHash,
+            sha256Checksum,
+            tamperStatus: 'VALID',
+            maskedFields: uniqueMaskedKeys.length > 0 ? JSON.stringify(uniqueMaskedKeys) : null,
+            blockNumber: nextBlockNumber,
+            createdAt: timestamp
+          })
+          .returning();
+
+        return inserted;
+      };
+
+      let attempts = 0;
+      while (attempts < 5) {
+        try {
+          return await executeWrite();
+        } catch (err: any) {
+          if (err?.message?.includes('locked') || err?.message?.includes('SQLITE_BUSY') || err?.code === 'SQLITE_BUSY') {
+            attempts++;
+            await new Promise((r) => setTimeout(r, 60 * attempts));
+            if (attempts >= 5) throw err;
+          } else {
+            throw err;
+          }
+        }
+      }
     } finally {
       releaseMutex!();
     }
@@ -471,13 +488,13 @@ export class AuditService {
    * Asynchronous capture via EventBus to avoid blocking heavy business transactions
    */
   public static captureAsync(input: AuditLogInput): void {
-    Promise.resolve().then(async () => {
+    setTimeout(async () => {
       try {
         await this.recordAuditLog(input);
       } catch (err: any) {
         console.warn(`[AuditService] Async capture failed for ${input.module}:${input.action}:`, err.message);
       }
-    });
+    }, 60);
   }
 
   /**

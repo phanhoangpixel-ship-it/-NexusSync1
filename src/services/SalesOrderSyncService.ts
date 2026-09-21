@@ -126,49 +126,85 @@ export class SalesOrderSyncService {
     newOrderAmount: number
   ): M07CustomerCreditCheckResult {
     const cleanAmount = safeNumber(newOrderAmount, 0);
+    const creditLimit = customer.creditLimit || 0;
+    const currentOutstanding = customer.outstandingBalance || 0;
+    const availableCredit = customer.availableCredit !== undefined ? customer.availableCredit : Math.max(0, creditLimit - currentOutstanding);
+    const custName = customer.name || customer.customerName || '';
+    const custCode = customer.customerCode || String(customer.customerId || customer.id);
 
     if (customer.isCreditBlocked) {
       return {
         isApproved: false,
-        customerId: customer.customerCode,
-        name: customer.name,
-        creditLimit: customer.creditLimit,
-        currentOutstanding: customer.outstandingBalance,
+        approved: false,
+        customerId: customer.customerId || customer.id || custCode,
+        customerCode: custCode,
+        name: custName,
+        customerName: custName,
+        creditLimit,
+        creditUsed: currentOutstanding,
+        currentOutstanding,
+        orderAmount: cleanAmount,
         newOrderAmount: cleanAmount,
-        availableCreditAfterOrder: customer.availableCredit - cleanAmount,
+        availableCredit,
+        remainingAvailableCredit: availableCredit,
+        availableCreditAfterOrder: availableCredit - cleanAmount,
+        isCreditBlocked: true,
+        requiresManagerApproval: true,
         exceededAmount: cleanAmount,
-        rejectionReason: `Khách hàng [${customer.customerCode}] ${customer.name} đang bị KHÓA CÔNG NỢ (Credit Blocked) theo chính sách M07.`
+        status: 'BLOCKED',
+        blockReason: `Khách hàng [${custCode}] ${custName} đang bị KHÓA CÔNG NỢ (Credit Blocked) theo chính sách M07.`,
+        rejectionReason: `Khách hàng [${custCode}] ${custName} đang bị KHÓA CÔNG NỢ (Credit Blocked) theo chính sách M07.`
       };
     }
 
-    // If customer has no credit limit configured (0 or negative means COD only unless enterprise unlimited)
-    if (customer.creditLimit > 0) {
-      const availableCredit = customer.availableCredit;
+    // If customer has a credit limit configured
+    if (creditLimit > 0) {
       if (cleanAmount > availableCredit) {
         const exceeded = cleanAmount - availableCredit;
         return {
           isApproved: false,
-          customerId: customer.customerCode,
-          name: customer.name,
-          creditLimit: customer.creditLimit,
-          currentOutstanding: customer.outstandingBalance,
+          approved: false,
+          customerId: customer.customerId || customer.id || custCode,
+          customerCode: custCode,
+          name: custName,
+          customerName: custName,
+          creditLimit,
+          creditUsed: currentOutstanding,
+          currentOutstanding,
+          orderAmount: cleanAmount,
           newOrderAmount: cleanAmount,
+          availableCredit,
+          remainingAvailableCredit: availableCredit,
           availableCreditAfterOrder: availableCredit - cleanAmount,
+          isCreditBlocked: false,
+          requiresManagerApproval: true,
           exceededAmount: exceeded,
-          rejectionReason: `Đơn hàng (${cleanAmount.toLocaleString('vi-VN')} đ) vượt hạn mức tín dụng còn lại (${availableCredit.toLocaleString('vi-VN')} đ) của khách hàng [${customer.customerCode}]. Vượt quá: ${exceeded.toLocaleString('vi-VN')} đ.`
+          status: 'OVER_LIMIT',
+          warningMessage: `Đơn hàng (${cleanAmount.toLocaleString('vi-VN')} đ) vượt hạn mức tín dụng còn lại (${availableCredit.toLocaleString('vi-VN')} đ) của khách hàng [${custCode}]. Vượt: ${exceeded.toLocaleString('vi-VN')} đ.`,
+          rejectionReason: `Đơn hàng (${cleanAmount.toLocaleString('vi-VN')} đ) vượt hạn mức tín dụng còn lại (${availableCredit.toLocaleString('vi-VN')} đ) của khách hàng [${custCode}]. Vượt quá: ${exceeded.toLocaleString('vi-VN')} đ.`
         };
       }
     }
 
     return {
       isApproved: true,
-      customerId: customer.customerCode,
-      name: customer.name,
-      creditLimit: customer.creditLimit,
-      currentOutstanding: customer.outstandingBalance,
+      approved: true,
+      customerId: customer.customerId || customer.id || custCode,
+      customerCode: custCode,
+      name: custName,
+      customerName: custName,
+      creditLimit,
+      creditUsed: currentOutstanding,
+      currentOutstanding,
+      orderAmount: cleanAmount,
       newOrderAmount: cleanAmount,
-      availableCreditAfterOrder: (customer.availableCredit ?? customer.creditLimit) - cleanAmount,
-      exceededAmount: 0
+      availableCredit,
+      remainingAvailableCredit: availableCredit,
+      availableCreditAfterOrder: availableCredit - cleanAmount,
+      isCreditBlocked: false,
+      requiresManagerApproval: false,
+      exceededAmount: 0,
+      status: 'APPROVED'
     };
   }
 

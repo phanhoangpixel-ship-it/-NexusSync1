@@ -1,16 +1,18 @@
 import React from 'react';
-import { Boxes, CheckCircle2, AlertTriangle, ArrowRight, ShieldCheck, Warehouse } from 'lucide-react';
+import { Boxes, CheckCircle2, AlertTriangle, ArrowRight, ShieldCheck, Warehouse, Truck } from 'lucide-react';
 
 interface M13ReservationTabProps {
   orders: any[];
   masterProducts: any[];
   onSelectOrder: (order: any) => void;
+  onUpdateFulfillment?: (orderId: string, nextStatus: string) => void;
 }
 
 export const M13ReservationTab: React.FC<M13ReservationTabProps> = ({
   orders,
   masterProducts,
   onSelectOrder,
+  onUpdateFulfillment,
 }) => {
   const reservedOrders = orders.filter(
     (o) => o.status !== 'CANCELLED' && o.status !== 'DRAFT'
@@ -126,8 +128,10 @@ export const M13ReservationTab: React.FC<M13ReservationTabProps> = ({
                     <td className="py-3 px-3">
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${
-                          o.reservationStatus === 'RESERVED'
-                            ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                          o.reservationStatus === 'BACKORDER'
+                            ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-700'
+                            : o.reservationStatus === 'RESERVED'
+                            ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
                             : o.reservationStatus === 'RELEASED'
                             ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
                             : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
@@ -137,13 +141,31 @@ export const M13ReservationTab: React.FC<M13ReservationTabProps> = ({
                       </span>
                     </td>
                     <td className="py-3 px-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => onSelectOrder(o)}
-                        className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold text-[10px] cursor-pointer"
-                      >
-                        Xem SO
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        {o.status === 'FULFILLED' || o.fulfillmentStatus === 'SHIPPED' ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            Đã Xuất Kho
+                          </span>
+                        ) : onUpdateFulfillment ? (
+                          <button
+                            type="button"
+                            onClick={() => onUpdateFulfillment(o.id, 'SHIPPED')}
+                            className="px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] cursor-pointer inline-flex items-center gap-1 transition-colors"
+                            title="Xuất kho & xác định giá vốn COGS (Phase 5)"
+                          >
+                            <Truck className="w-3 h-3" />
+                            Xuất Kho
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => onSelectOrder(o)}
+                          className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold text-[10px] cursor-pointer transition-colors"
+                        >
+                          Xem SO
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

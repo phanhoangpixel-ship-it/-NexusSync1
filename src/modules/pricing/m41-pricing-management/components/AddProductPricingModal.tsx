@@ -192,8 +192,8 @@ export const AddProductPricingModal: React.FC<AddProductPricingModalProps> = ({
           </div>
 
           {/* Phương thức định giá bán */}
-          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-3">
-            <label className="block font-semibold text-slate-800">
+          <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+            <label className="block font-semibold text-slate-800 dark:text-slate-200">
               Khai Báo Công Thức & Giá Bán (Selling Price Configuration)
             </label>
             <div className="grid grid-cols-3 gap-2">
@@ -203,7 +203,7 @@ export const AddProductPricingModal: React.FC<AddProductPricingModalProps> = ({
                 className={`py-2 px-2.5 rounded-lg border text-xs font-medium transition-all ${
                   pricingMethod === 'MARKUP'
                     ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}
               >
                 Markup (+%)
@@ -214,7 +214,7 @@ export const AddProductPricingModal: React.FC<AddProductPricingModalProps> = ({
                 className={`py-2 px-2.5 rounded-lg border text-xs font-medium transition-all ${
                   pricingMethod === 'TARGET_MARGIN'
                     ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}
               >
                 Biên LN Mục Tiêu
@@ -225,7 +225,7 @@ export const AddProductPricingModal: React.FC<AddProductPricingModalProps> = ({
                 className={`py-2 px-2.5 rounded-lg border text-xs font-medium transition-all ${
                   pricingMethod === 'FIXED'
                     ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}
               >
                 Giá Bán Cố Định

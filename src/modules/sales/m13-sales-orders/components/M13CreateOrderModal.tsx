@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Calculator, ShoppingCart, X, Check, Building2, Package, Sparkles, AlertTriangle, ShieldCheck, CreditCard, Layers, Truck, Receipt } from 'lucide-react';
+import { Plus, Trash2, Calculator, ShoppingCart, X, Check, Building2, Package, Sparkles, AlertTriangle, ShieldCheck, CreditCard, Layers, Truck, Receipt, Lock, CheckCircle2, RefreshCw } from 'lucide-react';
 import { CurrencyInput } from '../../../../components/common/CurrencyInput';
 import { TabErrorIndicator } from '../../../../components/common/TabErrorIndicator';
 import { ValidationSummaryPanel, ValidationErrorItem } from '../../../../components/common/ValidationSummaryPanel';
+import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import { M07CustomerMasterProfile, M07CustomerCreditCheckResult } from '../../../../types/salesOrderIntegration';
 import { SalesOrderSyncService } from '../../../../services/SalesOrderSyncService';
 import { safeNumber } from '../../../../utils/salesOrderDataNormalizer';
@@ -17,6 +18,21 @@ interface ProductItem {
   uop: string;
   discountPercent?: number;
   subtotal?: number;
+  pricingSnapshot?: {
+    unitPrice: number;
+    source: 'CONTRACT_PRICE' | 'PRICE_LIST' | 'BASE_PRICE';
+    contractId?: number | string | null;
+    priceListId?: number | string | null;
+    priceListName?: string;
+    isPriceLocked: boolean;
+    resolvedAt: string;
+  };
+  stockInfo?: {
+    availableStock: number;
+    onHand: number;
+    isSufficient: boolean;
+    shortage: number;
+  };
 }
 
 interface M13CreateOrderModalProps {
@@ -122,17 +138,138 @@ export const M13CreateOrderModal: React.FC<M13CreateOrderModalProps> = ({
   const [isCalculatingDiscount, setIsCalculatingDiscount] = useState<boolean>(false);
   const [activeFormTab, setActiveFormTab] = useState<'ALL' | 'CUSTOMER' | 'ITEMS' | 'LOGISTICS' | 'TAX_VAT'>('ALL');
 
+  // Credit Limit Guard state (Rule 19 ConfirmDialog)
+  const [creditConfirmDialog, setCreditConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    variant: 'warning' | 'danger' | 'primary';
+    confirmText: string;
+    onConfirm: () => void;
+    onCancel?: () => void;
+  } | null>(null);
+  const [creditServerCheck, setCreditServerCheck] = useState<M07CustomerCreditCheckResult | null>(null);
+  const [isCheckingServerCredit, setIsCheckingServerCredit] = useState<boolean>(false);
+
+  // M41 Pricing Engine Catalog & Authoritative State
+  const [catalogProducts, setCatalogProducts] = useState<ProductItem[]>(DEFAULT_PRODUCTS);
+  const [isResolvingPricing, setIsResolvingPricing] = useState<boolean>(false);
+  const [isCheckingStock, setIsCheckingStock] = useState<boolean>(false);
+
   // Line Items
   const [items, setItems] = useState<ProductItem[]>([
     { productId: 1, sku: 'PRD-001', name: 'Thép hình H-Beam SS400 200x200', qty: 5, price: 18500000, uop: 'Tấn', discountPercent: 0 }
   ]);
+
+  // Load live catalog from M41 Pricing Engine (GET /api/pricing/items)
+  useEffect(() => {
+    fetch('/api/pricing/items')
+      .then(res => res.json())
+      .then(data => {
+        const rawList = Array.isArray(data.data) ? data.data : (Array.isArray(data.items) ? data.items : []);
+        if (rawList.length > 0) {
+          const mapped = rawList.map((it: any, idx: number) => ({
+            productId: it.productId || idx + 1,
+            sku: it.sku,
+            name: it.productName || it.name || it.sku,
+            qty: 1,
+            price: it.finalPrice || it.basePrice || it.unitPrice || it.price || 0,
+            uop: it.uom || it.uop || 'Cái',
+            discountPercent: 0
+          }));
+          setCatalogProducts(mapped);
+        }
+      })
+      .catch(e => console.warn('Failed to load M41 catalog items:', e));
+  }, []);
+
+  // Single-Writer Resolver for M41 Pricing & M17 Inventory Stock
+  const resolveItemPricingAndStock = async (targetItems: ProductItem[], custId: number | 'custom', whId: number) => {
+    setIsResolvingPricing(true);
+    setIsCheckingStock(true);
+    try {
+      const updated = await Promise.all(
+        targetItems.map(async (it) => {
+          let pricingSnapshot = it.pricingSnapshot;
+          let stockInfo = it.stockInfo;
+          let unitPrice = it.price;
+
+          // 1. Authoritative M41 Pricing Resolution (POST /api/pricing/resolve)
+          try {
+            const priceRes = await fetch('/api/pricing/resolve', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                customerId: custId === 'custom' ? undefined : custId,
+                productId: it.productId,
+                sku: it.sku,
+                quantity: it.qty || 1
+              })
+            });
+            if (priceRes.ok) {
+              const priceData = await priceRes.json();
+              if (priceData.unitPrice !== undefined) {
+                unitPrice = priceData.unitPrice;
+                pricingSnapshot = priceData.pricingSnapshot || {
+                  unitPrice: priceData.unitPrice,
+                  source: priceData.source || 'BASE_PRICE',
+                  priceListName: priceData.priceListName,
+                  contractId: priceData.contractId,
+                  isPriceLocked: true,
+                  resolvedAt: new Date().toISOString()
+                };
+              }
+            }
+          } catch (e) {
+            console.warn('M41 price resolve error for', it.sku, e);
+          }
+
+          // 2. Authoritative M17 Stock Availability Check (POST /api/inventory/reservations with checkOnly: true)
+          try {
+            const stockRes = await fetch('/api/inventory/reservations', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                productId: it.productId,
+                warehouseId: whId,
+                quantity: it.qty || 1,
+                checkOnly: true
+              })
+            });
+            if (stockRes.ok) {
+              const stockData = await stockRes.json();
+              stockInfo = {
+                availableStock: stockData.availableStock ?? 0,
+                onHand: stockData.currentStock ?? 0,
+                isSufficient: stockData.isSufficient ?? false,
+                shortage: stockData.shortage ?? (stockData.isSufficient ? 0 : Math.max(0, (it.qty || 1) - (stockData.availableStock ?? 0)))
+              };
+            }
+          } catch (e) {
+            console.warn('M17 stock check error for', it.sku, e);
+          }
+
+          return {
+            ...it,
+            price: unitPrice,
+            pricingSnapshot,
+            stockInfo
+          };
+        })
+      );
+      setItems(updated);
+    } finally {
+      setIsResolvingPricing(false);
+      setIsCheckingStock(false);
+    }
+  };
 
   // Sync if initialQuotation provided
   useEffect(() => {
     if (initialQuotation) {
       setCustomerName(initialQuotation.customerName || initialQuotation.leadName || 'Khách hàng Báo giá M12');
       if (initialQuotation.items && Array.isArray(initialQuotation.items) && initialQuotation.items.length > 0) {
-        setItems(initialQuotation.items.map((it: any, idx: number) => ({
+        const mapped = initialQuotation.items.map((it: any, idx: number) => ({
           productId: it.productId || idx + 1,
           sku: it.sku || `SKU-${idx + 1}`,
           name: it.name || it.productName || 'Sản phẩm báo giá',
@@ -140,13 +277,22 @@ export const M13CreateOrderModal: React.FC<M13CreateOrderModalProps> = ({
           price: it.price || it.unitPrice || 1000000,
           uop: it.uop || 'Cái',
           discountPercent: it.discountPercent || it.discount || 0
-        })));
+        }));
+        setItems(mapped);
+        resolveItemPricingAndStock(mapped, selectedCustomerId, warehouseId);
       }
       if (initialQuotation.notes) {
         setNotes(`Chuyển đổi từ Báo giá CRM: ${initialQuotation.code || initialQuotation.id}. ${initialQuotation.notes}`);
       }
     }
   }, [initialQuotation]);
+
+  // Initial resolution on modal open
+  useEffect(() => {
+    if (isOpen && items.length > 0 && !items[0].pricingSnapshot) {
+      resolveItemPricingAndStock(items, selectedCustomerId, warehouseId);
+    }
+  }, [isOpen]);
 
   const activeCustomer = useMemo(() => {
     if (selectedCustomerId === 'custom') return null;
@@ -161,6 +307,7 @@ export const M13CreateOrderModal: React.FC<M13CreateOrderModalProps> = ({
       setAddress('');
       setBillingEmail('');
       setCustomerTier('STANDARD');
+      resolveItemPricingAndStock(items, 'custom', warehouseId);
     } else {
       const cId = Number(val);
       setSelectedCustomerId(cId);
@@ -171,17 +318,25 @@ export const M13CreateOrderModal: React.FC<M13CreateOrderModalProps> = ({
         setAddress(found.billingAddress ?? found.address ?? '');
         setBillingEmail(found.billingEmail ?? found.email ?? '');
         setCustomerTier(found.tier ?? 'STANDARD');
+        let nextItems = items;
         if (found.defaultDiscountPercent && found.defaultDiscountPercent > 0) {
-          setItems(prev => prev.map(it => ({ ...it, discountPercent: found.defaultDiscountPercent })));
+          nextItems = items.map(it => ({ ...it, discountPercent: found.defaultDiscountPercent }));
+          setItems(nextItems);
         }
+        resolveItemPricingAndStock(nextItems, cId, warehouseId);
       }
     }
   };
 
+  const handleWarehouseChange = (whId: number) => {
+    setWarehouseId(whId);
+    resolveItemPricingAndStock(items, selectedCustomerId, whId);
+  };
+
   const handleAddItem = () => {
-    const nextPrd = DEFAULT_PRODUCTS[items.length % DEFAULT_PRODUCTS.length];
-    setItems(prev => [
-      ...prev,
+    const nextPrd = catalogProducts[items.length % catalogProducts.length] || DEFAULT_PRODUCTS[items.length % DEFAULT_PRODUCTS.length];
+    const newItems = [
+      ...items,
       {
         productId: nextPrd.productId,
         sku: nextPrd.sku,
@@ -191,7 +346,9 @@ export const M13CreateOrderModal: React.FC<M13CreateOrderModalProps> = ({
         uop: nextPrd.uop,
         discountPercent: activeCustomer?.defaultDiscountPercent ?? 0
       }
-    ]);
+    ];
+    setItems(newItems);
+    resolveItemPricingAndStock(newItems, selectedCustomerId, warehouseId);
   };
 
   const handleRemoveItem = (index: number) => {
@@ -203,28 +360,32 @@ export const M13CreateOrderModal: React.FC<M13CreateOrderModalProps> = ({
   };
 
   const handleItemChange = (index: number, field: keyof ProductItem, value: any) => {
-    setItems(prev => {
-      const next = [...prev];
-      next[index] = { ...next[index], [field]: value };
-      return next;
-    });
+    const next = [...items];
+    next[index] = { ...next[index], [field]: value };
+    setItems(next);
+
+    // If quantity changed, re-resolve pricing and stock availability
+    if (field === 'qty') {
+      resolveItemPricingAndStock(next, selectedCustomerId, warehouseId);
+    }
   };
 
   const handleSelectPresetProduct = (index: number, sku: string) => {
-    const found = DEFAULT_PRODUCTS.find(p => p.sku === sku);
+    const found = catalogProducts.find(p => p.sku === sku) || DEFAULT_PRODUCTS.find(p => p.sku === sku);
     if (found) {
-      setItems(prev => {
-        const next = [...prev];
-        next[index] = {
-          ...next[index],
-          productId: found.productId,
-          sku: found.sku,
-          name: found.name,
-          price: found.price,
-          uop: found.uop
-        };
-        return next;
-      });
+      const next = [...items];
+      next[index] = {
+        ...next[index],
+        productId: found.productId,
+        sku: found.sku,
+        name: found.name,
+        price: found.price,
+        uop: found.uop,
+        pricingSnapshot: undefined,
+        stockInfo: undefined
+      };
+      setItems(next);
+      resolveItemPricingAndStock(next, selectedCustomerId, warehouseId);
     }
   };
 
@@ -302,11 +463,37 @@ export const M13CreateOrderModal: React.FC<M13CreateOrderModalProps> = ({
     );
   }, [selectedCustomerId, customerName, taxCode, billingEmail, address, requiresVatInvoice, grandTotal, items, customerList]);
 
-  // Real-time credit check
+  // Authoritative credit check from M07 GET /api/customers/:id/credit
+  useEffect(() => {
+    if (selectedCustomerId === 'custom' || !selectedCustomerId) {
+      setCreditServerCheck(null);
+      return;
+    }
+    let isMounted = true;
+    setIsCheckingServerCredit(true);
+    fetch(`/api/customers/${selectedCustomerId}/credit?amount=${grandTotal}`)
+      .then(res => res.json())
+      .then(data => {
+        if (isMounted) {
+          if (data && (data.creditLimit !== undefined || data.status)) {
+            setCreditServerCheck(data);
+          }
+          setIsCheckingServerCredit(false);
+        }
+      })
+      .catch(err => {
+        console.warn('M07 credit check fetch error:', err);
+        if (isMounted) setIsCheckingServerCredit(false);
+      });
+    return () => { isMounted = false; };
+  }, [selectedCustomerId, grandTotal]);
+
+  // Real-time credit check combining M07 authoritative server check and client sync
   const creditCheck: M07CustomerCreditCheckResult | null = useMemo(() => {
+    if (creditServerCheck) return creditServerCheck;
     if (!activeCustomer) return null;
     return SalesOrderSyncService.checkCustomerCredit(activeCustomer, grandTotal);
-  }, [activeCustomer, grandTotal]);
+  }, [creditServerCheck, activeCustomer, grandTotal]);
 
   // Auto-Fix Functions for individual fields and Global Auto-Fix
   const handleAutoFixCustomerName = () => {
@@ -858,46 +1045,107 @@ export const M13CreateOrderModal: React.FC<M13CreateOrderModalProps> = ({
       if (onCreateSuccess) onCreateSuccess(order);
     };
 
-    setIsSubmitting(true);
-    const orderPayload = {
-      customerId: selectedCustomerId === 'custom' ? null : selectedCustomerId,
-      customerName,
-      taxCode: taxCode || '0108999888',
-      shippingAddress: address || 'Khu Công Nghiệp Tân Bình, TP. Hồ Chí Minh',
-      billingEmail: billingEmail || 'ketoan@customer.vn',
-      channel,
-      warehouseId,
-      branchId: 1,
-      paymentMethod: paymentTerm.includes('COD') ? 'COD' : 'TRANSFER',
-      items: items.map(it => ({
-        id: it.productId ?? 1,
-        productId: it.productId ?? 1,
-        sku: it.sku ?? 'SKU-01',
-        name: it.name ?? 'Sản phẩm',
-        qty: it.qty ?? 1,
-        quantity: it.qty ?? 1,
-        price: it.price ?? 0,
-        unitPrice: it.price ?? 0,
-        discountPercent: it.discountPercent ?? 0,
-        discount: it.discountPercent ?? 0,
-        uop: it.uop ?? 'Cái'
-      })),
-      requiresVatInvoice,
-      notes: notes ? `${notes} • PaymentTerm: ${paymentTerm}` : `PaymentTerm: ${paymentTerm}`,
-      idempotencyKey: `SO-CREATE-${Date.now()}-${Math.floor(Math.random() * 1000)}`
-    };
+    const executeOrderSubmit = async (orderStatusOverride?: 'DRAFT' | 'PENDING_APPROVAL' | 'CONFIRMED') => {
+      setIsSubmitting(true);
+      const isPendingApproval = orderStatusOverride === 'PENDING_APPROVAL';
+      const orderPayload = {
+        customerId: selectedCustomerId === 'custom' ? null : selectedCustomerId,
+        customerName,
+        taxCode: taxCode || '0108999888',
+        shippingAddress: address || 'Khu Công Nghiệp Tân Bình, TP. Hồ Chí Minh',
+        billingEmail: billingEmail || 'ketoan@customer.vn',
+        channel,
+        warehouseId,
+        branchId: 1,
+        status: orderStatusOverride || 'CONFIRMED',
+        paymentMethod: paymentTerm.includes('COD') ? 'COD' : 'TRANSFER',
+        items: items.map(it => ({
+          id: it.productId ?? 1,
+          productId: it.productId ?? 1,
+          sku: it.sku ?? 'SKU-01',
+          name: it.name ?? 'Sản phẩm',
+          qty: it.qty ?? 1,
+          quantity: it.qty ?? 1,
+          price: it.price ?? 0,
+          unitPrice: it.price ?? 0,
+          discountPercent: it.discountPercent ?? 0,
+          discount: it.discountPercent ?? 0,
+          uop: it.uop ?? 'Cái',
+          pricingSnapshot: it.pricingSnapshot
+        })),
+        requiresVatInvoice,
+        notes: notes ? `${notes} • PaymentTerm: ${paymentTerm}` : `PaymentTerm: ${paymentTerm}`,
+        idempotencyKey: `SO-CREATE-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+      };
 
-    try {
-      const res = await fetch('/api/sales', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderPayload)
-      });
+      try {
+        const res = await fetch('/api/sales', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(orderPayload)
+        });
 
-      if (res.ok) {
-        const data = await res.json();
-        const createdOrder = {
-          id: data.order?.code ?? data.orderRef ?? `SO-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        if (res.ok) {
+          const data = await res.json();
+          const targetStatus = isPendingApproval 
+            ? 'PENDING_APPROVAL' 
+            : (data.order?.status ?? (data.reservationStatus === 'BACKORDER' ? 'CONFIRMED' : 'RESERVED'));
+          const reservationStatus = data.reservationStatus ?? (isPendingApproval ? 'PENDING' : (targetStatus === 'RESERVED' ? 'RESERVED' : 'BACKORDER'));
+          const fulfillmentStatus = data.fulfillmentStatus ?? (reservationStatus === 'BACKORDER' ? 'WAITING_TRANSFER' : (isPendingApproval ? 'ON_HOLD' : 'PENDING_PICKING'));
+
+          const createdOrder = {
+            id: data.order?.code ?? data.orderRef ?? `SO-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+            customerId: selectedCustomerId === 'custom' ? null : selectedCustomerId,
+            customerName,
+            taxCode: taxCode || '0108999888',
+            address: address || 'Khu Công Nghiệp Tân Bình, TP. Hồ Chí Minh',
+            billingEmail: billingEmail || 'ketoan@customer.vn',
+            orderDate: new Date().toISOString().slice(0, 10),
+            totalAmount: `${grandTotal.toLocaleString('vi-VN')} VND`,
+            totalAmountNumeric: grandTotal,
+            subtotalAmount: subtotalAfterDiscount,
+            taxRate: effectiveTaxRate,
+            taxAmount,
+            requiresVatInvoice,
+            status: targetStatus,
+            reservationStatus,
+            fulfillmentStatus,
+            vatStatus: 'NOT_ISSUED',
+            vatInvoiceNumber: null,
+            vatSerial: null,
+            cqtCode: null,
+            lookupCode: null,
+            warehouseId,
+            items: items.map(it => ({
+              sku: it.sku,
+              name: it.name,
+              qty: it.qty ?? 1,
+              uop: it.uop ?? 'Cái',
+              price: `${(it.price ?? 0).toLocaleString('vi-VN')} VND`,
+              unitPriceNumeric: it.price ?? 0,
+              discountPercent: it.discountPercent ?? 0,
+              amount: ((it.price ?? 0) * (it.qty ?? 1) * (1 - (it.discountPercent ?? 0) / 100)),
+              pricingSnapshot: it.pricingSnapshot
+            }))
+          };
+          dispatchOrderCreated(createdOrder);
+          if (isPendingApproval) {
+            onNotify('warning', 'Đơn hàng Chờ Phê Duyệt (M07)', `Đơn hàng [${createdOrder.id}] vượt hạn mức tín dụng khách hàng và đã được lưu ở trạng thái PENDING_APPROVAL.`);
+          } else if (reservationStatus === 'BACKORDER') {
+            onNotify('warning', 'Đơn Hàng Ghi Nhận (Chờ Điều Chuyển Kho)', `Đơn hàng [${createdOrder.id}] đã được lưu. Do tồn kho khả dụng không đủ cho toàn bộ sản phẩm, hệ thống M17 đã giữ chỗ phần có sẵn và đánh dấu BACKORDER.`);
+          } else {
+            onNotify('success', 'Tạo Đơn Hàng & Giữ Chỗ Tồn Kho M17 Thành Công', `Đã lưu đơn bán hàng [${createdOrder.id}] với đơn giá M41 đã khóa và giữ chỗ tồn kho (M17 Reserved) thành công.`);
+          }
+          onClose();
+        } else {
+          throw new Error('API server returned error');
+        }
+      } catch (err: any) {
+        // Fallback local create
+        const localId = `SO-2026-${Math.floor(10000 + Math.random() * 90000)}`;
+        const targetStatus = isPendingApproval ? 'PENDING_APPROVAL' : 'CONFIRMED';
+        const localOrder = {
+          id: localId,
           customerId: selectedCustomerId === 'custom' ? null : selectedCustomerId,
           customerName,
           taxCode: taxCode || '0108999888',
@@ -910,9 +1158,9 @@ export const M13CreateOrderModal: React.FC<M13CreateOrderModalProps> = ({
           taxRate: effectiveTaxRate,
           taxAmount,
           requiresVatInvoice,
-          status: 'CONFIRMED',
-          reservationStatus: 'RESERVED',
-          fulfillmentStatus: 'PENDING_PICKING',
+          status: targetStatus,
+          reservationStatus: isPendingApproval ? 'PENDING' : 'RESERVED',
+          fulfillmentStatus: isPendingApproval ? 'ON_HOLD' : 'PENDING_PICKING',
           vatStatus: 'NOT_ISSUED',
           vatInvoiceNumber: null,
           vatSerial: null,
@@ -930,55 +1178,60 @@ export const M13CreateOrderModal: React.FC<M13CreateOrderModalProps> = ({
             amount: ((it.price ?? 0) * (it.qty ?? 1) * (1 - (it.discountPercent ?? 0) / 100))
           }))
         };
-        dispatchOrderCreated(createdOrder);
-        onNotify('success', 'Tạo Sales Order thành công', `Đã lưu đơn bán hàng [${createdOrder.id}] và kích hoạt giữ chỗ tồn kho (Reservation) qua InventoryService.`);
+        dispatchOrderCreated(localOrder);
+        if (isPendingApproval) {
+          onNotify('warning', 'Đơn hàng Chờ Phê Duyệt', `Đã lưu đơn bán hàng [${localId}] ở trạng thái PENDING_APPROVAL do vượt hạn mức công nợ.`);
+        } else {
+          onNotify('success', 'Tạo Sales Order thành công (Offline Memory Mode)', `Đã lưu đơn bán hàng [${localId}].`);
+        }
         onClose();
-      } else {
-        throw new Error('API server returned error');
+      } finally {
+        setIsSubmitting(false);
       }
-    } catch (err: any) {
-      // Fallback local create
-      const localId = `SO-2026-${Math.floor(10000 + Math.random() * 90000)}`;
-      const localOrder = {
-        id: localId,
-        customerId: selectedCustomerId === 'custom' ? null : selectedCustomerId,
-        customerName,
-        taxCode: taxCode || '0108999888',
-        address: address || 'Khu Công Nghiệp Tân Bình, TP. Hồ Chí Minh',
-        billingEmail: billingEmail || 'ketoan@customer.vn',
-        orderDate: new Date().toISOString().slice(0, 10),
-        totalAmount: `${grandTotal.toLocaleString('vi-VN')} VND`,
-        totalAmountNumeric: grandTotal,
-        subtotalAmount: subtotalAfterDiscount,
-        taxRate: effectiveTaxRate,
-        taxAmount,
-        requiresVatInvoice,
-        status: 'CONFIRMED',
-        reservationStatus: 'RESERVED',
-        fulfillmentStatus: 'PENDING_PICKING',
-        vatStatus: 'NOT_ISSUED',
-        vatInvoiceNumber: null,
-        vatSerial: null,
-        cqtCode: null,
-        lookupCode: null,
-        warehouseId,
-        items: items.map(it => ({
-          sku: it.sku,
-          name: it.name,
-          qty: it.qty ?? 1,
-          uop: it.uop ?? 'Cái',
-          price: `${(it.price ?? 0).toLocaleString('vi-VN')} VND`,
-          unitPriceNumeric: it.price ?? 0,
-          discountPercent: it.discountPercent ?? 0,
-          amount: ((it.price ?? 0) * (it.qty ?? 1) * (1 - (it.discountPercent ?? 0) / 100))
-        }))
-      };
-      dispatchOrderCreated(localOrder);
-      onNotify('success', 'Tạo Sales Order thành công (Offline Memory Mode)', `Đã lưu đơn bán hàng [${localId}].`);
-      onClose();
-    } finally {
-      setIsSubmitting(false);
+    };
+
+    // CREDIT LIMIT GUARD GATE INTEGRATION
+    let activeCredit = creditServerCheck;
+    if (!activeCredit && selectedCustomerId !== 'custom') {
+      try {
+        const res = await fetch(`/api/customers/${selectedCustomerId}/credit?amount=${grandTotal}`);
+        if (res.ok) {
+          activeCredit = await res.json();
+          setCreditServerCheck(activeCredit);
+        }
+      } catch (err) {
+        console.warn('Authoritative credit check error:', err);
+      }
     }
+    if (!activeCredit && activeCustomer) {
+      activeCredit = SalesOrderSyncService.checkCustomerCredit(activeCustomer, grandTotal);
+    }
+
+    // Rule A: Hard block if credit is locked
+    if (activeCustomer?.isCreditBlocked || activeCredit?.isCreditBlocked || activeCredit?.status === 'BLOCKED') {
+      onNotify('danger', 'Khách hàng bị khóa tín dụng', `Khách hàng [${activeCustomer?.customerCode || selectedCustomerId}] đang bị PHONG TỎA CÔNG NỢ (Credit Blocked) theo chính sách M07. Không thể tạo đơn hàng ghi nợ.`);
+      return;
+    }
+
+    // Rule B: If credit is exceeded, trigger ConfirmDialog (Rule 19)
+    if (activeCredit && (!activeCredit.approved || activeCredit.status === 'OVER_LIMIT')) {
+      const exceeded = activeCredit.exceededAmount || Math.max(0, grandTotal - (activeCredit.availableCredit || 0));
+      setCreditConfirmDialog({
+        isOpen: true,
+        title: `Cảnh Báo Hạn Mức Tín Dụng M07 — Vượt ${exceeded.toLocaleString('vi-VN')} ₫`,
+        message: `Đơn hàng (${grandTotal.toLocaleString('vi-VN')} ₫) vượt quá hạn mức tín dụng còn lại của khách hàng (${Math.max(0, activeCredit.availableCredit || 0).toLocaleString('vi-VN')} ₫). Khoản vượt: ${exceeded.toLocaleString('vi-VN')} ₫.\n\nTheo quy chế tín dụng ERP B2B, đơn hàng sẽ được chuyển vào quy trình CHỜ PHÊ DUYỆT (PENDING_APPROVAL) để Quản lý Tài chính phê duyệt ngoại lệ.\n\nBạn có muốn gửi đơn hàng vào hàng đợi Chờ Duyệt (PENDING_APPROVAL) không?`,
+        variant: 'warning',
+        confirmText: 'Xác nhận chuyển Chờ Duyệt (PENDING_APPROVAL)',
+        onConfirm: () => {
+          setCreditConfirmDialog(null);
+          executeOrderSubmit('PENDING_APPROVAL');
+        }
+      });
+      return;
+    }
+
+    // If within credit limit, proceed with standard confirmed order
+    executeOrderSubmit('CONFIRMED');
   };
 
   return (
@@ -1249,11 +1502,11 @@ export const M13CreateOrderModal: React.FC<M13CreateOrderModalProps> = ({
           {(activeFormTab === 'ALL' || activeFormTab === 'LOGISTICS') && (
             <div className={`grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border ${tabErrors.LOGISTICS.length > 0 ? 'border-rose-300 dark:border-rose-900/60' : 'border-slate-200 dark:border-slate-700'}`}>
               <div>
-                <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Kho Xuất Hàng:</label>
+                <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Kho Xuất Hàng (M17):</label>
                 <select
                   id="m13-warehouse-select"
                   value={warehouseId}
-                  onChange={(e) => setWarehouseId(Number(e.target.value))}
+                  onChange={(e) => handleWarehouseChange(Number(e.target.value))}
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 >
                   <option value={1}>Kho Tổng Miền Bắc (WH-01)</option>
@@ -1299,10 +1552,29 @@ export const M13CreateOrderModal: React.FC<M13CreateOrderModalProps> = ({
           {/* Section 3: Line Items Table */}
           {(activeFormTab === 'ALL' || activeFormTab === 'ITEMS') && (
             <div className={`space-y-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border ${tabErrors.ITEMS.length > 0 ? 'border-rose-300 dark:border-rose-900/60' : 'border-slate-200 dark:border-slate-700'}`}>
+              {/* Enterprise Governance Info Banner */}
+              <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 text-xs flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>
+                    <strong>Cổng Thẩm Quyền Đơn Nhất M41 & M17:</strong> Đơn giá bán do <strong>M41 Pricing Engine</strong> giải quyết và khóa bất biến. Tồn kho khả dụng được kiểm tra tự động qua <strong>M17 InventoryService</strong> (tự động chuyển Backorder nếu thiếu hàng).
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => resolveItemPricingAndStock(items, selectedCustomerId, warehouseId)}
+                  disabled={isResolvingPricing || isCheckingStock}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-700 rounded-lg text-blue-700 dark:text-blue-300 font-bold hover:bg-blue-50 dark:hover:bg-slate-700 text-[11px] shrink-0 cursor-pointer"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isResolvingPricing || isCheckingStock ? 'animate-spin' : ''}`} />
+                  <span>{isResolvingPricing || isCheckingStock ? 'Đang thẩm định...' : 'Đồng bộ M41 / M17'}</span>
+                </button>
+              </div>
+
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase flex items-center gap-1.5">
                   <Package className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  <span>2. Chi Tiết Sản Phẩm & Chính Sách Chiết Khấu Động ({items.length} mặt hàng)</span>
+                  <span>2. Chi Tiết Sản Phẩm & Đơn Giá M41 Pricing Engine ({items.length} mặt hàng)</span>
                 </h4>
                 <div className="flex items-center gap-2">
                   {tabErrors.ITEMS.length > 0 && (
@@ -1336,10 +1608,10 @@ export const M13CreateOrderModal: React.FC<M13CreateOrderModalProps> = ({
                   <thead>
                     <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold uppercase text-[10px]">
                       <th className="py-2.5 px-3">Mã SKU / SP</th>
-                      <th className="py-2.5 px-3">Tên Hàng Hóa</th>
+                      <th className="py-2.5 px-3">Tên Hàng Hóa & Tồn Kho (M17)</th>
                       <th className="py-2.5 px-3 text-center">ĐVT</th>
                       <th className="py-2.5 px-3 text-right">Số Lượng</th>
-                      <th className="py-2.5 px-3 text-right">Đơn Giá (đ)</th>
+                      <th className="py-2.5 px-3 text-right">Đơn Giá Khóa (đ)</th>
                       <th className="py-2.5 px-3 text-right">CK (%)</th>
                       <th className="py-2.5 px-3 text-right">Thành Tiền</th>
                       <th className="py-2.5 px-2 text-center">Xóa</th>
@@ -1358,7 +1630,7 @@ export const M13CreateOrderModal: React.FC<M13CreateOrderModalProps> = ({
                               onChange={(e) => handleSelectPresetProduct(idx, e.target.value)}
                               className="px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 font-mono text-[11px] font-bold text-blue-600 dark:text-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             >
-                              {DEFAULT_PRODUCTS.map(dp => (
+                              {catalogProducts.map(dp => (
                                 <option key={dp.sku} value={dp.sku}>{dp.sku}</option>
                               ))}
                             </select>
@@ -1371,6 +1643,22 @@ export const M13CreateOrderModal: React.FC<M13CreateOrderModalProps> = ({
                               onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
                               className={`w-full px-2 py-1 rounded border ${!it.name?.trim() ? 'border-rose-400 focus:ring-rose-500' : 'border-slate-300 dark:border-slate-600'} bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500`}
                             />
+                            {/* Authoritative M17 Stock Availability Feedback */}
+                            {it.stockInfo && (
+                              <div className="mt-1 flex items-center gap-1 text-[10px] font-mono">
+                                {it.stockInfo.isSufficient ? (
+                                  <span className="text-emerald-700 dark:text-emerald-400 flex items-center gap-1 font-semibold">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                                    <span>Kho đủ hàng (Khả dụng: {it.stockInfo.availableStock} {it.uop || 'Cái'})</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-amber-700 dark:text-amber-400 flex items-center gap-1 font-bold">
+                                    <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                                    <span>Thiếu {it.stockInfo.shortage} {it.uop || 'Cái'} (Khả dụng: {it.stockInfo.availableStock}) → Tự động Backorder</span>
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </td>
                           <td className="py-2 px-3 text-center">
                             <input
@@ -1392,14 +1680,32 @@ export const M13CreateOrderModal: React.FC<M13CreateOrderModalProps> = ({
                             />
                           </td>
                           <td className="py-2 px-3 text-right">
-                            <input
-                              id={`m13-item-price-${idx}`}
-                              type="number"
-                              step="1000"
-                              value={it.price}
-                              onChange={(e) => handleItemChange(idx, 'price', Math.max(0, Number(e.target.value) || 0))}
-                              className="w-28 px-2 py-1 text-right font-mono rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-1">
+                                <input
+                                  id={`m13-item-price-${idx}`}
+                                  type="text"
+                                  readOnly
+                                  value={(it.price ?? 0).toLocaleString('vi-VN')}
+                                  className="w-28 px-2 py-1 text-right font-mono font-bold rounded border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs cursor-not-allowed select-all"
+                                  title="Đơn giá bán được chốt tự động bởi M41 Pricing Engine (Bất biến)"
+                                />
+                                <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" title="Khóa bởi M41 Pricing Engine" />
+                              </div>
+                              {it.pricingSnapshot && (
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold tracking-tight ${
+                                  it.pricingSnapshot.source === 'CONTRACT_PRICE'
+                                    ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                                    : it.pricingSnapshot.source === 'PRICE_LIST'
+                                    ? 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800'
+                                    : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                                }`}>
+                                  {it.pricingSnapshot.source === 'CONTRACT_PRICE' 
+                                    ? 'HĐ B2B M41' 
+                                    : (it.pricingSnapshot.source === 'PRICE_LIST' ? 'Bảng Giá M41' : 'Giá Chuẩn M41')}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-2 px-3 text-right">
                             <input
@@ -1540,6 +1846,20 @@ export const M13CreateOrderModal: React.FC<M13CreateOrderModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Rule 19 Enterprise Confirm Dialog for Credit Limit Guard */}
+      {creditConfirmDialog && (
+        <ConfirmDialog
+          isOpen={creditConfirmDialog.isOpen}
+          title={creditConfirmDialog.title}
+          message={creditConfirmDialog.message}
+          variant={creditConfirmDialog.variant}
+          confirmText={creditConfirmDialog.confirmText}
+          cancelText="Huỷ bỏ & Điều chỉnh lại"
+          onConfirm={creditConfirmDialog.onConfirm}
+          onClose={() => setCreditConfirmDialog(null)}
+        />
+      )}
     </div>
   );
 };

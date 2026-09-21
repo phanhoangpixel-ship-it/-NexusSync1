@@ -9,6 +9,7 @@ import { accountingEngine } from "./accountingEngine";
 import { costingEngine } from "./costingEngine";
 import { InventoryService } from "./inventoryService";
 import { AuditService } from "./auditService";
+import { commissionService } from "./commissionService";
 
 /**
  * MASTER EVENT ROUTER
@@ -30,13 +31,17 @@ export const EVENT_ROUTER: Record<string, string[]> = {
   // P2P & O2C Core Events
   "GoodsReceiptPosted": ["AuditSubscriber", "CostingSubscriber", "AccountingSubscriber", "ProcessOrchestratorSubscriber"],
   "GoodsIssueConfirmed": ["AuditSubscriber", "CostingSubscriber", "AccountingSubscriber", "ProcessOrchestratorSubscriber"],
-  "OrderConfirmed": ["AuditSubscriber", "ProcessOrchestratorSubscriber", "InventoryAllocationSubscriber"],
+  "OrderConfirmed": ["AuditSubscriber", "ProcessOrchestratorSubscriber", "InventoryAllocationSubscriber", "CommissionSubscriber"],
+  "InvoiceIssued": ["AuditSubscriber", "AccountingSubscriber", "CommissionSubscriber"],
+  "PaymentCollected": ["AuditSubscriber", "AccountingSubscriber", "CommissionSubscriber"],
   "StockIssued": ["AuditSubscriber", "CostingSubscriber", "AccountingSubscriber"],
   "GoodsReceived": ["AuditSubscriber", "CostingSubscriber", "AccountingSubscriber"],
 
   // Commission & Incentive Events
   "CommissionAccrued": ["AuditSubscriber", "AccountingSubscriber"],
   "CommissionDisbursed": ["AuditSubscriber", "AccountingSubscriber"],
+  "ReturnsRmaCompleted": ["AuditSubscriber", "CommissionSubscriber"],
+  "RmaCompleted": ["AuditSubscriber", "CommissionSubscriber"],
 
   // Process Orchestration Events
   "ProcessInstanceStarted": ["AuditSubscriber", "OrchestratorMonitoringSubscriber"],
@@ -356,6 +361,51 @@ export async function executeSubscriberHandler(consumer: string, event: any): Pr
           dueDate: new Date(Date.now() + 48 * 60 * 60 * 1000),
           createdAt: new Date()
         } as any);
+        break;
+      }
+
+      case "CommissionSubscriber": {
+        const actorId = parseInt(event.actorId, 10) || 1;
+        const salesOrderId = payload?.salesOrderId || payload?.orderId;
+        const salesPersonId = payload?.salesPersonId || actorId;
+        const totalAmount = Number(payload?.totalAmount || payload?.amount || 0);
+
+        if (eventType === "OrderConfirmed" || eventType === "GoodsIssueConfirmed") {
+          await commissionService.evaluateOrderCommission({
+            salesOrderId: salesOrderId ? Number(salesOrderId) : undefined,
+            salesPersonId: Number(salesPersonId),
+            triggerEvent: 'ORDER_CONFIRMED',
+            totalAmount,
+            userId: actorId,
+          });
+        } else if (eventType === "InvoiceIssued") {
+          await commissionService.evaluateOrderCommission({
+            salesOrderId: salesOrderId ? Number(salesOrderId) : undefined,
+            invoiceId: payload?.invoiceId ? Number(payload.invoiceId) : undefined,
+            salesPersonId: Number(salesPersonId),
+            triggerEvent: 'INVOICE_ISSUED',
+            totalAmount,
+            userId: actorId,
+          });
+        } else if (eventType === "PaymentCollected" || eventType === "TreasuryPaymentReceived") {
+          await commissionService.evaluateOrderCommission({
+            salesOrderId: salesOrderId ? Number(salesOrderId) : undefined,
+            invoiceId: payload?.invoiceId ? Number(payload.invoiceId) : undefined,
+            salesPersonId: Number(salesPersonId),
+            triggerEvent: 'PAYMENT_COLLECTED',
+            totalAmount,
+            userId: actorId,
+          });
+        } else if (eventType === "ReturnsRmaCompleted" || eventType === "RmaCompleted") {
+          await commissionService.generateClawbackFromRma({
+            rmaId: payload?.rmaId ? Number(payload.rmaId) : undefined,
+            rmaCode: payload?.rmaCode || String(event.aggregateId),
+            salesOrderId: salesOrderId ? Number(salesOrderId) : undefined,
+            returnAmount: Number(payload?.returnAmount || totalAmount),
+            userId: actorId,
+            reason: payload?.reason || 'Auto-clawback triggered by EventBus RMA completion event',
+          });
+        }
         break;
       }
 

@@ -1,5 +1,6 @@
-import React from 'react';
-import { MapPin, Truck, Play, X, RotateCcw, Activity, Navigation, Radio } from 'lucide-react';
+import React, { useState } from 'react';
+import { MapPin, Truck, Play, X, RotateCcw, Activity, Navigation, Radio, Compass, Sparkles, CheckCircle2, TrendingDown } from 'lucide-react';
+import { formatVND } from './types';
 
 interface LogisticsRoutesTabProps {
   isSimulating: boolean;
@@ -14,6 +15,35 @@ export const LogisticsRoutesTab: React.FC<LogisticsRoutesTabProps> = ({
   onToggleSimulating,
   onResetSimulation,
 }) => {
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optimizationResult, setOptimizationResult] = useState<any | null>(null);
+
+  const handleRunOptimization = async () => {
+    setIsOptimizing(true);
+    try {
+      const res = await fetch('/api/logistics/routes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stops: [
+            { address: 'Kho Tổng HQ Hà Nội (WH-MAIN)', name: 'Depot Xuất Phát', weightKg: 0 },
+            { address: 'KCN Tiên Sơn, Bắc Ninh', name: 'Điểm giao 1 - Kho Viettel Post', weightKg: 1200 },
+            { address: 'KCN Đại An, Hải Dương', name: 'Điểm giao 2 - Siêu thị WinMart', weightKg: 950 },
+            { address: 'Cảng Đình Vũ, Hải Phòng', name: 'Điểm giao 3 - Đại lý Nguyễn Kim', weightKg: 1350 },
+          ],
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOptimizationResult(data);
+      }
+    } catch (err) {
+      console.error('Lỗi tối ưu lộ trình:', err);
+    } finally {
+      setIsOptimizing(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* HEADER CONTROL BAR */}
@@ -24,11 +54,19 @@ export const LogisticsRoutesTab: React.FC<LogisticsRoutesTabProps> = ({
             <span>Giám Sát Định Tuyến GPS &amp; Tiến Độ Hành Trình Chuyến Xe</span>
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Mô phỏng tọa độ GPS thời gian thực, cảnh báo tốc độ km/h và giám sát điểm dừng Stops
+            Mô phỏng tọa độ GPS thời gian thực, cảnh báo tốc độ km/h và thuật toán tối ưu đa điểm dừng (TSP)
           </p>
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleRunOptimization}
+            disabled={isOptimizing}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+          >
+            <Sparkles className={`w-4 h-4 ${isOptimizing ? 'animate-spin' : ''}`} />
+            <span>{isOptimizing ? 'Đang Tối Ưu...' : 'Tối Ưu Tuyến Đa Điểm (TSP)'}</span>
+          </button>
           <button
             onClick={onToggleSimulating}
             className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer ${
@@ -38,7 +76,7 @@ export const LogisticsRoutesTab: React.FC<LogisticsRoutesTabProps> = ({
             }`}
           >
             {isSimulating ? <X className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-            <span>{isSimulating ? 'Tạm Dừng Giả Lập' : 'Chạy Tọa Độ GPS Chuyến Xe'}</span>
+            <span>{isSimulating ? 'Tạm Dừng Giả Lập' : 'Chạy Tọa Độ GPS'}</span>
           </button>
           <button
             onClick={onResetSimulation}
@@ -49,6 +87,44 @@ export const LogisticsRoutesTab: React.FC<LogisticsRoutesTabProps> = ({
           </button>
         </div>
       </div>
+
+      {/* MULTI-STOP ROUTE OPTIMIZATION RESULT PANEL */}
+      {optimizationResult && (
+        <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-indigo-200 dark:border-indigo-900 shadow-2xs space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-700 pb-2">
+            <div className="flex items-center gap-2">
+              <Compass className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                Kế Hoạch Tuyến Tối Ưu: {optimizationResult.routePlanCode}
+              </h3>
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-200">
+                Tiết kiệm {optimizationResult.efficiencyMetrics?.costSavingsPct}% chi phí
+              </span>
+            </div>
+            <div className="flex items-center gap-4 text-xs font-mono font-bold">
+              <span>Tổng quãng đường: <span className="text-blue-600">{optimizationResult.totalDistanceKm} km</span></span>
+              <span>Thời gian: <span className="text-indigo-600">{optimizationResult.estimatedDurationMinutes} phút</span></span>
+              <span>Tổng chi phí: <span className="text-emerald-600">{formatVND(optimizationResult.totalRouteCostVND)}</span></span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+            {optimizationResult.optimizedStops?.map((stop: any) => (
+              <div key={stop.sequence} className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="w-5 h-5 rounded-full bg-indigo-600 text-white font-bold text-[10px] flex items-center justify-center">
+                    {stop.sequence}
+                  </span>
+                  <span className="font-mono text-slate-500 text-[10px]">+{stop.distanceKm} km</span>
+                </div>
+                <div className="font-bold text-slate-900 dark:text-white truncate">{stop.name}</div>
+                <div className="text-slate-500 dark:text-slate-400 text-[11px] truncate">{stop.address}</div>
+                <div className="text-emerald-600 dark:text-emerald-400 font-mono text-[10px]">Tải trọng: {stop.cargoWeightKg} kg</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* TELEMETRY & ROUTE PROGRESS PANELS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

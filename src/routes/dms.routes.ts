@@ -255,7 +255,14 @@ router.post("/api/dms/documents/ocr", async (req, res) => {
     
     const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey) {
-       const ai = new GoogleGenAI({ apiKey });
+       const ai = new GoogleGenAI({
+         apiKey,
+         httpOptions: {
+           headers: {
+             'User-Agent': 'aistudio-build',
+           },
+         },
+       });
        const prompt = `Trích xuất thông tin hợp đồng sau thành JSON (bắt buộc đúng định dạng JSON chuẩn):
          {
            "title": "Tên tài liệu",
@@ -273,10 +280,10 @@ router.post("/api/dms/documents/ocr", async (req, res) => {
          
          Nội dung tệp tham khảo (giả lập): ${fileName} - ${fileContent || ''}`;
          
-       const aiResponse = await ai.models.generateContent({
-         model: 'gemini-2.5-flash',
-         contents: prompt
-       });
+        const aiResponse = await ai.models.generateContent({
+          model: 'gemini-3.6-flash',
+          contents: prompt
+        });
        
        let text = aiResponse.text;
        try {

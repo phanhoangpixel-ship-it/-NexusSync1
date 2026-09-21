@@ -264,6 +264,19 @@ router.post("/api/quality/batch-releases/:id/post-inventory", requireQualityPerm
   }
 });
 
+router.post("/api/quality/batch-releases/:id/approve", requireQualityPermission("quality.ncr.approve"), async (req, res) => {
+  try {
+    const userId = (req as any).user?.id || 1;
+    const release = await QualityService.approveAndPostBatchRelease(Number(req.params.id), {
+      ...req.body,
+      userId,
+    });
+    res.json({ success: true, status: "APPROVED", data: release });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ==========================================
 // 6. QUARANTINE LOTS (REALTIME ADAPTER FOR UI)
 // ==========================================

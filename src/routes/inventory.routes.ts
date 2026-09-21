@@ -317,7 +317,17 @@ router.get(["/api/inventory/ledger", "/api/stock/ledger"], async (req, res) => {
         };
       });
 
-      res.json(enriched);
+      let result = enriched;
+      if (req.query.referenceNo) {
+        const ref = String(req.query.referenceNo);
+        result = result.filter((l) => l.referenceNo && String(l.referenceNo).includes(ref));
+      }
+      if (req.query.productId) {
+        const pId = Number(req.query.productId);
+        result = result.filter((l) => l.productId === pId);
+      }
+
+      res.json(result);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -544,28 +554,196 @@ router.get("/api/stock-adjustments", async (req, res) => {
     }
   });
 
-  // 2. Reserve Stock
+  // 2. Reserve Stock (M17 Stock Allocation & Reservation Gate)
   router.post("/api/inventory/reservations", async (req, res) => {
     try {
-      const { productId, warehouseId, locationId, quantity, referenceNo, userId = 1, notes } = req.body;
+      const {
+        productId,
+        warehouseId,
+        locationId,
+        quantity,
+        referenceNo,
+        userId = 1,
+        notes,
+        checkOnly = false,
+        allowBackorder = false,
+        items
+      } = req.body;
 
-      if (!productId || !warehouseId || !referenceNo || !quantity) {
+      // Handle batch items if provided
+      if (Array.isArray(items) && items.length > 0) {
+        const batchResults: any[] = [];
+        let anyShortage = false;
+
+        for (const it of items) {
+          const pId = Number(it.productId || it.id);
+          const wId = Number(it.warehouseId || warehouseId || 1);
+          const reqQty = Number(it.quantity || it.qty || 1);
+
+          const avail = await InventoryService.checkAvailability({
+            productId: pId,
+            warehouseId: wId,
+            locationId: it.locationId ? Number(it.locationId) : null,
+            quantity: reqQty
+          });
+
+          if (!avail.isAvailable) {
+            anyShortage = true;
+            batchResults.push({
+              productId: pId,
+              requestedQuantity: reqQty,
+              availableStock: avail.available,
+              shortage: reqQty - Math.max(0, avail.available),
+              isSufficient: false,
+              status: "BACKORDER"
+            });
+          } else {
+            batchResults.push({
+              productId: pId,
+              requestedQuantity: reqQty,
+              availableStock: avail.available,
+              shortage: 0,
+              isSufficient: true,
+              status: "SUFFICIENT"
+            });
+          }
+        }
+
+        if (checkOnly || (anyShortage && !allowBackorder)) {
+          return res.status(anyShortage && !checkOnly ? 400 : 200).json({
+            success: !anyShortage,
+            isSufficient: !anyShortage,
+            status: anyShortage ? "BACKORDER" : "SUFFICIENT",
+            batchResults,
+            suggestedAction: anyShortage ? "WAITING_TRANSFER_OR_BACKORDER" : "READY_TO_RESERVE"
+          });
+        }
+
+        // Execute reservations
+        const reservationRecords: any[] = [];
+        for (const it of items) {
+          const pId = Number(it.productId || it.id);
+          const wId = Number(it.warehouseId || warehouseId || 1);
+          const reqQty = Number(it.quantity || it.qty || 1);
+          const check = batchResults.find(b => b.productId === pId);
+          const reserveQty = check?.isSufficient ? reqQty : Math.max(0, check?.availableStock || 0);
+
+          if (reserveQty > 0) {
+            const r = await InventoryService.reserveStock(null, {
+              productId: pId,
+              warehouseId: wId,
+              locationId: it.locationId ? Number(it.locationId) : null,
+              quantity: reserveQty,
+              referenceNo: String(referenceNo || `RES-${Date.now()}`),
+              userId: Number(userId),
+              notes: notes || `M17 Batch Reservation`
+            });
+            reservationRecords.push(r);
+          }
+        }
+
+        return res.status(201).json({
+          success: true,
+          status: anyShortage ? "PARTIALLY_RESERVED" : "RESERVED",
+          isSufficient: !anyShortage,
+          reservationRecords,
+          batchResults
+        });
+      }
+
+      // Single item reservation
+      if (!productId || !warehouseId || !quantity) {
         return res.status(400).json({
-          error: "Thiếu thông tin bắt buộc: productId, warehouseId, referenceNo, quantity",
+          error: "Thiếu thông tin bắt buộc: productId, warehouseId, quantity",
+        });
+      }
+
+      const pId = Number(productId);
+      const wId = Number(warehouseId);
+      const reqQty = Number(quantity);
+
+      // Check stock availability (Single-Writer M17 Gate)
+      const check = await InventoryService.checkAvailability({
+        productId: pId,
+        warehouseId: wId,
+        locationId: locationId ? Number(locationId) : null,
+        quantity: reqQty,
+      });
+
+      if (checkOnly) {
+        return res.json({
+          success: check.isAvailable,
+          isSufficient: check.isAvailable,
+          availableStock: check.available,
+          currentStock: check.onHand,
+          shortage: check.isAvailable ? 0 : Math.max(0, reqQty - check.available),
+          status: check.isAvailable ? "SUFFICIENT" : "BACKORDER"
+        });
+      }
+
+      if (!referenceNo) {
+        return res.status(400).json({
+          error: "Thiếu thông tin bắt buộc: referenceNo",
+        });
+      }
+
+      if (check.available < reqQty) {
+        if (!allowBackorder) {
+          return res.status(400).json({
+            success: false,
+            status: "BACKORDER",
+            isSufficient: false,
+            availableStock: check.available,
+            requestedQuantity: reqQty,
+            shortage: reqQty - Math.max(0, check.available),
+            suggestedAction: "WAITING_TRANSFER_OR_BACKORDER",
+            error: `Tồn kho khả dụng (${check.available}) không đủ để giữ chỗ ${reqQty} sản phẩm. Đã đánh dấu chuyển sang trạng thái chờ điều chuyển hoặc tách đơn (Backorder).`,
+          });
+        }
+
+        // Allow partial reservation if available > 0
+        const reserveQty = Math.max(0, check.available);
+        let partialResult: any = null;
+        if (reserveQty > 0) {
+          partialResult = await InventoryService.reserveStock(null, {
+            productId: pId,
+            warehouseId: wId,
+            locationId: locationId ? Number(locationId) : null,
+            quantity: reserveQty,
+            referenceNo: String(referenceNo),
+            userId: Number(userId),
+            notes: `${notes || ''} [PARTIAL_RESERVE - BACKORDER ${reqQty - reserveQty}]`,
+          });
+        }
+
+        return res.status(200).json({
+          success: true,
+          status: "BACKORDER",
+          isSufficient: false,
+          partialReserved: reserveQty > 0,
+          allocatedQuantity: reserveQty,
+          shortage: reqQty - reserveQty,
+          suggestedAction: "WAITING_TRANSFER_OR_BACKORDER",
+          result: partialResult
         });
       }
 
       const result = await InventoryService.reserveStock(null, {
-        productId: Number(productId),
-        warehouseId: Number(warehouseId),
+        productId: pId,
+        warehouseId: wId,
         locationId: locationId ? Number(locationId) : null,
-        quantity: Number(quantity),
+        quantity: reqQty,
         referenceNo: String(referenceNo),
         userId: Number(userId),
         notes,
       });
 
-      res.status(201).json(result);
+      res.status(201).json({
+        success: true,
+        status: "RESERVED",
+        isSufficient: true,
+        ...result,
+      });
     } catch (err: any) {
       res.status(400).json({ error: err.message || "Giữ chỗ tồn kho thất bại" });
     }
