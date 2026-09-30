@@ -1,3 +1,4 @@
+import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import React, { useState } from 'react';
 import { RlsPolicyConfig, TenantBranch, DelegationRecord } from './types';
 import { INITIAL_TENANT_BRANCHES, INITIAL_DELEGATIONS, MODULES_42_CATALOG } from './mockData';

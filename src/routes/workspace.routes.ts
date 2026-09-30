@@ -28,7 +28,26 @@ router.get("/api/workspace/work-items", async (req, res) => {
       const role = (req.query.role as string) || "SUPER_ADMIN";
       const branchId = (req.query.branchId as string) || "BR_HO";
       const filter = req.query.filter as any;
-      const items = await WorkspaceAggregationBackendService.getWorkItems(role, branchId, filter);
+      const moduleCode = (req.query.moduleCode as string) || (req.query.module as string) || undefined;
+      const status = req.query.status as string | undefined;
+      const type = req.query.type as string | undefined;
+      const priority = req.query.priority as string | undefined;
+      const sla = req.query.sla as string | undefined;
+      const search = req.query.search as string | undefined;
+      const assignedTo = req.query.assignedTo as string | undefined;
+      const isSlaViolated = req.query.isSlaViolated !== undefined ? req.query.isSlaViolated === 'true' || req.query.isSlaViolated === '1' : undefined;
+      
+      const items = await WorkspaceAggregationBackendService.getWorkItems(role, branchId, {
+        ...(typeof filter === 'object' && filter !== null ? filter : {}),
+        moduleCode,
+        status,
+        type,
+        priority,
+        sla,
+        search,
+        assignedTo,
+        isSlaViolated
+      });
       res.json(items);
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Failed to load work items" });
@@ -211,11 +230,24 @@ router.post(["/api/invoices/sign/:id", "/api/invoices/sign/*"], async (req, res)
 router.post("/api/workspace/work-items/:id/action", async (req, res) => {
   try {
     const { id } = req.params;
-    const { userId, actionType } = req.body;
-    const result = await WorkspaceAggregationBackendService.executeAction(id, { entityId: id, userId, actionType });
+    const { userId, actionType, idempotencyKey } = req.body;
+    const result = await WorkspaceAggregationBackendService.executeAction(id, { entityId: id, userId, actionType, idempotencyKey });
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message || "Lỗi xử lý tác vụ" });
+  }
+});
+
+router.post("/api/workspace/work-items/bulk-action", async (req, res) => {
+  try {
+    const { actions, userId = 'SYSTEM_ADMIN' } = req.body;
+    if (!Array.isArray(actions) || actions.length === 0) {
+      return res.status(400).json({ error: "Danh sách tác vụ rỗng hoặc không hợp lệ" });
+    }
+    const result = await WorkspaceAggregationBackendService.executeBatchActions(actions, userId);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Lỗi xử lý hàng loạt tác vụ" });
   }
 });
 

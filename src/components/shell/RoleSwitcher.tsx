@@ -26,16 +26,16 @@ export const RoleSwitcher: React.FC<RoleSwitcherProps> = ({
       id="nexus-role-switcher"
       type="button"
       onClick={onOpenLogin}
-      className="h-9 flex items-center gap-2 pl-2 pr-3 rounded-xl border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 transition-all text-left shadow-2xs shrink-0 whitespace-nowrap"
+      className="h-9 flex items-center gap-2 pl-2 pr-3 rounded-xl border border-slate-700/80 hover:border-slate-600 bg-slate-800/90 hover:bg-slate-700/80 text-white transition-all text-left shadow-2xs shrink-0 whitespace-nowrap cursor-pointer"
       title="Chuyển đổi vai trò & Người dùng"
     >
-      <div className="w-6 h-6 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs shrink-0">
+      <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
         <User className="w-3.5 h-3.5" />
       </div>
       <div className="hidden sm:block">
-        <div className="flex items-center gap-1">
-          <span className="text-xs font-bold text-slate-900 leading-none whitespace-nowrap">{currentUser.username}</span>
-          <span className="text-[9px] font-mono font-bold px-1 rounded bg-purple-100 text-purple-800 whitespace-nowrap">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-bold text-white leading-none whitespace-nowrap">{currentUser.username}</span>
+          <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-900/60 text-cyan-300 border border-blue-700/60 whitespace-nowrap">
             {currentUser.role}
           </span>
         </div>

@@ -1,3 +1,4 @@
+import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import React, { useState, useMemo } from 'react';
 import { SalesQuotaRecord } from './types';
 import { ConfirmDialogState } from '../../../../types';

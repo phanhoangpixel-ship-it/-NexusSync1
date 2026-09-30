@@ -43,6 +43,7 @@ export const LotsBatchesFEFOTab: React.FC<LotsBatchesFEFOTabProps> = ({
   const [simQty, setSimQty] = useState('450');
   const [simResult, setSimResult] = useState<any>(null);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [nearExpiryThresholdDays, setNearExpiryThresholdDays] = useState<number>(45);
 
   const handleRunSimulator = async () => {
     setIsSimulating(true);
@@ -123,7 +124,7 @@ export const LotsBatchesFEFOTab: React.FC<LotsBatchesFEFOTabProps> = ({
       {/* L2: DASHBOARD METRICS & INTRO */}
       <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 font-mono text-[10px] font-bold border border-amber-200 dark:border-amber-800">
               FEFO ALLOCATION ENGINE
             </span>
@@ -135,8 +136,26 @@ export const LotsBatchesFEFOTab: React.FC<LotsBatchesFEFOTabProps> = ({
             Tự động sắp xếp mức độ ưu tiên xuất kho theo ngày hết hạn (EXP Date), ngăn ngừa tồn đọng hàng quá hạn và tối ưu hóa chuỗi cung ứng vật tư.
           </p>
         </div>
-        <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-950/80 text-amber-600 dark:text-amber-300 flex items-center justify-center shrink-0 border border-amber-200 dark:border-amber-800">
-          <ShieldAlert className="w-5 h-5" />
+
+        <div className="flex items-center gap-3 self-end md:self-auto">
+          {/* User Configurable Near-Expiry Threshold Input */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50/80 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-xl text-xs">
+            <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="font-semibold text-amber-900 dark:text-amber-200">Ngưỡng cảnh báo cận hạn:</span>
+            <input
+              type="number"
+              min="1"
+              max="365"
+              value={nearExpiryThresholdDays}
+              onChange={(e) => setNearExpiryThresholdDays(Math.max(1, parseInt(e.target.value) || 1))}
+              className="w-14 px-1.5 py-0.5 text-center font-mono font-bold text-xs bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 rounded text-amber-900 dark:text-amber-100 focus:outline-hidden focus:ring-1 focus:ring-amber-500"
+            />
+            <span className="text-amber-700 dark:text-amber-400 font-medium">ngày</span>
+          </div>
+
+          <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-950/80 text-amber-600 dark:text-amber-300 flex items-center justify-center shrink-0 border border-amber-200 dark:border-amber-800">
+            <ShieldAlert className="w-5 h-5" />
+          </div>
         </div>
       </div>
 
@@ -429,7 +448,7 @@ export const LotsBatchesFEFOTab: React.FC<LotsBatchesFEFOTabProps> = ({
             endIndex={pagination.endIndex}
             onPageChange={pagination.goToPage}
             onPageSizeChange={pagination.setPageSize}
-            pageSizeOptions={[5, 10, 20, 50, 100]}
+            pageSizeOptions={[10, 15, 25, 50, 100]}
           />
         </div>
       </div>

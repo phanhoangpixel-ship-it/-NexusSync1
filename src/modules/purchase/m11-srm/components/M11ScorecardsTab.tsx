@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import { TablePagination } from '../../../../components/common/TablePagination';
+import { StatusBadge } from '../../../../components/common/StatusBadge';
 import { ScorecardItem, SupplierItem } from './m11Types';
 import { Award, Search, RefreshCw, Plus, Filter, ArrowUpRight, Star, TrendingUp, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { PaginationControl } from '../../../../components/common/PaginationControl';

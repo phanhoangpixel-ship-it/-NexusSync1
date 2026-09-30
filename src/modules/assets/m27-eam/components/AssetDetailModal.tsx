@@ -11,6 +11,8 @@ import {
   QrCode,
   Layers,
   FileText,
+  Calculator,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface AssetDetailModalProps {
@@ -19,6 +21,7 @@ interface AssetDetailModalProps {
   asset: any;
   onNotify: (type: 'success' | 'danger' | 'warning' | 'info', title: string, message: string) => void;
   onCreateWoForAsset: (asset: any) => void;
+  onOpenDepreciationModal?: (asset: any) => void;
 }
 
 export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
@@ -27,6 +30,7 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
   asset,
   onNotify,
   onCreateWoForAsset,
+  onOpenDepreciationModal,
 }) => {
   const [activeTab, setActiveTab] = useState<'info' | 'iot' | 'history' | 'finance'>('info');
 
@@ -138,64 +142,47 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                   <strong className="font-mono text-slate-900 dark:text-white">{asset.model || 'UMC-750SS'}</strong>
                 </div>
                 <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                  <span className="text-slate-500 dark:text-slate-400 block mb-1">Số Seri (Serial Number)</span>
-                  <strong className="font-mono text-slate-900 dark:text-white">{asset.serialNumber || 'SN-2024-001'}</strong>
+                  <span className="text-slate-500 dark:text-slate-400 block mb-1">Số Serial (S/N)</span>
+                  <strong className="font-mono text-slate-900 dark:text-white">{asset.serialNumber || 'SN-2024-998'}</strong>
                 </div>
                 <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                  <span className="text-slate-500 dark:text-slate-400 block mb-1">Hãng Sản Xuất (OEM)</span>
-                  <strong className="text-slate-900 dark:text-white">{asset.manufacturer || 'Haas Automation'}</strong>
+                  <span className="text-slate-500 dark:text-slate-400 block mb-1">Nhà Sản Xuất</span>
+                  <strong className="text-slate-900 dark:text-white">{asset.manufacturer || 'Nexus Tech'}</strong>
                 </div>
                 <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                  <span className="text-slate-500 dark:text-slate-400 block mb-1">Vị Trí Vận Hành</span>
+                  <span className="text-slate-500 dark:text-slate-400 block mb-1">Vị Trí Lắp Đặt</span>
                   <strong className="text-slate-900 dark:text-white">{asset.location || 'Xưởng Cơ Khí A1'}</strong>
                 </div>
                 <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                  <span className="text-slate-500 dark:text-slate-400 block mb-1">Kỹ Thuật Phụ Trách</span>
-                  <strong className="text-slate-900 dark:text-white">{asset.responsibleEmployeeName || 'Kỹ thuật trưởng'}</strong>
-                </div>
-              </div>
-
-              <div className="p-4 bg-blue-50/50 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-800/80 flex items-start gap-3">
-                <QrCode className="w-8 h-8 text-blue-600 dark:text-blue-400 shrink-0" />
-                <div className="text-xs">
-                  <div className="font-bold text-slate-900 dark:text-white">Mã QR Định Danh Thiết Bị Thông Minh</div>
-                  <div className="text-slate-600 dark:text-slate-300 mt-0.5">
-                    Quét mã QR dán trên thân máy móc để truy xuất tức thì phiếu bảo trì và lịch sử sửa chữa trên ứng dụng hiện trường.
-                  </div>
-                  <div className="font-mono text-[11px] text-blue-700 dark:text-blue-300 font-semibold mt-1">
-                    URI: nexus://eam/asset/{asset.code}
-                  </div>
+                  <span className="text-slate-500 dark:text-slate-400 block mb-1">Cán Bộ Quản Lý</span>
+                  <strong className="text-slate-900 dark:text-white">{asset.responsibleEmployeeName || 'Trần Văn Hùng'}</strong>
                 </div>
               </div>
             </div>
           )}
 
           {activeTab === 'iot' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 text-center">
-                  <span className="text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold block">Chỉ Số Sức Khỏe</span>
-                  <span className="text-2xl font-bold font-mono text-emerald-700 dark:text-emerald-300">98 / 100</span>
-                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block mt-0.5">Trạng thái Tối Ưu</span>
+            <div className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-400 block text-[10px]">Nhiệt Độ Vận Hành</span>
+                  <strong className="text-base font-mono text-slate-900 dark:text-white">52.4 °C</strong>
                 </div>
-                <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-800 text-center">
-                  <span className="text-blue-700 dark:text-blue-300 text-[11px] font-semibold block">Nhiệt Độ Trục Chính</span>
-                  <span className="text-2xl font-bold font-mono text-blue-700 dark:text-blue-300">52.4 °C</span>
-                  <span className="text-[10px] text-blue-600 dark:text-blue-400 block mt-0.5">An toàn (&lt;65°C)</span>
+                <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-400 block text-[10px]">Độ Rung Spindle</span>
+                  <strong className="text-base font-mono text-emerald-600 dark:text-emerald-400">1.8 mm/s</strong>
                 </div>
-                <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl border border-indigo-200 dark:border-indigo-800 text-center">
-                  <span className="text-indigo-700 dark:text-indigo-300 text-[11px] font-semibold block">Độ Rung Động</span>
-                  <span className="text-2xl font-bold font-mono text-indigo-700 dark:text-indigo-300">1.8 mm/s</span>
-                  <span className="text-[10px] text-indigo-600 dark:text-indigo-400 block mt-0.5">Chuẩn ISO 10816</span>
+                <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-400 block text-[10px]">Dòng Tải Động Cơ</span>
+                  <strong className="text-base font-mono text-slate-900 dark:text-white">14.2 A</strong>
                 </div>
-                <div className="p-3 bg-purple-50 dark:bg-purple-950/40 rounded-xl border border-purple-200 dark:border-purple-800 text-center">
-                  <span className="text-purple-700 dark:text-purple-300 text-[11px] font-semibold block">Dòng Điện Tải</span>
-                  <span className="text-2xl font-bold font-mono text-purple-700 dark:text-purple-300">14.2 A</span>
-                  <span className="text-[10px] text-purple-600 dark:text-purple-400 block mt-0.5">Tải trọng 68%</span>
+                <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-400 block text-[10px]">Chỉ Số Sức Khỏe</span>
+                  <strong className="text-base font-mono text-emerald-600 dark:text-emerald-400">{asset.healthScore || 98} / 100</strong>
                 </div>
               </div>
 
-              <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 text-xs space-y-2">
+              <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-900 dark:text-white">Cảnh Báo Dự Đoán Hỏng Hóc (Predictive AI)</span>
                   <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
@@ -258,11 +245,40 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                 </div>
               </div>
 
-              <div className="p-3.5 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1">
-                <span className="font-bold text-slate-900 dark:text-white">Định Khoản Kế Toán Sổ Cái M30:</span>
-                <p className="text-slate-600 dark:text-slate-400 font-mono text-[11px]">
-                  Nợ TK 627 (Chi phí SXC bảo trì) / Có TK 152, 334, 331 • Nợ TK 214 / Có TK 211 (Khấu hao TSCĐ)
-                </p>
+              <div className="grid grid-cols-2 gap-3 text-[11px]">
+                <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-400 block mb-0.5">Thời Gian Khấu Hao Hữu Ích</span>
+                  <strong className="font-mono text-slate-800 dark:text-slate-200">
+                    {asset.usefulLifeMonths || 60} tháng (5 năm)
+                  </strong>
+                </div>
+                <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-400 block mb-0.5">Mức Trích Khấu Hao Hàng Tháng</span>
+                  <strong className="font-mono text-emerald-600 dark:text-emerald-400">
+                    {asset.monthlyDepreciation ? asset.monthlyDepreciation.toLocaleString('vi-VN') : '—'} ₫/tháng
+                  </strong>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-slate-900 dark:text-white block">Định Khoản Kế Toán Sổ Cái M30:</span>
+                  <p className="text-slate-600 dark:text-slate-400 font-mono text-[11px] mt-0.5">
+                    Nợ TK 627 (Chi phí SXC khấu hao) / Có TK 214 (Hao mòn TSCĐ)
+                  </p>
+                </div>
+                {onOpenDepreciationModal && (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onOpenDepreciationModal(asset);
+                    }}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0 ml-3"
+                  >
+                    <Calculator className="w-3.5 h-3.5" />
+                    <span>Trích Khấu Hao (M30)</span>
+                  </button>
+                )}
               </div>
             </div>
           )}

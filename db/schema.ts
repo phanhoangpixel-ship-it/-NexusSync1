@@ -865,8 +865,31 @@ export const accountingEntries = sqliteTable("accounting_entries", {
   branchId: integer("branch_id").references(() => warehouses.id),
   customerId: integer("customer_id").references(() => customers.id),
   supplierId: integer("supplier_id").references(() => suppliers.id),
+  costCenter: text("cost_center"),
+  departmentId: integer("department_id").references(() => departments.id),
+  isReversal: integer("is_reversal", { mode: 'boolean' }).default(false),
+  reversedEntryId: integer("reversed_entry_id"),
+  reversalReason: text("reversal_reason"),
   createdBy: integer("created_by").notNull().references(() => users.id),
   createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const periodClosingRuns = sqliteTable("period_closing_runs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  periodCode: text("period_code").notNull().unique(), // e.g. "T08/2026", "2026-08"
+  periodType: text("period_type").notNull().default("MONTHLY"), // MONTHLY, QUARTERLY, YEARLY
+  startDate: integer("start_date", { mode: 'timestamp' }),
+  endDate: integer("end_date", { mode: 'timestamp' }),
+  status: text("status").notNull().default("LOCKED"), // OPEN, IN_PROGRESS, LOCKED, REOPENED
+  closedBy: integer("closed_by").references(() => users.id),
+  closedByName: text("closed_by_name"),
+  closedAt: integer("closed_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  reopenedBy: integer("reopened_by").references(() => users.id),
+  reopenedAt: integer("reopened_at", { mode: 'timestamp' }),
+  notes: text("notes"),
+  summaryData: text("summary_data"),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }),
 });
 
 // 17. Costing Engine & COGS Management
@@ -1292,6 +1315,7 @@ export const projects = sqliteTable("projects", {
   eac: real("eac").notNull().default(0),
   revisionNo: text("revision_no").notNull().default("v1.0"),
   billingStatus: text("billing_status").notNull().default("UNBILLED"),
+  billedAmount: real("billed_amount").notNull().default(0),
   notes: text("notes"),
   createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
   updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
@@ -1386,6 +1410,26 @@ export const projectBudgetVersions = sqliteTable("project_budget_versions", {
   createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
 
+export const projectChangeOrders = sqliteTable("project_change_orders", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull().references(() => projects.id),
+  changeOrderCode: text("change_order_code").notNull().unique(), // CO-PRJ-2026-001 or BCR-001
+  title: text("title").notNull(),
+  changeType: text("change_type").notNull().default("SCOPE_BUDGET"), // SCOPE_BUDGET, SCHEDULE, TECHNICAL, MATERIAL_SUBSTITUTION
+  description: text("description"),
+  costImpact: real("cost_impact").notNull().default(0), // Added or deducted budget VND
+  scheduleImpactDays: integer("schedule_impact_days").notNull().default(0),
+  reason: text("reason"),
+  status: text("status").notNull().default("SUBMITTED"), // DRAFT, SUBMITTED, APPROVED, REJECTED
+  requestedBy: text("requested_by").notNull().default("Project Manager"),
+  approvedBy: text("approved_by"),
+  approvedAt: integer("approved_at", { mode: 'timestamp' }),
+  rejectionReason: text("rejection_reason"),
+  dmsDocumentId: integer("dms_document_id"),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
 export const projectEvmSnapshots = sqliteTable("project_evm_snapshots", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   projectId: integer("project_id").notNull().references(() => projects.id),
@@ -1417,6 +1461,81 @@ export const projectMilestones = sqliteTable("project_milestones", {
   verifiedBy: integer("verified_by"),
   verifiedAt: integer("verified_at", { mode: 'timestamp' }),
   billedAt: integer("billed_at", { mode: 'timestamp' }),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const wbsNodes = sqliteTable("wbs_nodes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull().references(() => projects.id),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  level: integer("level").notNull().default(1),
+  parentWbsId: integer("parent_wbs_id"),
+  assignee: text("assignee"),
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  durationDays: integer("duration_days").default(0),
+  budgetAmount: real("budget_amount").notNull().default(0),
+  actualCost: real("actual_cost").notNull().default(0),
+  progressPct: real("progress_pct").notNull().default(0),
+  status: text("status").notNull().default("NOT_STARTED"),
+  deliverable: text("deliverable"),
+  isCriticalPath: integer("is_critical_path", { mode: 'boolean' }).default(false),
+  isMilestone: integer("is_milestone", { mode: 'boolean' }).default(false),
+  dependencyCode: text("dependency_code"),
+  dependencyType: text("dependency_type"),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const projectResources = sqliteTable("project_resources", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").references(() => projects.id),
+  name: text("name").notNull(),
+  role: text("role").notNull(),
+  department: text("department"),
+  resourceType: text("resource_type").notNull().default("PEOPLE"), // PEOPLE, EQUIPMENT, MATERIAL
+  standardRateVND: real("standard_rate_vnd").notNull().default(250000),
+  overtimeRateVND: real("overtime_rate_vnd").notNull().default(375000),
+  allocationPct: real("allocation_pct").notNull().default(100),
+  allocatedHours: real("allocated_hours").notNull().default(0),
+  capacityHours: real("capacity_hours").notNull().default(160),
+  assignedTasksCount: integer("assigned_tasks_count").notNull().default(0),
+  employeeId: integer("employee_id").references(() => employees.id),
+  status: text("status").notNull().default("ACTIVE"),
+  email: text("email"),
+  phone: text("phone"),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const projectTimesheets = sqliteTable("project_timesheets", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull().references(() => projects.id),
+  resourceId: integer("resource_id").references(() => projectResources.id),
+  employeeName: text("employee_name").notNull(),
+  wbsCode: text("wbs_code"),
+  wbsTaskName: text("wbs_task_name"),
+  date: text("date").notNull(),
+  hoursLogged: real("hours_logged").notNull().default(0),
+  hourlyRateVND: real("hourly_rate_vnd").notNull().default(0),
+  laborCostVND: real("labor_cost_vnd").notNull().default(0),
+  status: text("status").notNull().default("APPROVED"), // SUBMITTED, APPROVED, REJECTED
+  notes: text("notes"),
+  approvedBy: text("approved_by"),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const projectCostLedger = sqliteTable("project_cost_ledger", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull().references(() => projects.id),
+  wbsId: integer("wbs_id"),
+  costType: text("cost_type").notNull(), // LABOR, MATERIAL, OVERHEAD, SUBCONTRACT, EQUIPMENT
+  description: text("description").notNull(),
+  amount: real("amount").notNull().default(0),
+  referenceNo: text("reference_no"),
+  date: text("date").notNull(),
+  sourceModule: text("source_module").notNull().default("M35"), // M28, M17, M42, M30, M35
+  glJournalEntryId: integer("gl_journal_entry_id"),
+  recordedBy: text("recorded_by").notNull().default("System"),
   createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
 
@@ -1492,6 +1611,73 @@ export const maintenancePlans = sqliteTable("maintenance_plans", {
   nextDueDate: text("next_due_date"),
 });
 
+export const maintenanceSchedules = sqliteTable("maintenance_schedules", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  assetId: integer("asset_id").notNull().references(() => assets.id),
+  scheduleCode: text("schedule_code").notNull(), // PMS-0001
+  title: text("title").notNull(),
+  maintenanceType: text("maintenance_type").notNull().default("PREVENTIVE"), // PREVENTIVE, CORRECTIVE, PREDICTIVE, CALIBRATION
+  frequencyType: text("frequency_type").default("DAYS"), // DAYS, HOURS, CYCLES
+  intervalDays: integer("interval_days").default(30),
+  intervalHours: real("interval_hours").default(0),
+  description: text("description"),
+  lastPerformedDate: text("last_performed_date"),
+  nextDueDate: text("next_due_date"),
+  assignedTechnician: text("assigned_technician"),
+  estimatedCost: real("estimated_cost").default(0),
+  estimatedHours: real("estimated_hours").default(2),
+  status: text("status").notNull().default("ACTIVE"), // ACTIVE, PAUSED, RETIRED
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const fixedAssets = sqliteTable("fixed_assets", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  code: text("code").notNull().unique(), // AST-0001
+  name: text("name").notNull(),
+  categoryId: integer("category_id").references(() => assetCategories.id),
+  categoryName: text("category_name"),
+  assetType: text("asset_type").default("MACHINERY"), // MACHINERY, FACILITY, VEHICLE, IT_HARDWARE
+  serialNumber: text("serial_number"),
+  model: text("model"),
+  manufacturer: text("manufacturer"),
+  supplierId: integer("supplier_id"),
+  supplierName: text("supplier_name"),
+  purchaseDate: text("purchase_date"),
+  purchaseCost: real("purchase_cost").notNull().default(0),
+  salvageValue: real("salvage_value").notNull().default(0),
+  usefulLifeMonths: integer("useful_life_months").notNull().default(60),
+  depreciationMethod: text("depreciation_method").notNull().default("STRAIGHT_LINE"), // STRAIGHT_LINE, DECLINING_BALANCE
+  accumulatedDepreciation: real("accumulated_depreciation").notNull().default(0),
+  bookValue: real("book_value").notNull().default(0),
+  monthlyDepreciation: real("monthly_depreciation").notNull().default(0),
+  lastDepreciationDate: text("last_depreciation_date"),
+  branchId: integer("branch_id"),
+  departmentId: integer("department_id"),
+  location: text("location"),
+  responsibleEmployeeId: integer("responsible_employee_id"),
+  responsibleEmployeeName: text("responsible_employee_name"),
+  glAssetAccount: text("gl_asset_account").default("TK 211"),
+  glDepreciationAccount: text("gl_depreciation_account").default("TK 214"),
+  glExpenseAccount: text("gl_expense_account").default("TK 627"),
+  status: text("status").notNull().default("ACTIVE"), // ACTIVE, IN_USE, MAINTENANCE, REPAIR, IDLE, RETIRED, SCRAPPED
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const assetHierarchy = sqliteTable("asset_hierarchy", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  parentId: integer("parent_id"), // self-reference or null for root
+  assetId: integer("asset_id"), // references fixed_assets.id or assets.id
+  hierarchyLevel: text("hierarchy_level").notNull().default("MACHINE"), // SITE, PLANT, PRODUCTION_LINE, MACHINE, SUBASSEMBLY, COMPONENT
+  nodeCode: text("node_code").notNull(),
+  nodeName: text("node_name").notNull(),
+  location: text("location"),
+  status: text("status").notNull().default("ACTIVE"),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
 export const maintenanceWorkOrders = sqliteTable("maintenance_work_orders", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   woCode: text("wo_code").notNull().unique(), // WO-0001
@@ -1509,6 +1695,11 @@ export const maintenanceWorkOrders = sqliteTable("maintenance_work_orders", {
   status: text("status").notNull().default("OPEN"), // OPEN, ASSIGNED, IN_PROGRESS, WAITING_PART, COMPLETED, CLOSED
   totalCost: real("total_cost").notNull().default(0),
   downtimeHours: real("downtime_hours").notNull().default(0),
+  sourceModule: text("source_module"), // M38, M15, M27_PM, MANUAL
+  sourceReferenceId: integer("source_reference_id"),
+  sourceReferenceCode: text("source_reference_code"), // INC-xxxx, RMA-xxxx, PMS-xxxx
+  resolutionNotes: text("resolution_notes"),
+  actualHours: real("actual_hours").default(0),
   createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
 
@@ -1601,7 +1792,7 @@ export const crmQuotations = sqliteTable("crm_quotations", {
 
 export const tickets = sqliteTable("tickets", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  ticketCode: text("ticket_code").notNull().unique(), // TCK-0001
+  ticketCode: text("ticket_code").notNull().unique(), // TCK-0001, IT-TKT-2026-0001
   customerId: integer("customer_id").references(() => customers.id),
   customerName: text("customer_name"),
   contactName: text("contact_name"),
@@ -1616,17 +1807,137 @@ export const tickets = sqliteTable("tickets", {
   firstResponseTimeMinutes: integer("first_response_time_minutes"),
   resolutionTimeHours: real("resolution_time_hours"),
   isSlaBreached: integer("is_sla_breached", { mode: 'boolean' }).default(false),
-  status: text("status").notNull().default("OPEN"), // OPEN, ASSIGNED, IN_PROGRESS, WAITING_CUSTOMER, RESOLVED, CLOSED
+  status: text("status").notNull().default("OPEN"), // OPEN, ASSIGNED, IN_PROGRESS, WAITING_CUSTOMER, PENDING, RESOLVED, CLOSED, CANCELLED
   createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
   updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  // M38 Enterprise Extended Fields (Optional for full backward compatibility)
+  type: text("type").default("INCIDENT"), // INCIDENT, SERVICE_REQUEST, ACCESS_REQUEST, EQUIPMENT_DEFECT
+  impact: text("impact").default("LOW"), // LOW, MEDIUM, HIGH, CRITICAL
+  urgency: text("urgency").default("LOW"), // LOW, MEDIUM, HIGH, CRITICAL
+  requesterId: integer("requester_id"),
+  requesterName: text("requester_name"),
+  requesterEmail: text("requester_email"),
+  requesterDepartment: text("requester_department"),
+  assetId: integer("asset_id"),
+  assetCode: text("asset_code"),
+  assetName: text("asset_name"),
+  serialId: integer("serial_id"),
+  serialNumber: text("serial_number"),
+  slaPolicyId: integer("sla_policy_id"),
+  responseDueAt: integer("response_due_at", { mode: 'timestamp' }),
+  resolveDueAt: integer("resolve_due_at", { mode: 'timestamp' }),
+  slaPausedAt: integer("sla_paused_at", { mode: 'timestamp' }),
+  slaPausedSeconds: integer("sla_paused_seconds").default(0),
+  firstResponseAt: integer("first_response_at", { mode: 'timestamp' }),
+  resolvedAt: integer("resolved_at", { mode: 'timestamp' }),
+  closedAt: integer("closed_at", { mode: 'timestamp' }),
+  rootCause: text("root_cause"),
+  resolutionNote: text("resolution_note"),
+  sourceModule: text("source_module"),
+  sourceId: text("source_id"),
+  idempotencyKey: text("idempotency_key"),
+  parentTicketId: integer("parent_ticket_id"),
+  workOrderId: integer("work_order_id"),
+  workOrderCode: text("work_order_code"),
+  dmsAttachmentIds: text("dms_attachment_ids"), // JSON array of document ids/uuids
+  warning75Sent: integer("warning_75_sent", { mode: 'boolean' }).default(false),
+  warning90Sent: integer("warning_90_sent", { mode: 'boolean' }).default(false),
+  escalationLevel: integer("escalation_level").default(0),
+  feedbackScore: integer("feedback_score"),
+  feedbackComment: text("feedback_comment"),
 });
 
 export const ticketMessages = sqliteTable("ticket_messages", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   ticketId: integer("ticket_id").notNull().references(() => tickets.id),
   senderName: text("sender_name").notNull(),
-  senderType: text("sender_type").notNull().default("AGENT"), // AGENT, CUSTOMER, SYSTEM
+  senderType: text("sender_type").notNull().default("AGENT"), // AGENT, CUSTOMER, SYSTEM, USER
   message: text("message").notNull(),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const slaPolicies = sqliteTable("sla_policies", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  policyCode: text("policy_code").notNull().unique(), // SLA-P1, SLA-P2, SLA-P3, SLA-P4
+  policyName: text("policy_name").notNull(),
+  priority: text("priority").notNull(), // URGENT, HIGH, NORMAL, LOW
+  responseHours: real("response_hours").notNull(), // e.g. 0.25 (15m), 0.5 (30m), 2.0, 4.0
+  resolutionHours: real("resolution_hours").notNull(), // e.g. 2.0, 4.0, 8.0, 24.0
+  warning75ThresholdPct: real("warning_75_threshold_pct").default(75),
+  warning90ThresholdPct: real("warning_90_threshold_pct").default(90),
+  businessHoursOnly: integer("business_hours_only", { mode: 'boolean' }).default(true),
+  escalationTargetRoleId: text("escalation_target_role_id").default("IT_LEAD"),
+  description: text("description"),
+  isActive: integer("is_active", { mode: 'boolean' }).default(true),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const ticketStatusHistory = sqliteTable("ticket_status_history", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ticketId: integer("ticket_id").notNull().references(() => tickets.id),
+  previousStatus: text("previous_status"),
+  newStatus: text("new_status").notNull(),
+  changedById: integer("changed_by_id"),
+  changedByName: text("changed_by_name").notNull(),
+  changeReason: text("change_reason"),
+  notes: text("notes"),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const ticketAccessRequests = sqliteTable("ticket_access_requests", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ticketId: integer("ticket_id").references(() => tickets.id),
+  requestCode: text("request_code").notNull().unique(), // AR-2026-0001
+  requesterId: integer("requester_id").notNull(),
+  requesterName: text("requester_name").notNull(),
+  requesterEmail: text("requester_email"),
+  targetUserId: integer("target_user_id").notNull(),
+  targetUserName: text("target_user_name").notNull(),
+  targetUserEmail: text("target_user_email"),
+  targetUserRole: text("target_user_role"),
+  requestedPermissionOrRole: text("requested_permission_or_role").notNull(), // e.g. 'accounting:post_gl' or 'FINANCE_MANAGER'
+  isHighRisk: integer("is_high_risk", { mode: 'boolean' }).default(false),
+  reason: text("reason").notNull(),
+  durationDays: integer("duration_days").default(30),
+  expiresAt: integer("expires_at", { mode: 'timestamp' }),
+  status: text("status").notNull().default("PENDING_MANAGER_APPROVAL"), // PENDING_MANAGER_APPROVAL, PENDING_SECURITY_APPROVAL, APPROVED_PENDING_FULFILLMENT, FULFILLED, REJECTED, REVOKED, EXPIRED
+  managerApproverId: integer("manager_approver_id"),
+  managerApproverName: text("manager_approver_name"),
+  managerApprovedAt: integer("manager_approved_at", { mode: 'timestamp' }),
+  managerNotes: text("manager_notes"),
+  securityApproverId: integer("security_approver_id"),
+  securityApproverName: text("security_approver_name"),
+  securityApprovedAt: integer("security_approved_at", { mode: 'timestamp' }),
+  securityNotes: text("security_notes"),
+  fulfilledById: integer("fulfilled_by_id"),
+  fulfilledByName: text("fulfilled_by_name"),
+  fulfilledAt: integer("fulfilled_at", { mode: 'timestamp' }),
+  fulfillmentNotes: text("fulfillment_notes"),
+  revokedById: integer("revoked_by_id"),
+  revokedByName: text("revoked_by_name"),
+  revokedAt: integer("revoked_at", { mode: 'timestamp' }),
+  revocationReason: text("revocation_reason"),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const ticketSurveys = sqliteTable("ticket_surveys", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ticketId: integer("ticket_id").notNull().unique().references(() => tickets.id),
+  rating: integer("rating").notNull(), // 1 to 5
+  feedback: text("feedback"),
+  submittedById: integer("submitted_by_id"),
+  submittedByName: text("submitted_by_name"),
+  submittedAt: integer("submitted_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const ticketRelations = sqliteTable("ticket_relations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  sourceTicketId: integer("source_ticket_id").notNull().references(() => tickets.id),
+  targetTicketId: integer("target_ticket_id").notNull().references(() => tickets.id),
+  relationType: text("relation_type").notNull().default("RELATES_TO"), // RELATES_TO, PARENT_OF, CHILD_OF, DUPLICATE_OF, REOPENED_FROM
+  notes: text("notes"),
   createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
 
@@ -2896,14 +3207,93 @@ export const consolidationEntities = sqliteTable("consolidation_entities", {
   ownershipPercentage: real("ownership_percentage").notNull().default(100),
 });
 
+export const consolidationScope = sqliteTable("consolidation_scope", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  scopeCode: text("scope_code").notNull().unique(),
+  scopeName: text("scope_name").notNull(),
+  groupId: integer("group_id").notNull().references(() => consolidationGroups.id),
+  description: text("description"),
+  isActive: integer("is_active", { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const intercompanyPartyMap = sqliteTable("intercompany_party_map", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  mapCode: text("map_code").notNull().unique(),
+  branchId: integer("branch_id").notNull().references(() => warehouses.id),
+  customerId: integer("customer_id").references(() => customers.id),
+  supplierId: integer("supplier_id").references(() => suppliers.id),
+  relatedBranchId: integer("related_branch_id").references(() => warehouses.id),
+  notes: text("notes"),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
 export const consolidationRuns = sqliteTable("consolidation_runs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   runCode: text("run_code").notNull().unique(),
   groupId: integer("group_id").notNull().references(() => consolidationGroups.id),
+  periodId: text("period_id"), // e.g. '2026-08'
   periodStart: integer("period_start", { mode: 'timestamp' }).notNull(),
   periodEnd: integer("period_end", { mode: 'timestamp' }).notNull(),
-  status: text("status").notNull().default('DRAFT'), // 'DRAFT', 'COMPLETED', 'APPROVED'
+  revisionNo: integer("revision_no").notNull().default(1),
+  status: text("status").notNull().default('DRAFT'), // 'DRAFT', 'REVIEW', 'APPROVED', 'LOCKED', 'REJECTED'
+  idempotencyKey: text("idempotency_key"),
+  totalEliminated: real("total_eliminated").default(0),
+  approvedBy: text("approved_by"),
+  approvedAt: integer("approved_at", { mode: 'timestamp' }),
+  lockedAt: integer("locked_at", { mode: 'timestamp' }),
+  sealedDmsDocId: integer("sealed_dms_doc_id"),
+  notes: text("notes"),
   createdBy: integer("created_by").notNull().references(() => users.id),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const consolidationRunLines = sqliteTable("consolidation_run_lines", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  runId: integer("run_id").notNull().references(() => consolidationRuns.id, { onDelete: 'cascade' }),
+  branchId: integer("branch_id").notNull().references(() => warehouses.id),
+  accountCode: text("account_code").notNull(),
+  accountName: text("account_name").notNull(),
+  accountType: text("account_type").notNull(), // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+  originalCurrency: text("original_currency").notNull().default("VND"),
+  originalAmount: real("original_amount").notNull().default(0),
+  fxRate: real("fx_rate").notNull().default(1.0),
+  convertedAmount: real("converted_amount").notNull().default(0),
+  eliminationDebit: real("elimination_debit").notNull().default(0),
+  eliminationCredit: real("elimination_credit").notNull().default(0),
+  consolidatedAmount: real("consolidated_amount").notNull().default(0),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const eliminationEntries = sqliteTable("elimination_entries", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  runId: integer("run_id").notNull().references(() => consolidationRuns.id, { onDelete: 'cascade' }),
+  entryCode: text("entry_code").notNull().unique(),
+  eliminationType: text("elimination_type").notNull(), // 'AR_AP', 'REVENUE_COGS', 'INTERCOMPANY_EXPENSE', 'INVESTMENT_EQUITY', 'OTHER'
+  debitAccount: text("debit_account").notNull(),
+  creditAccount: text("credit_account").notNull(),
+  amount: real("amount").notNull(),
+  sourceBranchId: integer("source_branch_id").references(() => warehouses.id),
+  targetBranchId: integer("target_branch_id").references(() => warehouses.id),
+  sourceRef: text("source_ref"),
+  description: text("description"),
+  status: text("status").notNull().default("PROPOSED"), // PROPOSED, APPLIED, REJECTED
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const fxAdjustments = sqliteTable("fx_adjustments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  runId: integer("run_id").notNull().references(() => consolidationRuns.id, { onDelete: 'cascade' }),
+  branchId: integer("branch_id").references(() => warehouses.id),
+  accountCode: text("account_code").notNull(),
+  fromCurrency: text("from_currency").notNull(),
+  toCurrency: text("to_currency").notNull().default("VND"),
+  originalAmount: real("original_amount").notNull(),
+  appliedRate: real("applied_rate").notNull(),
+  convertedAmount: real("converted_amount").notNull(),
+  gainLossAmount: real("gain_loss_amount").default(0),
+  rateType: text("rate_type").notNull().default("CLOSING_RATE"), // CLOSING_RATE, AVERAGE_RATE, HISTORICAL_RATE
   createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
 
@@ -2938,6 +3328,73 @@ export const sourcingPackages = sqliteTable("sourcing_packages", {
   statusIdx: index("sourcing_packages_status_idx").on(t.status),
   costCenterIdx: index("sourcing_packages_cost_center_idx").on(t.costCenter),
 }));
+
+// ============================================================================
+// M37: BI & EXECUTIVE ANALYTICS TABLES
+// ============================================================================
+
+export const reportDefinitions = sqliteTable("report_definitions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  reportCode: text("report_code").notNull().unique(), // e.g. RPT-PNL-VAS, RPT-CASHFLOW-DIR
+  title: text("title").notNull(),
+  reportType: text("report_type").notNull(), // PNL, CASHFLOW, TURNOVER_RATIOS, FORECAST, KPI_SUMMARY
+  scope: text("scope").notNull().default("BRANCH"), // BRANCH, CONSOLIDATED
+  configuration: text("configuration"), // JSON string for filters, grouping, account maps
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+}, (t) => ({
+  reportCodeIdx: index("report_definitions_code_idx").on(t.reportCode),
+  reportTypeIdx: index("report_definitions_type_idx").on(t.reportType),
+}));
+
+export const exportJobs = sqliteTable("export_jobs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  jobId: text("job_id").notNull().unique(), // e.g. EXP-20260925-001
+  idempotencyKey: text("idempotency_key").notNull().unique(),
+  reportType: text("report_type").notNull(),
+  scope: text("scope").notNull().default("BRANCH"),
+  branchId: integer("branch_id"),
+  periodId: text("period_id"),
+  format: text("format").notNull().default("EXCEL"), // EXCEL, PDF, CSV
+  status: text("status").notNull().default("PENDING"), // PENDING, PROCESSING, COMPLETED, FAILED
+  filePath: text("file_path"),
+  dmsDocId: integer("dms_doc_id"),
+  errorMessage: text("error_message"),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  completedAt: integer("completed_at", { mode: 'timestamp' }),
+}, (t) => ({
+  idempotencyKeyIdx: index("export_jobs_idempotency_idx").on(t.idempotencyKey),
+  statusIdx: index("export_jobs_status_idx").on(t.status),
+}));
+
+export const dashboardConfigs = sqliteTable("dashboard_configs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").references(() => users.id),
+  title: text("title").notNull().default("Executive Dashboard"),
+  layout: text("layout"), // JSON string
+  isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const kpiThresholdConfigs = sqliteTable("kpi_threshold_configs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  metricCode: text("metric_code").notNull().unique(), // GROSS_MARGIN_PCT, NET_MARGIN_PCT, INVENTORY_TURNOVER, DSO, DPO, QUICK_RATIO
+  metricName: text("metric_name").notNull(),
+  warningThreshold: real("warning_threshold").notNull(),
+  criticalThreshold: real("critical_threshold").notNull(),
+  targetValue: real("target_value").notNull(),
+  unit: text("unit").notNull().default("PERCENT"), // PERCENT, DAYS, RATIO, CURRENCY
+  notificationChannel: text("notification_channel").default("EVENTBUS"),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  updatedBy: integer("updated_by").references(() => users.id),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+}, (t) => ({
+  metricCodeIdx: index("kpi_threshold_code_idx").on(t.metricCode),
+}));
+
 
 export const srmRfqs = sqliteTable("srm_rfqs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -3030,10 +3487,20 @@ export const bankTransactions = sqliteTable("bank_transactions", {
   amount: real("amount").notNull(), // positive for IN, negative for OUT
   reference: text("reference"),
   transactionDate: integer("transaction_date", { mode: 'timestamp' }).notNull(),
-  status: text("status").notNull().default("UNMATCHED"), // UNMATCHED, MATCHED, IGNORED
+  status: text("status").notNull().default("UNMATCHED"), // UNMATCHED, MATCHED, IGNORED, MANUAL_OVERRIDE
+  matchType: text("match_type"), // AUTO_EXACT_REF, AUTO_VIETQR_MEMO, AUTO_AMOUNT_WINDOW, MANUAL_OVERRIDE, WEBHOOK_VIETQR
+  importChecksum: text("import_checksum"), // Hash of imported file/batch
+  transactionHash: text("transaction_hash"), // SHA256(account + date + amount + ref) for deduplication
   reconciledInvoiceId: integer("reconciled_invoice_id").references(() => invoices.id),
   reconciledPaymentId: integer("reconciled_payment_id").references(() => payments.id),
+  reconciledVoucherId: integer("reconciled_voucher_id"), // References cashVouchers.id (M32 01-TT / 02-TT)
   reconciledBy: integer("reconciled_by").references(() => users.id),
+  reconciledAt: integer("reconciled_at", { mode: 'timestamp' }),
+  partnerName: text("partner_name"),
+  partnerAccount: text("partner_account"),
+  counterpartyBank: text("counterparty_bank"),
+  virtualAccount: text("virtual_account"),
+  notes: text("notes"),
   createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
 
@@ -3171,19 +3638,50 @@ export const cashVouchers = sqliteTable("cash_vouchers", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   voucherCode: text("voucher_code").notNull().unique(),
   voucherType: text("voucher_type").notNull().default("RECEIPT"), // RECEIPT, PAYMENT
-  partnerType: text("partner_type").default("CUSTOMER"),
+  voucherForm: text("voucher_form").default("01-TT"), // 01-TT (Phiếu Thu), 02-TT (Phiếu Chi), UNC, OTHER
+  voucherCategory: text("voucher_category").default("DEBT_COLLECTION"), // REVENUE, EXPENSE, DEBT_COLLECTION, SUPPLIER_PAYMENT, SALARY, COMMISSION, RMA_REFUND, ADVANCE, OTHER
+  partnerType: text("partner_type").default("CUSTOMER"), // CUSTOMER, SUPPLIER, EMPLOYEE, PARTNER, OTHER
+  partnerId: integer("partner_id"),
   partnerName: text("partner_name").notNull(),
+  partnerAddress: text("partner_address"),
+  partnerTaxCode: text("partner_tax_code"),
+  receiverOrPayerName: text("receiver_or_payer_name"),
   amount: real("amount").notNull(),
+  amountInWords: text("amount_in_words"),
+  currency: text("currency").default("VND"),
+  exchangeRate: real("exchange_rate").default(1),
+  debitAccount: text("debit_account").default("1111"),
+  creditAccount: text("credit_account").default("131"),
   bankAccountId: integer("bank_account_id"),
   bankName: text("bank_name"),
+  bankAccountNumber: text("bank_account_number"),
   paymentMethod: text("payment_method").default("BANK_TRANSFER"),
-  status: text("status").notNull().default("PENDING_APPROVAL"),
+  status: text("status").notNull().default("PENDING_APPROVAL"), // DRAFT, PENDING_APPROVAL, APPROVED, POSTED, REJECTED, CANCELLED
   date: text("date").notNull(),
+  postingDate: text("posting_date"),
   reason: text("reason"),
+  attachedDocsCount: integer("attached_docs_count").default(0),
+  attachedDocsDescription: text("attached_docs_description"),
+  sourceModule: text("source_module").default("M32"), // M32, M13, M14, M15, M16, M28, M08, M31, MANUAL
+  sourceDocumentType: text("source_document_type"), // SALES_ORDER, PURCHASE_ORDER, COMMISSION_PAYOUT, RMA_RETURN, PAYROLL, INVOICE, DIRECT
+  sourceDocumentId: integer("source_document_id"),
+  sourceReferenceNo: text("source_reference_no"),
+  idempotencyKey: text("idempotency_key"),
+  accountingEntryId: integer("accounting_entry_id"),
   accountingEntry: text("accounting_entry"),
+  postedGL: integer("posted_gl", { mode: "boolean" }).default(false),
+  directorSignature: text("director_signature"),
+  chiefAccountantSignature: text("chief_accountant_signature"),
+  cashierSignature: text("cashier_signature"),
+  payerOrReceiverSignature: text("payer_or_receiver_signature"),
+  preparerSignature: text("preparer_signature"),
   createdBy: text("created_by").default("Admin"),
+  createdById: integer("created_by_id"),
   approvedBy: text("approved_by"),
+  approvedById: integer("approved_by_id"),
+  approvedAt: integer("approved_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
 export const treasuryTransfers = sqliteTable("treasury_transfers", {
@@ -3228,6 +3726,48 @@ export const dmsDocuments = sqliteTable("dms_documents", {
   workflowStage: integer("workflow_stage").default(1),
   workflowSteps: text("workflow_steps"), // JSON string
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+
+  // Expanded M29 fields
+  entityType: text("entity_type"), // M31_INVOICE, M30_LEDGER, M08_PO, etc.
+  entityId: text("entity_id"),
+  classification: text("classification").default("INTERNAL"), // Public/Internal/Confidential/Restricted
+  retentionClass: text("retention_class"),
+  retentionUntil: integer("retention_until", { mode: "timestamp" }),
+  legalHold: integer("legal_hold", { mode: "boolean" }).default(false),
+  supersedesId: integer("supersedes_id"),
+  hashScope: text("hash_scope").default("FILE_CONTENT"), // FILE_CONTENT or METADATA_JSON
+  sizeBytes: integer("size_bytes"),
+  mimeType: text("mime_type"),
+  idempotencyKey: text("idempotency_key").unique(),
+  fileContentBase64: text("file_content_base64"),
+});
+
+export const retentionPolicies = sqliteTable("retention_policies", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  category: text("category").notNull(),
+  retentionYears: integer("retention_years").notNull(),
+  isDefault: integer("is_default", { mode: "boolean" }).default(false),
+  description: text("description"),
+});
+
+export const eSignatures = sqliteTable("e_signatures", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  docId: integer("doc_id").notNull().references(() => dmsDocuments.id),
+  signerId: integer("signer_id").references(() => users.id),
+  signerName: text("signer_name").notNull(),
+  signatureType: text("signature_type").notNull().default("INTERNAL"), // INTERNAL, LEGAL_CA
+  hashValue: text("hash_value").notNull(),
+  certificateSerial: text("certificate_serial"),
+  signedAt: integer("signed_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+});
+
+export const dmsArchives = sqliteTable("dms_archives", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  docId: integer("doc_id").notNull().references(() => dmsDocuments.id),
+  archivePath: text("archive_path").notNull(),
+  archiveTier: text("archive_tier").default("COLD_GLACIER"),
+  archivedAt: integer("archived_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
 // ==========================================
@@ -4177,6 +4717,253 @@ export type RmaRequest = typeof rmaRequests.$inferSelect;
 export type NewRmaRequest = typeof rmaRequests.$inferInsert;
 export type RmaItem = typeof rmaItems.$inferSelect;
 export type NewRmaItem = typeof rmaItems.$inferInsert;
+
+// =========================================================================
+// M40: EHS SAFETY & ENVIRONMENT (Incidents, JSA, CAPA, Audits, Fire, Permits)
+// =========================================================================
+
+export const ehsIncidents = sqliteTable("ehs_incidents", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  incidentNumber: text("incident_number").notNull().unique(), // EHS-INC-2026-0001
+  title: text("title").notNull(),
+  incidentType: text("incident_type").notNull().default("SAFETY_HAZARD"), // NEAR_MISS, FIRST_AID, MEDICAL_TREATMENT, LOST_TIME, FATAL, ENVIRONMENTAL_SPILL, FIRE_HAZARD, ELECTRICAL_HAZARD
+  severity: text("severity").notNull().default("MEDIUM"), // LOW, MEDIUM, HIGH, CRITICAL
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  warehouseName: text("warehouse_name"),
+  locationDetail: text("location_detail"),
+  incidentDate: text("incident_date").notNull(),
+  reportedBy: integer("reported_by").references(() => employees.id),
+  reportedByName: text("reported_by_name"),
+  affectedEmployeeId: integer("affected_employee_id").references(() => employees.id),
+  affectedEmployeeName: text("affected_employee_name"),
+  description: text("description").notNull(),
+  immediateAction: text("immediate_action"),
+  rootCause: text("root_cause"),
+  reportingDeadlineAt: integer("reporting_deadline_at", { mode: 'timestamp' }),
+  status: text("status").notNull().default("OPEN"), // OPEN, INVESTIGATING, CAPA_PENDING, CLOSED
+  resolvedAt: integer("resolved_at", { mode: 'timestamp' }),
+  closedBy: text("closed_by"),
+  relatedAssetId: integer("related_asset_id").references(() => assets.id),
+  relatedPermitId: integer("related_permit_id"),
+  idempotencyKey: text("idempotency_key").unique(),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+}, (t) => ({
+  incidentNumberIdx: uniqueIndex("ehs_incidents_number_idx").on(t.incidentNumber),
+  statusIdx: index("ehs_incidents_status_idx").on(t.status),
+  warehouseIdIdx: index("ehs_incidents_warehouse_id_idx").on(t.warehouseId),
+  severityIdx: index("ehs_incidents_severity_idx").on(t.severity),
+  typeIdx: index("ehs_incidents_type_idx").on(t.incidentType),
+  idempotencyIdx: index("ehs_incidents_idempotency_idx").on(t.idempotencyKey),
+}));
+
+export const ehsRiskAssessments = sqliteTable("ehs_risk_assessments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  assessmentCode: text("assessment_code").notNull().unique(), // JSA-2026-0001
+  jobTitle: text("job_title").notNull(),
+  workArea: text("work_area").notNull(),
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  warehouseName: text("warehouse_name"),
+  severityScore: integer("severity_score").notNull().default(1), // 1-5
+  probabilityScore: integer("probability_score").notNull().default(1), // 1-5
+  riskScore: integer("risk_score").notNull().default(1), // 1-25
+  riskLevel: text("risk_level").notNull().default("LOW"), // LOW, MEDIUM, HIGH, EXTREME
+  hazardsJson: text("hazards_json"), // JSON string
+  controlMeasures: text("control_measures").notNull(),
+  assessedBy: text("assessed_by").notNull(),
+  assessedEmployeeId: integer("assessed_employee_id").references(() => employees.id),
+  reviewDate: text("review_date"),
+  status: text("status").notNull().default("ACTIVE"), // ACTIVE, UNDER_REVIEW, ARCHIVED
+  idempotencyKey: text("idempotency_key").unique(),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+}, (t) => ({
+  assessmentCodeIdx: uniqueIndex("ehs_risk_assessments_code_idx").on(t.assessmentCode),
+  warehouseIdIdx: index("ehs_risk_assessments_warehouse_idx").on(t.warehouseId),
+  riskLevelIdx: index("ehs_risk_assessments_risk_level_idx").on(t.riskLevel),
+}));
+
+export const ehsCapas = sqliteTable("ehs_capas", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  capaNumber: text("capa_number").notNull().unique(), // EHS-CAPA-2026-0001
+  sourceRefType: text("source_ref_type").notNull().default("MANUAL"), // INCIDENT, AUDIT, JSA, FIRE_SAFETY, MANUAL
+  sourceRefId: integer("source_ref_id"),
+  sourceRefCode: text("source_ref_code"),
+  title: text("title").notNull(),
+  actionType: text("action_type").notNull().default("CORRECTIVE"), // CORRECTIVE, PREVENTIVE
+  rootCauseSummary: text("root_cause_summary"),
+  actionPlan: text("action_plan").notNull(),
+  assignedTo: integer("assigned_to").references(() => employees.id),
+  assignedToName: text("assigned_to_name"),
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  warehouseName: text("warehouse_name"),
+  dueDate: text("due_date").notNull(),
+  status: text("status").notNull().default("OPEN"), // OPEN, IN_PROGRESS, VERIFIED, CLOSED
+  verificationNotes: text("verification_notes"),
+  verifiedBy: text("verified_by"),
+  verifiedAt: integer("verified_at", { mode: 'timestamp' }),
+  idempotencyKey: text("idempotency_key").unique(),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+}, (t) => ({
+  capaNumberIdx: uniqueIndex("ehs_capas_number_idx").on(t.capaNumber),
+  statusIdx: index("ehs_capas_status_idx").on(t.status),
+  assignedToIdx: index("ehs_capas_assigned_to_idx").on(t.assignedTo),
+  warehouseIdIdx: index("ehs_capas_warehouse_idx").on(t.warehouseId),
+}));
+
+export const ehsSafetyAudits = sqliteTable("ehs_safety_audits", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  auditNumber: text("audit_number").notNull().unique(), // EHS-AUD-2026-0001
+  title: text("title").notNull(),
+  auditType: text("audit_type").notNull().default("FIRE_SAFETY"), // FIRE_SAFETY, GENERAL_SAFETY, PPE, HAZMAT, ELECTRICAL, MACHINERY_LOTO
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  warehouseName: text("warehouse_name"),
+  auditDate: text("audit_date").notNull(),
+  auditorId: integer("auditor_id").references(() => employees.id),
+  auditorName: text("auditor_name").notNull(),
+  totalItems: integer("total_items").notNull().default(0),
+  passedItems: integer("passed_items").notNull().default(0),
+  failedItems: integer("failed_items").notNull().default(0),
+  scorePercent: real("score_percent").notNull().default(100),
+  result: text("result").notNull().default("PASS"), // PASS, FAIL
+  remarks: text("remarks"),
+  generatedCapaId: integer("generated_capa_id"),
+  status: text("status").notNull().default("COMPLETED"), // DRAFT, IN_PROGRESS, COMPLETED
+  idempotencyKey: text("idempotency_key").unique(),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+}, (t) => ({
+  auditNumberIdx: uniqueIndex("ehs_safety_audits_number_idx").on(t.auditNumber),
+  warehouseIdIdx: index("ehs_safety_audits_warehouse_idx").on(t.warehouseId),
+  resultIdx: index("ehs_safety_audits_result_idx").on(t.result),
+}));
+
+export const ehsAuditChecklistItems = sqliteTable("ehs_audit_checklist_items", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  auditId: integer("audit_id").notNull().references(() => ehsSafetyAudits.id, { onDelete: 'cascade' }),
+  itemDescription: text("item_description").notNull(),
+  category: text("category").notNull(),
+  isMandatory: integer("is_mandatory", { mode: 'boolean' }).notNull().default(true),
+  status: text("status").notNull().default("PASS"), // PASS, FAIL, NA
+  equipmentId: integer("equipment_id"),
+  equipmentCode: text("equipment_code"),
+  failureReason: text("failure_reason"),
+  notes: text("notes"),
+}, (t) => ({
+  auditIdIdx: index("ehs_audit_items_audit_id_idx").on(t.auditId),
+}));
+
+export const ehsFireEquipment = sqliteTable("ehs_fire_equipment", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  equipmentCode: text("equipment_code").notNull().unique(), // FE-WH01-001
+  name: text("name").notNull(),
+  type: text("type").notNull().default("FIRE_EXTINGUISHER_ABC"), // FIRE_EXTINGUISHER_ABC, FIRE_EXTINGUISHER_CO2, HYDRANT, SMOKE_DETECTOR, ALARM_PANEL, HOSE_REEL
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  warehouseName: text("warehouse_name"),
+  specificLocation: text("specific_location").notNull(),
+  lastInspectionDate: text("last_inspection_date").notNull(),
+  expiryDate: text("expiry_date").notNull(), // Inspection expiration (e.g. 6 months cycle)
+  weightKg: real("weight_kg"),
+  pressureStatus: text("pressure_status").default("NORMAL"), // NORMAL, LOW, HIGH
+  status: text("status").notNull().default("READY"), // READY, EXPIRED, MAINTENANCE, REPLACED
+  relatedAssetId: integer("related_asset_id").references(() => assets.id),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+}, (t) => ({
+  equipmentCodeIdx: uniqueIndex("ehs_fire_eq_code_idx").on(t.equipmentCode),
+  warehouseIdIdx: index("ehs_fire_eq_warehouse_idx").on(t.warehouseId),
+  expiryDateIdx: index("ehs_fire_eq_expiry_idx").on(t.expiryDate),
+  statusIdx: index("ehs_fire_eq_status_idx").on(t.status),
+}));
+
+export const ehsEnvironmentalRecords = sqliteTable("ehs_environmental_records", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  recordNumber: text("record_number").notNull().unique(), // ENV-2026-0001
+  recordType: text("record_type").notNull(), // WASTE_WATER, EXHAUST_GAS, HAZARDOUS_WASTE, NOISE_LEVEL, ENERGY_USAGE
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  warehouseName: text("warehouse_name"),
+  parameterName: text("parameter_name").notNull(), // pH, COD, BOD5, TSS, CO, SO2, NOx, Decibel, Hazardous Kg
+  measuredValue: real("measured_value").notNull(),
+  standardThreshold: real("standard_threshold").notNull(),
+  unit: text("unit").notNull(), // mg/L, ppm, dBA, kg, kWh
+  complianceStatus: text("compliance_status").notNull().default("COMPLIANT"), // COMPLIANT, EXCEEDED, WARNING
+  recordedDate: text("recorded_date").notNull(),
+  notes: text("notes"),
+  recordedBy: text("recorded_by").default("Cán bộ Môi trường ISO 14001"),
+  idempotencyKey: text("idempotency_key").unique(),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+}, (t) => ({
+  recordNumberIdx: uniqueIndex("ehs_env_rec_num_idx").on(t.recordNumber),
+  warehouseIdIdx: index("ehs_env_rec_warehouse_idx").on(t.warehouseId),
+  typeIdx: index("ehs_env_rec_type_idx").on(t.recordType),
+  statusIdx: index("ehs_env_rec_status_idx").on(t.complianceStatus),
+}));
+
+export const ehsSafetyPermits = sqliteTable("ehs_safety_permits", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  permitNumber: text("permit_number").notNull().unique(), // PMT-2026-0001
+  permitType: text("permit_type").notNull(), // HOT_WORK, CONFINED_SPACE, WORKING_AT_HEIGHT, LOTO_ISOLATION, CHEMICAL_HANDLING
+  targetAssetId: integer("target_asset_id").references(() => assets.id),
+  targetAssetCode: text("target_asset_code"),
+  targetAssetName: text("target_asset_name"),
+  warehouseId: integer("warehouse_id").references(() => warehouses.id),
+  warehouseName: text("warehouse_name"),
+  areaLocation: text("area_location").notNull(),
+  description: text("description").notNull(),
+  validFrom: text("valid_from").notNull(),
+  validTo: text("valid_to").notNull(),
+  applicantId: integer("applicant_id").references(() => employees.id),
+  applicantName: text("applicant_name").notNull(),
+  approverId: integer("approver_id").references(() => employees.id),
+  approverName: text("approver_name"),
+  lotoTagNumber: text("loto_tag_number"),
+  safetyChecklistJson: text("safety_checklist_json"),
+  status: text("status").notNull().default("DRAFT"), // DRAFT, APPROVED, ACTIVE, EXPIRED, CLOSED
+  closedAt: integer("closed_at", { mode: 'timestamp' }),
+  closedNotes: text("closed_notes"),
+  idempotencyKey: text("idempotency_key").unique(),
+  createdAt: integer("created_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+}, (t) => ({
+  permitNumberIdx: uniqueIndex("ehs_permits_number_idx").on(t.permitNumber),
+  targetAssetIdIdx: index("ehs_permits_asset_idx").on(t.targetAssetId),
+  statusIdx: index("ehs_permits_status_idx").on(t.status),
+  warehouseIdIdx: index("ehs_permits_warehouse_idx").on(t.warehouseId),
+}));
+
+export const ehsSiteScope = sqliteTable("ehs_site_scope", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  warehouseId: integer("warehouse_id").notNull().unique().references(() => warehouses.id),
+  warehouseName: text("warehouse_name").notNull(),
+  safetyOfficerId: integer("safety_officer_id").references(() => employees.id),
+  safetyOfficerName: text("safety_officer_name"),
+  auditFrequencyDays: integer("audit_frequency_days").notNull().default(30),
+  emergencyContact: text("emergency_contact"),
+  isActive: integer("is_active", { mode: 'boolean' }).notNull().default(true),
+  updatedAt: integer("updated_at", { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export type EhsIncident = typeof ehsIncidents.$inferSelect;
+export type NewEhsIncident = typeof ehsIncidents.$inferInsert;
+export type EhsRiskAssessment = typeof ehsRiskAssessments.$inferSelect;
+export type NewEhsRiskAssessment = typeof ehsRiskAssessments.$inferInsert;
+export type EhsCapa = typeof ehsCapas.$inferSelect;
+export type NewEhsCapa = typeof ehsCapas.$inferInsert;
+export type EhsSafetyAudit = typeof ehsSafetyAudits.$inferSelect;
+export type NewEhsSafetyAudit = typeof ehsSafetyAudits.$inferInsert;
+export type EhsAuditChecklistItem = typeof ehsAuditChecklistItems.$inferSelect;
+export type NewEhsAuditChecklistItem = typeof ehsAuditChecklistItems.$inferInsert;
+export type EhsFireEquipment = typeof ehsFireEquipment.$inferSelect;
+export type NewEhsFireEquipment = typeof ehsFireEquipment.$inferInsert;
+export type EhsEnvironmentalRecord = typeof ehsEnvironmentalRecords.$inferSelect;
+export type NewEhsEnvironmentalRecord = typeof ehsEnvironmentalRecords.$inferInsert;
+export type EhsSafetyPermit = typeof ehsSafetyPermits.$inferSelect;
+export type NewEhsSafetyPermit = typeof ehsSafetyPermits.$inferInsert;
+export type EhsSiteScope = typeof ehsSiteScope.$inferSelect;
+export type NewEhsSiteScope = typeof ehsSiteScope.$inferInsert;
+
+export * from "./schema.m01-observability";
+export * from "./schema.m03-system-config";
 
 
 

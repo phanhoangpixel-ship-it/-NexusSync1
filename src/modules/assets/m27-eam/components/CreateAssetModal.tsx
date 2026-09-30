@@ -20,6 +20,7 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
   const [model, setModel] = useState('');
   const [serialNumber, setSerialNumber] = useState('');
   const [manufacturer, setManufacturer] = useState('');
+  const [criticality, setCriticality] = useState<'A' | 'B' | 'C'>('B');
   const [purchaseCost, setPurchaseCost] = useState<number>(500000000);
   const [location, setLocation] = useState('Nhà Xưởng A — Khu Gia Công');
   const [responsibleEmployeeName, setResponsibleEmployeeName] = useState('Trần Văn Hùng (Kỹ thuật trưởng)');
@@ -45,6 +46,7 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
           model: model.trim() || 'MODEL-2026',
           serialNumber: serialNumber.trim() || `SN-${Date.now().toString().slice(-6)}`,
           manufacturer: manufacturer.trim() || 'Nexus Engineering',
+          criticality,
           purchaseCost: Number(purchaseCost),
           location,
           responsibleEmployeeName,
@@ -160,6 +162,64 @@ export const CreateAssetModal: React.FC<CreateAssetModalProps> = ({
                 onChange={(e) => setManufacturer(e.target.value)}
                 className="w-full text-xs px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
               />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              Mức Độ Trọng Yếu (Criticality Tier) <span className="text-rose-500">*</span>
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setCriticality('A')}
+                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                  criticality === 'A'
+                    ? 'border-rose-500 bg-rose-50 dark:bg-rose-950/40 text-rose-900 dark:text-rose-200 ring-2 ring-rose-400'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-xs font-bold text-rose-600 dark:text-rose-400">Tier A</span>
+                  <span className="w-2 h-2 rounded-full bg-rose-500" />
+                </div>
+                <div className="text-[11px] font-semibold text-slate-800 dark:text-slate-200">Cực Kỳ Quan Trọng</div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">Zero tolerance downtime</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCriticality('B')}
+                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                  criticality === 'B'
+                    ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 ring-2 ring-amber-400'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-xs font-bold text-amber-600 dark:text-amber-400">Tier B</span>
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                </div>
+                <div className="text-[11px] font-semibold text-slate-800 dark:text-slate-200">Quan Trọng</div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">Thiết bị chạy ca</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCriticality('C')}
+                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                  criticality === 'C'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 ring-2 ring-blue-400'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-xs font-bold text-blue-600 dark:text-blue-400">Tier C</span>
+                  <span className="w-2 h-2 rounded-full bg-blue-500" />
+                </div>
+                <div className="text-[11px] font-semibold text-slate-800 dark:text-slate-200">Tiêu Chuẩn</div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">Phụ trợ, dự phòng</div>
+              </button>
             </div>
           </div>
 

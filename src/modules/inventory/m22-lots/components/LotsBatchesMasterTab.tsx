@@ -32,7 +32,7 @@ export const LotsBatchesMasterTab: React.FC<LotsBatchesMasterTabProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  
+  const [nearExpiryDaysThreshold, setNearExpiryDaysThreshold] = useState<number>(45);
   
   // Advanced Filter States
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -242,6 +242,8 @@ export const LotsBatchesMasterTab: React.FC<LotsBatchesMasterTabProps> = ({
         
         if (expiryHorizonFilter === 'EXPIRED') {
           matchExpiryHorizon = daysToExpiry < 0;
+        } else if (expiryHorizonFilter === 'CUSTOM_THRESHOLD') {
+          matchExpiryHorizon = daysToExpiry >= 0 && daysToExpiry <= nearExpiryDaysThreshold;
         } else if (expiryHorizonFilter === 'UNDER_30') {
           matchExpiryHorizon = daysToExpiry >= 0 && daysToExpiry <= 30;
         } else if (expiryHorizonFilter === 'UNDER_90') {
@@ -251,9 +253,17 @@ export const LotsBatchesMasterTab: React.FC<LotsBatchesMasterTabProps> = ({
         }
       }
 
-      return matchSearch && matchStatus && matchWarehouse && matchZone && matchMfgDate && matchExpiryHorizon;
+      // Check statusFilter with dynamic threshold if EXPIRED_SOON
+      let finalMatchStatus = matchStatus;
+      if (statusFilter === 'EXPIRED_SOON' && lot.expDate) {
+        const expDate = new Date(lot.expDate);
+        const daysToExpiry = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        finalMatchStatus = daysToExpiry >= 0 && daysToExpiry <= nearExpiryDaysThreshold;
+      }
+
+      return matchSearch && finalMatchStatus && matchWarehouse && matchZone && matchMfgDate && matchExpiryHorizon;
     });
-  }, [lots, searchQuery, statusFilter, warehouseFilter, zoneFilter, mfgStartDate, mfgEndDate, expiryHorizonFilter]);
+  }, [lots, searchQuery, statusFilter, warehouseFilter, zoneFilter, mfgStartDate, mfgEndDate, expiryHorizonFilter, nearExpiryDaysThreshold]);
 
   const pagination = usePagination({
     totalItems: filteredLots.length,
@@ -333,11 +343,26 @@ export const LotsBatchesMasterTab: React.FC<LotsBatchesMasterTabProps> = ({
             >
               <option value="ALL">Tất cả Trạng Thái</option>
               <option value="ACTIVE">Đang Hoạt Động (Hạn Tốt)</option>
-              <option value="EXPIRED_SOON">Cảnh Báo Cận Hạn (&le; 45 ngày)</option>
+              <option value="EXPIRED_SOON">Cảnh Báo Cận Hạn (&le; {nearExpiryDaysThreshold} ngày)</option>
               <option value="EXPIRED">Đã Hết Hạn</option>
               <option value="QUARANTINED">Biệt Ly (QC Lock)</option>
               <option value="DEPLETED">Đã Xuất Hết</option>
             </select>
+
+            {/* User-Configurable Near-Expiry Threshold Input */}
+            <div className="flex items-center gap-1 px-2.5 py-1 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-lg text-xs" title="Thiết lập ngưỡng số ngày cảnh báo cận hạn cho toàn hệ thống">
+              <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="font-semibold text-amber-900 dark:text-amber-200 hidden xl:inline">Ngưỡng cận hạn:</span>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                value={nearExpiryDaysThreshold}
+                onChange={(e) => setNearExpiryDaysThreshold(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-12 px-1 py-0.5 text-center font-mono font-bold text-xs bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 rounded text-amber-900 dark:text-amber-100 focus:outline-hidden focus:ring-1 focus:ring-amber-500"
+              />
+              <span className="text-amber-700 dark:text-amber-400 font-medium text-[11px]">ngày</span>
+            </div>
 
             {/* Warehouse Quick Filter */}
             <select
@@ -572,10 +597,15 @@ export const LotsBatchesMasterTab: React.FC<LotsBatchesMasterTabProps> = ({
         <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs flex items-center justify-between">
           <div>
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Cảnh Báo Hết Hạn
+              Cảnh Báo Cận Hạn (&le; {nearExpiryDaysThreshold} ngày)
             </span>
             <div className="mt-1 text-2xl font-mono tabular-nums font-bold text-amber-600 dark:text-amber-400">
-              {lots.filter(l => l.status === 'EXPIRED_SOON').length} <span className="text-xs font-sans font-normal text-slate-500">lô</span>
+              {lots.filter(l => {
+                if (l.status === 'EXPIRED') return false;
+                if (!l.expDate) return l.status === 'EXPIRED_SOON';
+                const daysLeft = Math.ceil((new Date(l.expDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                return daysLeft >= 0 && daysLeft <= nearExpiryDaysThreshold;
+              }).length} <span className="text-xs font-sans font-normal text-slate-500">lô</span>
             </div>
           </div>
           <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-950/80 text-amber-600 dark:text-amber-300 flex items-center justify-center shrink-0 border border-amber-200 dark:border-amber-800">

@@ -10,9 +10,15 @@ import * as XLSX from 'xlsx';
 import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import { ConfirmDialogState, SelectedEntityContext } from '../../../../types';
 import { usePagination } from '../../../../hooks/usePagination';
+import { TablePagination } from '../../../../components/common/TablePagination';
 import { PaginationControl } from '../../../../components/common/PaginationControl';
+import { StatusBadge } from '../../../../components/common/StatusBadge';
+import { MoneyCell } from '../../../../components/common/MoneyCell';
+import { QtyCell } from '../../../../components/common/QtyCell';
+import { BulkActionBar } from '../../../../components/common/BulkActionBar';
 import { L3ContentState } from '../../../../components/common/L3ContentState';
 import { ENTERPRISE_MASTER_PRODUCTS } from '../../../../data/enterpriseMaster';
+import { applyTargetDocumentHighlight } from '../../../../utils/documentTargeting';
 
 export interface StockAdjustmentItem {
   id?: number;
@@ -65,6 +71,8 @@ interface StockAdjustmentMasterTabProps {
   onCreateNew: () => void;
   onSelectEntity?: (context: SelectedEntityContext) => void;
   onNotify: (type: 'success' | 'warning' | 'error' | 'info', title: string, message?: string) => void;
+  targetDocCode?: string | null;
+  onClearTarget?: () => void;
 }
 
 export const StockAdjustmentMasterTab: React.FC<StockAdjustmentMasterTabProps> = ({
@@ -77,13 +85,33 @@ export const StockAdjustmentMasterTab: React.FC<StockAdjustmentMasterTabProps> =
   onDuplicate,
   onCreateNew,
   onSelectEntity,
-  onNotify
+  onNotify,
+  targetDocCode,
+  onClearTarget,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [warehouseFilter, setWarehouseFilter] = useState<string>('ALL');
   const [selectedAdj, setSelectedAdj] = useState<StockAdjustmentRecord | null>(null);
+  const [selectedAdjustmentIds, setSelectedAdjustmentIds] = useState<number[]>([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  // Synchronize targeted document from Task Center / Notification Drawer
+  React.useEffect(() => {
+    if (targetDocCode) {
+      const code = targetDocCode.trim();
+      setSearchTerm(code);
+      const found = adjustments.find(a => 
+        a.code.toUpperCase().includes(code.toUpperCase()) || 
+        a.reason.toUpperCase().includes(code.toUpperCase())
+      );
+      if (found) {
+        setSelectedAdj(found);
+        setIsDrawerOpen(true);
+      }
+      applyTargetDocumentHighlight(code);
+    }
+  }, [targetDocCode, adjustments]);
 
   // Confirm dialog state for Rule #19
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
@@ -257,6 +285,46 @@ export const StockAdjustmentMasterTab: React.FC<StockAdjustmentMasterTabProps> =
         </div>
       </div>
 
+      {/* ACTIVE TARGET DOCUMENT FOCUS BANNER (Chỉ trỏ & định vị chính xác vị trí chứng từ từ Thông Báo / Task Center) */}
+      {targetDocCode && (
+        <div 
+          id="m20-target-doc-banner"
+          className="bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 dark:from-blue-950/80 dark:via-indigo-950/70 dark:to-blue-950/80 border-2 border-blue-400/80 dark:border-blue-600 p-3 sm:p-4 rounded-2xl shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs shrink-0 animate-bounce">
+              <Boxes className="w-5 h-5 text-amber-300" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2 py-0.5 rounded-md bg-blue-600 text-white text-[10px] font-mono font-bold tracking-wider uppercase shadow-2xs">
+                  ĐANG ĐỊNH VỊ CHỨNG TỪ
+                </span>
+                <span className="font-mono font-bold text-sm text-blue-950 dark:text-blue-100 bg-white dark:bg-slate-900 px-2.5 py-0.5 rounded-md border border-blue-200 dark:border-blue-800">
+                  {targetDocCode}
+                </span>
+              </div>
+              <p className="text-xs text-blue-900 dark:text-blue-200 font-medium mt-1">
+                Hệ thống đã tự động lọc và mở đúng phiếu điều chỉnh kiểm kê để bạn rà soát và xác nhận bù trừ mà không cần tìm kiếm.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                if (onClearTarget) onClearTarget();
+                setSearchTerm('');
+              }}
+              className="px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+            >
+              Xem tất cả
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* L1: COMMAND BAR (SEARCH, FILTERS, ACTIONS)                                */}
       {/* ========================================================================= */}
@@ -377,23 +445,40 @@ export const StockAdjustmentMasterTab: React.FC<StockAdjustmentMasterTabProps> =
                   const isApproved = adj.status === 'APPROVED';
                   const isRejected = adj.status === 'REJECTED';
                   const isDraft = adj.status === 'DRAFT';
+                  const isTargetMatch = Boolean(
+                    targetDocCode && (
+                      adj.code.toUpperCase().includes(targetDocCode.toUpperCase()) ||
+                      adj.reason.toUpperCase().includes(targetDocCode.toUpperCase())
+                    )
+                  );
 
                   return (
                     <tr
                       key={adj.id}
+                      id={isTargetMatch ? 'target-focused-adj' : undefined}
+                      data-adj-code={adj.code}
                       onClick={() => handleOpenDrawer(adj)}
                       className={`hover:bg-slate-100/80 dark:hover:bg-slate-700/60 transition-colors duration-150 cursor-pointer ${
-                        selectedAdj?.id === adj.id ? 'border-l-4 border-blue-600 bg-blue-50/70 dark:bg-slate-700/80' :
-                        isApproved ? 'border-l-4 border-emerald-500/60 bg-emerald-50/10 dark:bg-emerald-950/10' :
-                        isRejected ? 'border-l-4 border-rose-500 bg-rose-50/20 dark:bg-rose-950/20' :
-                        'border-l-4 border-amber-500 bg-amber-50/15 dark:bg-amber-950/10'
+                        isTargetMatch
+                          ? 'highlight-active-row border-l-4 border-blue-600 bg-blue-50/90 dark:bg-blue-950/70 ring-2 ring-blue-500/60 shadow-md'
+                          : selectedAdj?.id === adj.id ? 'border-l-4 border-blue-600 bg-blue-50/70 dark:bg-slate-700/80' :
+                          isApproved ? 'border-l-4 border-emerald-500/60 bg-emerald-50/10 dark:bg-emerald-950/10' :
+                          isRejected ? 'border-l-4 border-rose-500 bg-rose-50/20 dark:bg-rose-950/20' :
+                          'border-l-4 border-amber-500 bg-amber-50/15 dark:bg-amber-950/10'
                       }`}
                     >
                       {/* Code */}
                       <td className="p-3">
-                        <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800">
-                          {adj.code}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {isTargetMatch && (
+                            <span className="px-1.5 py-0.5 rounded bg-blue-600 text-white text-[9px] font-mono font-bold tracking-tight uppercase shadow-2xs animate-pulse">
+                              🎯 ĐÍCH ĐẾN
+                            </span>
+                          )}
+                          <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800">
+                            {adj.code}
+                          </span>
+                        </div>
                       </td>
 
                       {/* Warehouse */}

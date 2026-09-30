@@ -12,6 +12,10 @@ const router = Router();
 // =========================================================================
 async function ensureScmSeedData() {
   try {
+    const tableCheck = await client.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND (name = 'mps_schedules' OR name = 'scm_forecasts')");
+    if (tableCheck.rows.length < 2) {
+      return; // Tables not yet bootstrapped, gracefully skip early initialization
+    }
     const forecastCount = (await db.select({ count: sql<number>`count(*)` }).from(schema.scmForecasts).get())?.count || 0;
     if (forecastCount === 0) {
       const prods = await db.select().from(schema.products).all();

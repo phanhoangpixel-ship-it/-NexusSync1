@@ -61,13 +61,16 @@ import { lotsRouter } from "./src/routes/lots.routes";
 import { serialsRouter } from "./src/routes/serials.routes";
 import { settingsRouter } from "./src/routes/settings.routes";
 import { industryProfilesRouter } from "./src/routes/industryProfiles.routes";
+import { workspaceObservabilityRouter } from "./src/routes/workspaceObservability.routes";
 import { orgWorkflowRouter } from "./src/routes/orgWorkflow.routes";
 import wmsExtendedRouter from "./src/routes/wmsExtended.routes";
 import { commissionRouter } from "./src/routes/commission.routes";
 import { auditRouter } from "./src/routes/audit.routes";
+import { serviceDeskRouter } from "./src/routes/serviceDesk.routes";
 import { AuditService } from "./engines/auditService";
 import { CostingShadowRunner } from "./engines/costingShadowRunner";
 import { costingEngine } from "./engines/costingEngine";
+import { runCycle as runObservabilityCycle } from "./engines/observabilityProjectorService";
 
 
 async function startServer() {
@@ -81,6 +84,11 @@ async function startServer() {
     await bootstrapDatabase();
     await AuditService.seedInitialChainIfEmpty();
     await AuditService.init();
+
+    // Background M01 Observability Projector Loop (Chu kỳ 15s)
+    setInterval(() => {
+      runObservabilityCycle().catch(() => {});
+    }, 15000);
   } catch (err) {
     console.error("Warning during bootstrapDatabase:", err);
   }
@@ -91,6 +99,7 @@ async function startServer() {
   app.use(coreRouter);
   app.use(authRouter);
   app.use(workspaceRouter);
+  app.use(workspaceObservabilityRouter);
   app.use(masterDataRouter);
   app.use(inventoryRouter);
   app.use(returnsRouter);
@@ -123,6 +132,7 @@ async function startServer() {
   app.use(industryProfilesRouter);
   app.use(orgWorkflowRouter);
   app.use(commissionRouter);
+  app.use(["/api/service-desk", "/api/issues"], serviceDeskRouter);
 
   // --- PHASE 6: M24 WMS EXTENDED ROUTER (WAVE PICKING, LPN, DOCK SCHEDULING, SERVICE ENGINES) ---
   app.use(wmsExtendedRouter);

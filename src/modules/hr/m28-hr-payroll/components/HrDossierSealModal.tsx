@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, ShieldCheck, Lock, FileText, CheckCircle2, Copy } from 'lucide-react';
 
 interface HrDossierSealModalProps {
@@ -22,6 +22,18 @@ export const HrDossierSealModal: React.FC<HrDossierSealModalProps> = ({
   const [notes, setNotes] = useState('Niêm phong toàn diện hồ sơ định biên nhân sự, bảng lương và định khoản GL kỳ hiện tại');
   const [submitting, setSubmitting] = useState(false);
   const [sealResult, setSealResult] = useState<any | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -54,8 +66,14 @@ export const HrDossierSealModal: React.FC<HrDossierSealModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col">
+    <div 
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-800/40">
           <div className="flex items-center gap-3">
@@ -64,12 +82,12 @@ export const HrDossierSealModal: React.FC<HrDossierSealModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white">Niêm Phong Hồ Sơ HR &amp; Bảng Lương (DMS-M02)</h3>
-              <p className="text-xs text-slate-500">Tạo mã băm SHA-256 bất biến &amp; khóa chứng từ nhân sự vào sổ kiểm toán</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Tạo mã băm SHA-256 bất biến &amp; khóa chứng từ nhân sự vào sổ kiểm toán</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>

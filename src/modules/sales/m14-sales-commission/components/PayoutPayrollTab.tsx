@@ -1,3 +1,5 @@
+import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
+import { TablePagination } from '../../../../components/common/TablePagination';
 import React, { useState, useMemo } from 'react';
 import { CommissionPayoutBatch, CommissionPayoutItemRecord } from './types';
 import { ConfirmDialogState } from '../../../../types';
@@ -40,6 +42,9 @@ export const PayoutPayrollTab: React.FC<PayoutPayrollTabProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [payoutPage, setPayoutPage] = useState<number>(1);
+  const [payoutPageSize, setPayoutPageSize] = useState<number>(15);
+  const [selectedPayoutIds, setSelectedPayoutIds] = useState<string[]>([]);
 
   // Create Payout Modal
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -472,17 +477,15 @@ export const PayoutPayrollTab: React.FC<PayoutPayrollTabProps> = ({
           </table>
         </div>
 
-        {/* Sticky Pagination */}
-        <div className="p-2.5 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 rounded-b-xl">
-          <PaginationControl
-            currentPage={pagination.page}
-            totalPages={pagination.totalPages}
-            pageSize={pagination.pageSize}
-            totalItems={filteredPayouts.length}
-            onPageChange={pagination.setPage}
-            onPageSizeChange={pagination.setPageSize}
-          />
-        </div>
+        {/* Standard Table Pagination */}
+        <TablePagination
+          currentPage={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={filteredPayouts.length}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          pageSizeOptions={[10, 15, 25, 50, 100]}
+        />
       </div>
 
       {/* Modal: Create Payout Batch */}

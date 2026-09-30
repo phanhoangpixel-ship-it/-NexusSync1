@@ -170,90 +170,83 @@ export const M14SalesCommissionWorkspace: React.FC<M14SalesCommissionWorkspacePr
 
   return (
     <div className="space-y-4 pb-12">
-      {/* L0: Top Header Banner & Quick Actions */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-5 text-white shadow-xl border border-indigo-900/50">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-200 text-xs font-semibold">
-              <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-              M14 — SALES COMMISSION & INCENTIVE ENGINE (CHÍNH DANH)
-            </div>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
-              <Award className="w-6 h-6 text-amber-400" />
-              Động Cơ Hoa Hồng & Động Lực Kinh Doanh
-            </h1>
-            <p className="text-xs text-slate-300 max-w-3xl leading-relaxed">
-              Quản lý toàn diện chính sách hoa hồng theo Doanh thu & Biên Lợi Nhuận Gộp (M42 COGS), Tự động khấu trừ thu hồi RMA (M15), Xử lý khiếu nại minh bạch và Tích hợp chi trả qua Bảng lương M28 HR & Sổ cái M30 GL.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              onClick={() => {
-                setShowQaModal(true);
-                if (!qaResults) handleRunQaCertification();
-              }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 rounded-xl text-xs font-bold text-amber-200 transition-colors shadow-xs cursor-pointer"
-              title="Kiểm thử toàn diện 19/19 kịch bản & Niêm phong bất biến Pha 12"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-              <span>Chứng Nhận QA 19/19 (Pha 12)</span>
-            </button>
-            <button
-              onClick={handleSubscribeEvents}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600/40 hover:bg-indigo-600/60 border border-indigo-400/40 rounded-xl text-xs font-semibold text-indigo-100 transition-colors shadow-xs cursor-pointer"
-              title="Đăng ký lắng nghe sự kiện tự động từ M05 EventBus"
-            >
-              <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-              <span>EventBus M05</span>
-            </button>
-            <button
-              onClick={fetchData}
-              disabled={loading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-xs font-semibold text-white transition-colors cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>Làm Mới</span>
-            </button>
-          </div>
+      {/* L0: Compact Control Bar & Quick Actions */}
+      <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs flex flex-col sm:flex-row justify-between items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300 font-mono text-[10px] font-bold border border-indigo-200 dark:border-indigo-800">
+            M14 • SALES COMMISSION ENGINE
+          </span>
+          <span className="text-xs text-slate-500 dark:text-slate-400 hidden lg:inline">
+            Hoa Hồng Theo Doanh Thu & Lợi Nhuận Gộp • RMA Clawback
+          </span>
         </div>
 
-        {/* Global Overview Metrics */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-4 pt-4 border-t border-white/10">
-          <div className="bg-white/5 backdrop-blur-sm p-3 rounded-xl border border-white/10">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Tổng Hoa Hồng Đã Tính</span>
-            <span className="text-sm sm:text-base font-extrabold text-white font-mono tabular-nums">
-              {metrics.totalAccrued.toLocaleString('vi-VN')} ₫
-            </span>
-          </div>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+          <button
+            onClick={() => {
+              setShowQaModal(true);
+              if (!qaResults) handleRunQaCertification();
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 rounded-lg text-xs font-bold text-amber-700 dark:text-amber-300 transition-colors cursor-pointer"
+            title="Kiểm thử toàn diện 19/19 kịch bản"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <span>QA 19/19</span>
+          </button>
+          <button
+            onClick={handleSubscribeEvents}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-semibold text-indigo-700 dark:text-indigo-300 transition-colors cursor-pointer"
+            title="Đăng ký lắng nghe sự kiện tự động từ M05 EventBus"
+          >
+            <Radio className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 animate-pulse" />
+            <span>EventBus M05</span>
+          </button>
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : 'text-slate-500 dark:text-slate-400'}`} />
+            <span>Làm Mới</span>
+          </button>
+        </div>
+      </div>
 
-          <div className="bg-white/5 backdrop-blur-sm p-3 rounded-xl border border-white/10">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Tính Theo Margin M42</span>
-            <span className="text-sm sm:text-base font-extrabold text-emerald-400 font-mono tabular-nums">
-              {metrics.marginBasedCount} bút toán
-            </span>
-          </div>
+      {/* Global Overview Metrics */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+          <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block mb-0.5">Tổng Hoa Hồng Đã Tính</span>
+          <span className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white font-mono tabular-nums">
+            {metrics.totalAccrued.toLocaleString('vi-VN')} ₫
+          </span>
+        </div>
 
-          <div className="bg-white/5 backdrop-blur-sm p-3 rounded-xl border border-white/10">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Khấu Trừ Thu Hồi RMA</span>
-            <span className="text-sm sm:text-base font-extrabold text-rose-400 font-mono tabular-nums">
-              -{metrics.totalClawback.toLocaleString('vi-VN')} ₫
-            </span>
-          </div>
+        <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+          <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block mb-0.5">Tính Theo Margin M42</span>
+          <span className="text-sm sm:text-base font-extrabold text-emerald-600 dark:text-emerald-400 font-mono tabular-nums">
+            {metrics.marginBasedCount} bút toán
+          </span>
+        </div>
 
-          <div className="bg-white/5 backdrop-blur-sm p-3 rounded-xl border border-white/10">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Khiếu Nại Cần Xử Lý</span>
-            <span className="text-sm sm:text-base font-extrabold text-amber-400 font-mono tabular-nums">
-              {metrics.openDisputesCount} phiếu mở
-            </span>
-          </div>
+        <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+          <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block mb-0.5">Khấu Trừ Thu Hồi RMA</span>
+          <span className="text-sm sm:text-base font-extrabold text-rose-600 dark:text-rose-400 font-mono tabular-nums">
+            -{metrics.totalClawback.toLocaleString('vi-VN')} ₫
+          </span>
+        </div>
 
-          <div className="bg-white/5 backdrop-blur-sm p-3 rounded-xl border border-white/10 col-span-2 sm:col-span-1">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Quyết Toán Chờ Chi</span>
-            <span className="text-sm sm:text-base font-extrabold text-indigo-300 font-mono tabular-nums">
-              {metrics.pendingPayoutsAmount.toLocaleString('vi-VN')} ₫
-            </span>
-          </div>
+        <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+          <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block mb-0.5">Khiếu Nại Cần Xử Lý</span>
+          <span className="text-sm sm:text-base font-extrabold text-amber-600 dark:text-amber-400 font-mono tabular-nums">
+            {metrics.openDisputesCount} phiếu mở
+          </span>
+        </div>
+
+        <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs col-span-2 sm:col-span-1">
+          <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block mb-0.5">Quyết Toán Chờ Chi</span>
+          <span className="text-sm sm:text-base font-extrabold text-indigo-600 dark:text-indigo-400 font-mono tabular-nums">
+            {metrics.pendingPayoutsAmount.toLocaleString('vi-VN')} ₫
+          </span>
         </div>
       </div>
 

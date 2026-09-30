@@ -1,13 +1,19 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 /* ========================================================================= */
 /* NEXUSSYNC ERP - GLOBAL HIGH-CONTRAST & THEME LEGIBILITY ENGINE            */
 /* ========================================================================= */
 
 /* Base typography and form controls contrast standards */
 @layer base {
+  html,
   body {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -314,6 +320,256 @@ table td div:not([class*="font-mono"]):not([class*="tabular-nums"]):not([class*=
   }
 }
 
+/* ========================================================================= */
+/* NEXUSSYNC ERP - M31 & M35 UNIFIED DARK MODE ENTERPRISE FINANCES ENGINE    */
+/* Guarantees Consistent Contrast Ratios (WCAG AA), Surfaces & Elevations     */
+/* ========================================================================= */
+
+/* 1. Finance Workspace Root Surfaces & Depth Levels */
+.dark .finance-workspace,
+.dark .m30-workspace,
+.dark .m31-workspace,
+.dark .m35-workspace,
+.dark [data-module="M30"],
+.dark [data-module="M31"],
+.dark [data-module="M35"],
+.dark .m30-container,
+.dark .m31-container,
+.dark .m35-container {
+  color-scheme: dark;
+  background-color: #0b0f19;
+  color: #f1f5f9;
+}
+
+/* 2. Unified Card & Surface Elevations */
+.dark .finance-card,
+.dark .m30-card,
+.dark .m31-card,
+.dark .m35-card,
+.dark [data-surface="card"],
+.dark .surface-card {
+  background-color: #0f172a !important;
+  border: 1px solid #1e293b !important;
+  color: #f8fafc !important;
+}
+
+.dark .finance-card-elevated,
+.dark .m30-card-elevated,
+.dark .m31-card-elevated,
+.dark .m35-card-elevated,
+.dark [data-surface="elevated"] {
+  background-color: #1e293b !important;
+  border: 1px solid #334155 !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3) !important;
+}
+
+.dark .finance-card-nested,
+.dark .m30-well,
+.dark .m31-well,
+.dark .m35-well,
+.dark [data-surface="well"] {
+  background-color: #0b1120 !important;
+  border: 1px solid #1e293b !important;
+}
+
+/* 3. KPI & Metrics Summary Blocks (WCAG AA Minimum 4.5:1 Contrast) */
+.dark .finance-kpi-card,
+.dark .m30-stat-card,
+.dark .m31-stat-card,
+.dark .m35-kpi-card {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
+  border: 1px solid #334155 !important;
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.dark .finance-kpi-title,
+.dark .m31-stat-label,
+.dark .m35-kpi-label {
+  color: #94a3b8 !important;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dark .finance-kpi-value,
+.dark .m31-stat-value,
+.dark .m35-kpi-value {
+  color: #f8fafc !important;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-feature-settings: 'tnum';
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+/* 4. Enterprise Data Tables in Dark Mode */
+.dark .finance-table,
+.dark .m31-table,
+.dark .m35-table {
+  background-color: #0f172a;
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+
+.dark .finance-table thead th,
+.dark .m31-table thead th,
+.dark .m35-table thead th {
+  background-color: #1e293b !important;
+  color: #cbd5e1 !important;
+  border-bottom: 1px solid #334155 !important;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.625rem 0.875rem;
+}
+
+.dark .finance-table tbody tr,
+.dark .m31-table tbody tr,
+.dark .m35-table tbody tr {
+  background-color: transparent;
+  border-bottom: 1px solid #1e293b;
+  transition: background-color 0.15s ease;
+}
+
+.dark .finance-table tbody tr:hover,
+.dark .m31-table tbody tr:hover,
+.dark .m35-table tbody tr:hover {
+  background-color: rgba(30, 41, 59, 0.7) !important;
+}
+
+.dark .finance-table tbody td,
+.dark .m31-table tbody td,
+.dark .m35-table tbody td {
+  color: #e2e8f0;
+  border-bottom: 1px solid #1e293b;
+  padding: 0.625rem 0.875rem;
+}
+
+.dark .finance-table tbody tr.row-selected,
+.dark .m31-table tbody tr.row-selected,
+.dark .m35-table tbody tr.row-selected {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+  border-left: 3px solid #3b82f6 !important;
+}
+
+/* 5. Financial Tabular Figures & Account Numbers */
+.dark .financial-number,
+.dark .m31-amount,
+.dark .m35-cost {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-feature-settings: 'tnum';
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.dark .amount-revenue,
+.dark .amount-positive {
+  color: #34d399 !important; /* emerald-400 */
+}
+
+.dark .amount-expense,
+.dark .amount-negative,
+.dark .amount-liability {
+  color: #f87171 !important; /* red-400 */
+}
+
+.dark .amount-receivable,
+.dark .amount-info {
+  color: #60a5fa !important; /* blue-400 */
+}
+
+.dark .amount-tax,
+.dark .amount-special {
+  color: #c084fc !important; /* purple-400 */
+}
+
+/* 6. Standardized High-Contrast Status Badges */
+.dark .status-badge-success,
+.dark .badge-paid,
+.dark .badge-approved,
+.dark .badge-completed {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(52, 211, 153, 0.3) !important;
+}
+
+.dark .status-badge-warning,
+.dark .badge-partial,
+.dark .badge-pending,
+.dark .badge-in-progress {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+  color: #fbbf24 !important;
+  border: 1px solid rgba(251, 191, 36, 0.3) !important;
+}
+
+.dark .status-badge-danger,
+.dark .badge-overdue,
+.dark .badge-rejected,
+.dark .badge-cancelled,
+.dark .badge-discrepancy {
+  background-color: rgba(244, 63, 94, 0.15) !important;
+  color: #fb7185 !important;
+  border: 1px solid rgba(251, 113, 133, 0.3) !important;
+}
+
+.dark .status-badge-info,
+.dark .badge-issued,
+.dark .badge-sent,
+.dark .badge-draft {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+  color: #60a5fa !important;
+  border: 1px solid rgba(96, 165, 250, 0.3) !important;
+}
+
+/* 7. Modal Windows & Popups in M31 & M35 */
+.dark .finance-modal-surface,
+.dark .m31-modal,
+.dark .m35-modal {
+  background-color: #0f172a !important;
+  border: 1px solid #334155 !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8) !important;
+  color: #f8fafc !important;
+}
+
+.dark .finance-modal-header,
+.dark .m31-modal-header,
+.dark .m35-modal-header {
+  border-bottom: 1px solid #1e293b !important;
+  color: #f8fafc !important;
+}
+
+.dark .finance-modal-footer,
+.dark .m31-modal-footer,
+.dark .m35-modal-footer {
+  border-top: 1px solid #1e293b !important;
+  background-color: #0b0f19 !important;
+}
+
+/* 8. Callout Alerts & Regulatory Notices */
+.dark .notice-cqt,
+.dark .m31-cqt-banner {
+  background-color: rgba(30, 58, 138, 0.25) !important;
+  border: 1px solid rgba(59, 130, 246, 0.4) !important;
+  color: #bfdbfe !important;
+}
+
+.dark .notice-warning,
+.dark .m31-warning-banner {
+  background-color: rgba(120, 53, 15, 0.25) !important;
+  border: 1px solid rgba(245, 158, 11, 0.4) !important;
+  color: #fde68a !important;
+}
+
+.dark .notice-danger,
+.dark .m31-error-banner {
+  background-color: rgba(136, 19, 55, 0.25) !important;
+  border: 1px solid rgba(244, 63, 94, 0.4) !important;
+  color: #fecdd3 !important;
+}
+
 /* Custom Scrollbar for ERP Tables */
 ::-webkit-scrollbar {
   width: 6px;
@@ -448,4 +704,55 @@ table td div:not([class*="font-mono"]):not([class*="tabular-nums"]):not([class*=
     padding-left: 0.75rem !important;
     padding-right: 0.75rem !important;
   }
+}
+
+/* ========================================================================= */
+/* NEXUSSYNC ERP - TARGET DOCUMENT FOCUS & HIGH-VISIBILITY PULSE ANIMATION  */
+/* ========================================================================= */
+@keyframes nexusTargetPulseGlow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.75), inset 0 0 0 2px rgba(37, 99, 235, 0.9);
+    background-color: rgba(219, 234, 254, 0.95);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(37, 99, 235, 0.2), inset 0 0 0 3px rgba(37, 99, 235, 1);
+    background-color: rgba(191, 219, 254, 0.9);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.75), inset 0 0 0 2px rgba(37, 99, 235, 0.9);
+    background-color: rgba(219, 234, 254, 0.95);
+  }
+}
+
+@keyframes nexusTargetPulseGlowDark {
+  0% {
+    box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.8), inset 0 0 0 2px rgba(96, 165, 250, 0.9);
+    background-color: rgba(30, 58, 138, 0.9);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(96, 165, 250, 0.25), inset 0 0 0 3px rgba(96, 165, 250, 1);
+    background-color: rgba(30, 64, 175, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.8), inset 0 0 0 2px rgba(96, 165, 250, 0.9);
+    background-color: rgba(30, 58, 138, 0.9);
+  }
+}
+
+.highlight-active-row {
+  animation: nexusTargetPulseGlow 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+  position: relative !important;
+  z-index: 30 !important;
+  border-left: 6px solid #2563eb !important;
+  outline: 2px solid #3b82f6 !important;
+  outline-offset: -1px !important;
+  border-radius: 8px !important;
+  transition: all 0.3s ease-in-out !important;
+}
+
+.dark .highlight-active-row,
+.cool-dark .highlight-active-row {
+  animation: nexusTargetPulseGlowDark 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+  border-left: 6px solid #60a5fa !important;
+  outline: 2px solid #60a5fa !important;
 }

@@ -383,7 +383,7 @@ router.post(
           assignedPickerId: user.id || 1,
           createdAt: new Date(),
           updatedAt: new Date()
-        })
+        } as any)
         .returning();
 
       for (const item of items) {
@@ -398,7 +398,7 @@ router.post(
           locationId: item.locationId ? Number(item.locationId) : null,
           status: "PENDING",
           createdAt: new Date()
-        });
+        } as any);
       }
 
       // Record Audit Trail (Rule #02 / M02)
@@ -805,7 +805,7 @@ router.post(
           sealedByUserId: user.id || 1,
           createdAt: new Date(),
           updatedAt: new Date()
-        })
+        } as any)
         .returning();
 
       for (const c of contents) {
@@ -818,7 +818,7 @@ router.post(
           lotNo: c.lotNo || null,
           serialNo: c.serialNo || null,
           createdAt: new Date()
-        });
+        } as any);
       }
 
       await AuditService.recordAuditLog({
@@ -1723,7 +1723,7 @@ async function runM24OperationalTestVerifications(): Promise<M24EndpointTestCase
       if (spec.domain === "WAVE_PICKING") {
         await db.select().from(schema.wavePicks).limit(1);
       } else if (spec.domain === "LPN_PALLET") {
-        await db.select().from(schema.lpns).limit(1);
+        await db.select().from(schema.lpn).limit(1);
       } else if (spec.domain === "DOCK_GATE") {
         await db.select().from(schema.dockAppointments).limit(1);
       } else if (spec.domain === "CARRIER_FREIGHT") {

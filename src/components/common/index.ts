@@ -1,7 +1,6 @@
 /**
  * NexusSync ERP - Core Common Components Index
  */
-
 export { GlobalErrorBoundary } from './GlobalErrorBoundary';
 export { GlobalThemeProvider, useGlobalTheme } from './GlobalThemeProvider';
 export { EnterpriseTable } from './EnterpriseTable';
@@ -36,3 +35,24 @@ export type { CurrencyInputProps } from './CurrencyInput';
 export { CurrencyInputField } from './CurrencyInputField';
 export { DisplayScaleSelector } from './DisplayScaleSelector';
 
+// Enterprise Presentation Standardization Components (Wave 1-4)
+export { TablePagination } from './TablePagination';
+export type { TablePaginationProps } from './TablePagination';
+export { BulkActionBar } from './BulkActionBar';
+export type { BulkActionBarProps, BulkActionItem } from './BulkActionBar';
+export { StatusBadge } from './StatusBadge';
+export type { StatusBadgeProps, StatusBadgeVariant } from './StatusBadge';
+export { MoneyCell } from './MoneyCell';
+export type { MoneyCellProps } from './MoneyCell';
+export { QtyCell } from './QtyCell';
+export type { QtyCellProps } from './QtyCell';
+export { EmptyState } from './EmptyState';
+export type { EmptyStateProps } from './EmptyState';
+export { KpiBar } from './KpiBar';
+export type { KpiBarProps, KpiMetricItem } from './KpiBar';
+export { FilterBar } from './FilterBar';
+export type { FilterBarProps, FilterDropdownConfig, FilterOption } from './FilterBar';
+export { DetailDrawer } from './DetailDrawer';
+export type { DetailDrawerProps } from './DetailDrawer';
+export { StandardModuleLayout } from './StandardModuleLayout';
+export type { StandardModuleLayoutProps } from './StandardModuleLayout';

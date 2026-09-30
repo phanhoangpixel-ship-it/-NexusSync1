@@ -1,3 +1,4 @@
+import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import React from 'react';
 import { SodDiagnosticRule, SuperAdminDetailItem } from './types';
 import { ConfirmDialogState } from '../../../../types';

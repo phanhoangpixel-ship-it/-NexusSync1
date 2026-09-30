@@ -7,7 +7,12 @@
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
+    "lint": "tsc --noEmit",
+    "test:m01": "tsx scripts/test-m01-observability.ts",
+    "test:activity-center": "tsx scripts/test-activity-task-center.ts",
     "test:m17": "tsx scripts/test-m17-inventory-core.ts",
+    "test:m33": "tsx scripts/test-m33-bank-reconciliation.ts",
+    "test:trace-360": "tsx scripts/test-trace-360.ts",
     "verify:modules": "tsx scripts/verify-workspace-modules.ts"
   },
   "dependencies": {

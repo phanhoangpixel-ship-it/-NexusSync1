@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { SelectedEntityContext } from '../../../../types/index';
 import { useWorkspaceSessionTab } from '../../../../hooks/useWorkspaceSessionTab';
 import { useWorkspaceAction } from '../../../../components/shell/DomainWorkspaceShell';
@@ -35,6 +35,8 @@ import {
   ExternalLink,
   User,
   Lock,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 import { EmployeeRegistryTab } from './EmployeeRegistryTab';
@@ -87,6 +89,15 @@ export const HRWorkspace: React.FC<HRWorkspaceProps> = ({
   const [isPayrollGLModalOpen, setIsPayrollGLModalOpen] = useState(false);
   const [selectedPayrollForModal, setSelectedPayrollForModal] = useState<any | null>(null);
   const [isSealModalOpen, setIsSealModalOpen] = useState(false);
+
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
+
+  const scrollTabs = (direction: 'left' | 'right') => {
+    if (tabsContainerRef.current) {
+      const scrollAmount = direction === 'left' ? -260 : 260;
+      tabsContainerRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
 
   useEffect(() => {
     if (showCreateModal) {
@@ -294,26 +305,40 @@ export const HRWorkspace: React.FC<HRWorkspaceProps> = ({
         </div>
       </div>
 
-      {/* Navigation Tab Bar (Master Spec) */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs p-1.5 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none flex-1">
+      {/* Navigation Tab Bar (Master Enterprise Spec with Smooth Scroll & Full Visibility) */}
+      <div className="relative bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs p-1.5 flex items-center gap-1">
+        {/* Left Scroll Button */}
+        <button
+          type="button"
+          onClick={() => scrollTabs('left')}
+          title="Cuộn sang trái"
+          className="shrink-0 p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors hidden sm:flex items-center justify-center cursor-pointer"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+
+        {/* Tab Scroll Track */}
+        <div 
+          ref={tabsContainerRef}
+          className="flex items-center gap-1.5 overflow-x-auto scroll-smooth no-scrollbar flex-1 py-0.5"
+        >
           {/* Tab 1: Employees */}
           <button
             id="tab-emp-list"
             onClick={() => setActiveTab('EMPLOYEES')}
-            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+            className={`px-3 py-2 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'EMPLOYEES'
                 ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <Users className="w-4 h-4" />
+            <Users className="w-4 h-4 shrink-0" />
             <span>Hồ sơ Nhân sự</span>
             <span
-              className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold ${
+              className={`px-1.5 py-0.5 rounded-md text-[11px] font-mono font-bold ${
                 activeTab === 'EMPLOYEES'
                   ? 'bg-blue-700 text-white'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
               }`}
             >
               {employees.length}
@@ -324,13 +349,13 @@ export const HRWorkspace: React.FC<HRWorkspaceProps> = ({
           <button
             id="tab-attendance"
             onClick={() => setActiveTab('ATTENDANCE')}
-            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+            className={`px-3 py-2 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'ATTENDANCE'
                 ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <Clock className="w-4 h-4" />
+            <Clock className="w-4 h-4 shrink-0" />
             <span>Chấm công &amp; Điểm danh</span>
           </button>
 
@@ -338,19 +363,19 @@ export const HRWorkspace: React.FC<HRWorkspaceProps> = ({
           <button
             id="tab-leaves"
             onClick={() => setActiveTab('LEAVES')}
-            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+            className={`px-3 py-2 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'LEAVES'
                 ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <Calendar className="w-4 h-4" />
+            <Calendar className="w-4 h-4 shrink-0" />
             <span>Đơn Nghỉ phép</span>
             <span
-              className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold ${
+              className={`px-1.5 py-0.5 rounded-md text-[11px] font-mono font-bold ${
                 activeTab === 'LEAVES'
                   ? 'bg-blue-700 text-white'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
               }`}
             >
               {leaves.length}
@@ -361,13 +386,13 @@ export const HRWorkspace: React.FC<HRWorkspaceProps> = ({
           <button
             id="tab-payroll"
             onClick={() => setActiveTab('PAYROLL')}
-            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+            className={`px-3 py-2 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'PAYROLL'
                 ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <DollarSign className="w-4 h-4" />
+            <DollarSign className="w-4 h-4 shrink-0" />
             <span>Bảng Lương &amp; Hạch toán GL</span>
           </button>
 
@@ -375,13 +400,13 @@ export const HRWorkspace: React.FC<HRWorkspaceProps> = ({
           <button
             id="tab-ess"
             onClick={() => setActiveTab('ESS')}
-            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+            className={`px-3 py-2 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'ESS'
                 ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <User className="w-4 h-4" />
+            <User className="w-4 h-4 shrink-0" />
             <span>Cổng ESS Cá nhân</span>
           </button>
 
@@ -389,13 +414,13 @@ export const HRWorkspace: React.FC<HRWorkspaceProps> = ({
           <button
             id="tab-performance"
             onClick={() => setActiveTab('PERFORMANCE')}
-            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+            className={`px-3 py-2 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'PERFORMANCE'
                 ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <Award className="w-4 h-4" />
+            <Award className="w-4 h-4 shrink-0" />
             <span>Đánh giá KPI</span>
           </button>
 
@@ -403,13 +428,13 @@ export const HRWorkspace: React.FC<HRWorkspaceProps> = ({
           <button
             id="tab-training"
             onClick={() => setActiveTab('TRAINING')}
-            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+            className={`px-3 py-2 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'TRAINING'
                 ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <GraduationCap className="w-4 h-4" />
+            <GraduationCap className="w-4 h-4 shrink-0" />
             <span>Đào tạo &amp; Chứng chỉ</span>
           </button>
 
@@ -417,16 +442,26 @@ export const HRWorkspace: React.FC<HRWorkspaceProps> = ({
           <button
             id="tab-dms-audit"
             onClick={() => setActiveTab('AUDIT_DMS')}
-            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+            className={`px-3 py-2 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'AUDIT_DMS'
                 ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <ShieldCheck className="w-4 h-4" />
+            <ShieldCheck className="w-4 h-4 shrink-0" />
             <span>Hồ sơ DMS &amp; Kiểm toán</span>
           </button>
         </div>
+
+        {/* Right Scroll Button */}
+        <button
+          type="button"
+          onClick={() => scrollTabs('right')}
+          title="Cuộn sang phải"
+          className="shrink-0 p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors hidden sm:flex items-center justify-center cursor-pointer"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Tab Contents */}

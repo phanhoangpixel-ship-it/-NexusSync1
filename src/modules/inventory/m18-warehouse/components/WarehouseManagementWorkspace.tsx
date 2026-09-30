@@ -13,6 +13,7 @@ import { WarehouseInternalOpsTab } from './WarehouseInternalOpsTab';
 import { WarehouseStockControlTab } from './WarehouseStockControlTab';
 import { WarehouseTraceabilityTab } from './WarehouseTraceabilityTab';
 import { WarehouseAnalyticsTab } from './WarehouseAnalyticsTab';
+import { M18WarehouseVisualTopologyModal } from './M18WarehouseVisualTopologyModal';
 
 interface WarehouseManagementWorkspaceProps {
   onNotify: (type: 'success' | 'warning' | 'error' | 'info', title: string, message?: string) => void;
@@ -25,6 +26,7 @@ export const WarehouseManagementWorkspace: React.FC<WarehouseManagementWorkspace
 }) => {
   // Session-persisted tab navigation (Golden Standard)
   const [activeGroup, setActiveGroup] = useWorkspaceSessionTab('M18', 'setup');
+  const [isVisualTopologyOpen, setIsVisualTopologyOpen] = React.useState<boolean>(false);
 
   return (
     <div className="space-y-4 w-full max-w-full pb-6">
@@ -43,7 +45,16 @@ export const WarehouseManagementWorkspace: React.FC<WarehouseManagementWorkspace
             Trung tâm điều hành kho vận toàn diện: 7 nhóm nghiệp vụ từ Warehouse Setup, Inbound, Outbound đến Traceability &amp; Analytics theo Golden Standard L0 - L4.
           </p>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsVisualTopologyOpen(true)}
+            className="inline-flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+          >
+            <Warehouse className="w-4 h-4 text-indigo-200" />
+            Sơ Đồ Kho 2D/3D (Topology)
+          </button>
+
           <button 
             onClick={() => onNotify('success', 'Đồng bộ Inventory Core', 'Toàn bộ trạng thái WMS đã đồng bộ với Inventory Core thành công.')}
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
@@ -173,6 +184,13 @@ export const WarehouseManagementWorkspace: React.FC<WarehouseManagementWorkspace
       {activeGroup === 'analytics' && (
         <WarehouseAnalyticsTab onNotify={onNotify} onSelectEntity={onSelectEntity} />
       )}
+
+      {/* 2D/3D Interactive Warehouse Visual Topology Modal (Phase 3) */}
+      <M18WarehouseVisualTopologyModal
+        isOpen={isVisualTopologyOpen}
+        onClose={() => setIsVisualTopologyOpen(false)}
+        onNotify={onNotify}
+      />
     </div>
   );
 };

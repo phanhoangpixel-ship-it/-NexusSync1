@@ -35,19 +35,56 @@ This catalog maps application endpoints to their respective domains, permissions
 
 ## M01 — WORKSPACE HUB & ORCHESTRATION
 
-**Entity: Workspace Summary & WorkQueue**
-- `GET    /api/workspace/summary` (Cross-module operational summary & role metrics)
-- `GET    /api/workspace/work-items` (Aggregated actionable SLA tasks across P2P, O2C, WMS, Finance)
-- `GET    /api/workspace/entity-preview` (Deep-link preview metadata for documents)
-- `GET    /api/workspace/process-chains` (Value Stream & business process chains)
+**Entity: Workspace Summary & Operational Work Queue (Tab 1 & Tab 2)**
+- `GET    /api/workspace/summary` (Cross-module operational summary, task counts, approval counts, alert metrics)
+- `GET    /api/workspace/work-items` (Dynamic query-filtered work items across M08, M20, M38, M16 with role-based RBAC `canAction` & `isReadOnly`)
+- `POST   /api/workspace/work-items/:id/action` (Whitelisted quick action dispatcher with idempotencyKey & SHA-256 M02 audit trail)
+- `POST   /api/workspace/work-items/bulk-action` (Sequential bulk action executor with per-item idempotencyKey & isolated error handling)
+- `GET    /api/workspace/entity-preview` (Deep-link entity metadata & DMS document attachment count via `/api/dms/entity/:type/:id/attachments`)
+- `GET    /api/workspace/process-chains` (Value Stream & business process chains for P2P and O2C flows)
 - `GET    /api/workspace/search` (Omnibar global cross-cutting search query)
-- `POST   /api/workspace/work-items/:id/action` (Quick action dispatcher delegating to authoritative domain services)
   - **Module:** M01 — WORKSPACE HUB
   - **Auth:** JWT / Role-based Context
-  - **Permission:** `workspace:read` (GET), `workspace:action` (POST)
-  - **Database:** Read-only Aggregation from Domain Models (`purchase_orders`, `stock_adjustments`, `invoices`, `tickets`, `audit_logs`)
-  - **Frontend Consumer:** `WorkspaceHub.tsx`, `DashboardStats.tsx`, `UnifiedActivityTaskDrawer.tsx`, `App.tsx`
-  - **Status:** Verified (M01 SSOT Aggregator)
+  - **Permission:** Built-in domain module permissions (`purchase:approve`, `stock_adjustment.approve`, `servicedesk.ticket.manage`, etc.)
+  - **Database:** Read-only Aggregation from Domain Models (`purchase_orders`, `stock_adjustments`, `tickets`, `sales_orders`, `audit_logs`). 0 direct core ledger mutations.
+  - **Frontend Consumer:** `OperationalActivityTaskCenter.tsx`, `WorkspaceHub.tsx`, `ControlTowerTab.tsx`, `UnifiedActivityTaskDrawer.tsx`
+  - **Status:** Verified (All endpoints LIVE QA PASS, 2026-09-29)
+
+
+**Entity: NexusFlow Observability & Command Hub (Phase 1 — Read-Model)**
+- `GET    /api/workspace/observability/health` (Điểm sức khoẻ tổng hệ thống + phân bố green/yellow/red module theo ngày + trạng thái snapshotComputed & cảnh báo)
+- `GET    /api/workspace/observability/topology` (Bản đồ toàn bộ module trong registry kèm chỉ số hoạt động trong ngày + cờ registryOnly + trạng thái snapshotComputed)
+- `POST   /api/workspace/observability/sync` (Kích hoạt thủ công 1 chu kỳ chiếu dữ liệu — idempotent, không phải nghiệp vụ)
+  - **Module:** M01 — WORKSPACE HUB (Observability Sub-domain)
+  - **Auth:** JWT Required (qua `requireAuth` toàn cục tại `/api`, KHÔNG có `requirePermission` riêng — quyết định kiến trúc có chủ đích vì bảng `permissions` chưa có mã `workspace:*`)
+  - **Permission:** Không có mã riêng (xem ghi chú trên)
+  - **Database:** `flow_spans`, `module_kpi_snapshots` (bảng DẪN XUẤT, chiếu lại từ `audit_logs` M02 và `outbox_events` M05 — KHÔNG PHẢI Domain Authority mới, không có module nào khác được phép ghi vào 2 bảng này ngoài `ObservabilityProjectorService`)
+  - **Cross-Module Integrations:** M02 Audit Trail (nguồn chính, read-only), M05 EventBus (nguồn phụ, read-only), toàn bộ `moduleRegistry.ts` (đọc danh mục module)
+  - **Frontend Consumer:** `M01ObservabilityPanel.tsx` (mount trong `WorkspaceHub.tsx`)
+  - **Giới hạn đã biết (Phase 1):** `slaViolations` luôn = 0 (chưa có nguồn SLA đáng tin cậy cho mọi action ngoài M38 `sla_policies`); `systemScore` là trung bình cộng đều theo module, chưa có trọng số phòng ban chính thức; không polling tự động phía client (chỉ fetch khi mount + nút làm mới thủ công); backend có `setInterval` 15s để tự động chiếu dữ liệu.
+  - **Status:** Verified (Phase 1 — 3/3 endpoint PASS với dữ liệu thật, 2026-09-26)
+
+**Entity: NexusFlow Observability (Phase 2 — Span Explorer, RCA & Remediation)**
+- `GET    /api/workspace/observability/spans` (Khảo sát luồng phân tán: danh sách flow spans phân trang, hỗ trợ filter `moduleCode`, `status`, `correlationId`)
+- `GET    /api/workspace/observability/rca/:correlationId` (Phân tích nguyên nhân gốc: truy vết chuỗi spans theo correlationId, tự động xác định root cause span)
+- `POST   /api/workspace/observability/remediate/:flowSpanId` (Tái kích hoạt retry sự kiện lỗi an toàn qua M05 EventBus cho span nguồn EVENT; từ chối 400 có kiểm soát đối với span nguồn AUDIT)
+  - **Module:** M01 — WORKSPACE HUB (Observability Sub-domain)
+  - **Auth:** JWT Required
+  - **Permission:** Không có mã riêng (nhất quán với Phase 1)
+  - **Database:** Đọc `flow_spans`; tương tác khắc phục an toàn qua M05 EventBus (không ghi đè trực tiếp kho, sổ cái, giá hay giá vốn)
+  - **Frontend Consumer:** `M01ObservabilityPanel.tsx` (Span Explorer, RCA Panel, ConfirmDialog Remediation)
+  - **Điều kiện chứng nhận Phase 2:** Remediation mới verified được nhánh từ chối (`sourceType=AUDIT` → 400) bằng dữ liệu thật. Nhánh thành công (retry một span `EVENT` bị lỗi thật) chưa từng chạy được vì `outbox_events` rỗng tại mọi thời điểm QA — không phải lỗi code, là giới hạn dữ liệu môi trường. Cần test bổ sung khi hệ thống có `outbox_events` thật phát sinh, trước khi coi tính năng "Remediation" là certified đầy đủ 100%.
+  - **Status:** Verified có điều kiện (2026-09-26)
+
+**Entity: NexusFlow Observability (Phase 3 — Trend Detection & Time-Travel Viewer)**
+- `GET    /api/workspace/observability/trends` (Phân tích xu hướng rule-based thống kê: tính toán `IMPROVING`, `DEGRADING`, `STABLE`, `INSUFFICIENT_DATA`, `NO_DATA` cho 43 module dựa trên baseline lịch sử N ngày)
+- `GET    /api/workspace/observability/trends/:moduleCode` (Lấy chuỗi dữ liệu lịch sử điểm khả dụng và tổng thao tác theo ngày của 1 module phục vụ biểu đồ Sparkline Recharts 30 ngày)
+  - **Module:** M01 — WORKSPACE HUB (Observability Sub-domain)
+  - **Auth:** JWT Required
+  - **Permission:** Không có mã riêng (nhất quán với Phase 1-2)
+  - **Database:** Đọc `module_kpi_snapshots` (hoàn toàn read-only, không có mutation mới)
+  - **Frontend Consumer:** `M01ObservabilityPanel.tsx` (Bộ chọn Time-Travel Date, Banner cảnh báo snapshotComputed, Sparkline LineChart Card 30 ngày)
+  - **Status:** Verified (Phase 3 — 100% read-only, PASS, 2026-09-26)
 
 ## M06 — INNOVATION R&D & FORMULATION
 
@@ -554,28 +591,50 @@ This catalog maps application endpoints to their respective domains, permissions
   - **Frontend Consumer:** `Invoices.tsx`
   - **Status:** Verified
 
-## FINANCE & ACCOUNTING
+## M30 / M31 / M32 — FINANCE & ACCOUNTING
 
-**Entity: Payments**
-- `GET    /api/payments`
-- `POST   /api/accounting/payments`
-  - **Module:** FINANCE
+**Entity: General Ledger & VAS Double-Entry (M30 Single-Writer Authority)**
+- `GET    /api/finance/accounts` *(Canonical COA & Trial Balance | Alias: `GET /api/accounting/accounts`)*
+- `POST   /api/finance/gl/entries` *(Canonical GL Entry Post | Alias: `POST /api/accounting/entries`)*
+- `GET    /api/finance/gl/entries` *(Canonical GL Entries Query | Alias: `GET /api/accounting/entries`)*
+- `GET    /api/finance/trial-balance` *(Canonical Trial Balance TT200 | Alias: `GET /api/accounting/trial-balance`)*
+- `POST   /api/finance/period-close` / `POST /api/finance/gl/vas911-closing` *(Canonical VAS 911 Period Closing | Alias: `POST /api/accounting/period-close`)*
+- `GET    /api/finance/financial-statements` *(Canonical BCTC Package B01/B02/B03/B05 | Alias: `GET /api/accounting/financial-statements`)*
+- `GET    /api/finance/reports/cost-center-summary` *(Canonical Cost Center & Department Breakdown)*
+- `POST   /api/finance/gl/reversal` *(Canonical Storno Reversal Journaling | Alias: `POST /api/accounting/gl/reversal`)*
+- `GET    /api/finance/reports/cross-reconciliation` *(Canonical Cross-Module Subledger Reconciliation)*
+  - **Module:** M30 — GENERAL LEDGER & FINANCIAL REPORTING
   - **Auth:** JWT Required
-  - **Permission:** `payment:read`, `payment:write`
-  - **Database:** `payments`, `accounting_entries`
-  - **Frontend Consumer:** `Payments.tsx`
+  - **Permission:** `accounting:read` (GET), `accounting:write` (POST), `finance:close` (Period Closing)
+  - **Database:** `accounting_entries`, `chart_of_accounts`, `period_closing_runs`, `audit_logs`
+  - **Cross-Module Integrations:** M02 Audit, M13 Sales, M20 WMS, M28 Payroll, M31 Invoices, M32 Treasury
+  - **Frontend Consumer:** `M30GeneralLedgerWorkspace.tsx` (`/finance`)
+  - **Status:** Verified (Canonical `/api/finance/*` with Backward-Compatible `/api/accounting/*` Aliases)
+
+**Entity: Invoices & AR/AP Management (M31)**
+- `GET    /api/invoices`
+- `GET    /api/invoices/:id`
+- `POST   /api/invoices`
+- `PUT    /api/invoices/:id/cancel`
+- `POST   /api/invoices/:id/post-gl`
+  - **Module:** M31 — INVOICES AR/AP
+  - **Auth:** JWT Required
+  - **Permission:** `invoice:read`, `invoice:write`
+  - **Database:** `invoices`, `invoice_items`, `accounting_entries`
+  - **Frontend Consumer:** `M31InvoicesArApWorkspace.tsx` (`/invoices`)
   - **Status:** Verified
 
-**Entity: Accounting & GL**
-- `GET    /api/accounting/summary`
-- `GET    /api/accounting/revenue`
-- `GET    /api/accounting/receivables/:customerId/statement`
-- `POST   /api/accounting/entries`
-  - **Module:** FINANCE
+**Entity: Payments & Treasury Management (M32)**
+- `GET    /api/treasury/bank-accounts`
+- `GET    /api/treasury/vouchers`
+- `POST   /api/treasury/vouchers`
+- `POST   /api/treasury/vouchers/:id/approve`
+- `POST   /api/treasury/transfers`
+  - **Module:** M32 — PAYMENTS & TREASURY
   - **Auth:** JWT Required
-  - **Permission:** `accounting:read`, `accounting:write`
-  - **Database:** `accounting_entries`, `accounting_accounts`
-  - **Frontend Consumer:** `Accounting.tsx`
+  - **Permission:** `payment:read`, `payment:write`
+  - **Database:** `cash_vouchers`, `bank_accounts`, `treasury_transfers`, `accounting_entries`
+  - **Frontend Consumer:** `M32PaymentsTreasuryWorkspace.tsx` (`/payments`)
   - **Status:** Verified
 
 **Entity: Costing & COGS Engine (Module M42 - WS31_COGS)**
@@ -677,6 +736,41 @@ This catalog maps application endpoints to their respective domains, permissions
   - **Database:** `outbox_events`, `processed_events`, `dlq_events`, `audit_logs`
   - **Frontend Consumer:** `M05EventBusWorkspace.tsx`
   - **Status:** Verified (Full Upgrade Complete)
+
+## M22 — LOTS, BATCHES & 360° TRACEABILITY
+
+**Entity: Lots, Expiry Tracking & Bidirectional Genealogy**
+- `GET    /api/inventory/lots` (Fetch active lots with SKU, balance, status, mfg/exp dates; alias: `/api/lots`)
+- `GET    /api/inventory/lots/:id` (Fetch single lot master record; alias: `/api/lots/:id`)
+- `POST   /api/inventory/lots` (Register new lot master record; alias: `/api/lots`)
+- `PATCH  /api/inventory/lots/:id/status` (Update lot status to ACTIVE, EXPIRED_SOON, QUARANTINED)
+- `POST   /api/inventory/lots/fefo-simulate` (Simulate FEFO dispatch allocations)
+- `GET    /api/inventory/lots/:id/trace` (Fetch bidirectional graph lineage with optional `maxDepth` and `maxNodes` params; alias: `/api/lots/:id/trace`)
+- `GET    /api/inventory/lots/:id/trace-upstream` (Fetch upstream PO -> GRN -> Supplier origin tree)
+- `GET    /api/inventory/lots/:id/trace-downstream` (Fetch downstream MO -> BOM -> FG -> SO consumption tree)
+- `GET    /api/inventory/lots/:id/ledger` (Fetch lot-specific physical inventory movements ledger)
+- `GET    /api/inventory/lots/:id/recall-dossier` (Fetch read-only simulated exposure & recall dossier)
+  - **Module:** M22 — LOTS & BATCHES
+  - **Auth:** JWT Required
+  - **Permission:** `INVENTORY_VIEW`, `lots.view`, `lots.manage`, `inventory`
+  - **Database:** `lots`, `lot_balances`, `stock_ledger`
+  - **Frontend Consumer:** `M22LotsBatchesWorkspace.tsx`, `LotsBatchesTraceabilityTab.tsx`, `LotInventoryHistoryDrilldown.tsx`
+  - **Status:** Verified (Full Traceability 360 Upgrade Complete)
+
+## M23 — SERIAL NUMBER & IMEI LIFECYCLE TRACKING
+
+**Entity: Serial Numbers, Profiles & Electronic Warranty**
+- `GET    /api/serials` (Fetch unit serial numbers list with status, SKU, warehouse, warranty)
+- `GET    /api/serials/:id/history` (Fetch serial event timeline and transactions history; alias: `/api/serials/:id/trace`)
+- `POST   /api/serials` (Register unit serial numbers with uniqueness guard)
+- `POST   /api/serials/:id/actions` (Perform unit actions: SELL, WARRANTY, TRANSFER, DEFECTIVE)
+- `GET    /api/serial-profiles` (Fetch product serial profiles and prefix rules)
+  - **Module:** M23 — SERIALS & IMEI
+  - **Auth:** JWT Required
+  - **Permission:** `SERIAL_VIEW`, `serials.view`, `serials.manage`, `inventory`
+  - **Database:** `serial_profiles`, `serial_numbers`, `serial_history`, `serial_transactions`
+  - **Frontend Consumer:** `M23SerialsWorkspace.tsx`
+  - **Status:** Verified (Full Traceability 360 Upgrade Complete)
 
 ## M24 — WMS EXTENDED (WAVE PICKING, LPN & DOCK APPOINTMENTS)
 
@@ -865,6 +959,506 @@ This catalog maps application endpoints to their respective domains, permissions
   - **Frontend Consumer:** `M36LogisticsWorkspace.tsx` (`LogisticsCostsTab.tsx`)
   - **Status:** Certified & Active (Fully Implemented & Verified)
 
+## M35 — PROJECTS & WORK BREAKDOWN STRUCTURE (WBS)
+
+**Entity: Project & WBS Tree**
+- `GET    /api/projects` (List projects with WBS nodes, progress, budgets, actual costs, and billing status)
+- `POST   /api/projects` (Create project charter with PM, branch, budget, and contract value)
+- `GET    /api/projects/:id` (Fetch single project with full WBS hierarchy, milestones, and costs)
+- `POST   /api/projects/:id/wbs` (Add/update WBS node with budget, schedule, predecessor, and assignee)
+- `PUT    /api/projects/:id/progress` (Update project/WBS progress % and automatically recalculate EVM metrics)
+  - **Module:** M35 — PROJECTS & WBS
+  - **Auth:** JWT Required
+  - **Permission:** `projects:read`, `projects:write`
+  - **Database:** `projects`, `wbs_nodes`, `project_milestones`, `project_wbs`, `project_tasks`
+  - **Frontend Consumer:** `M35ProjectsWBSWorkspace.tsx`, `ProjectWbsTreeTab.tsx`, `ProjectScheduleGanttTab.tsx`
+  - **Status:** Verified & Active
+
+**Entity: Timesheet, Resource & Job Costing**
+- `POST   /api/projects/resources` (Register labor, equipment, or subcontractor resources with hourly standard rates)
+- `POST   /api/projects/:id/timesheets` (Log daily task hours, calculate labor cost, record into projectCostLedger & post GL M30)
+- `POST   /api/projects/:id/material-issue` (Issue materials to project via InventoryService single writer & CostingEngine M42)
+- `GET    /api/projects/:id/job-cost` (Aggregated 5 cost components: Labor M28, Material M17/M42, Overhead M30, Equipment M27, Subcontract M10)
+- `GET    /api/projects/evm` (Portfolio ISO 21508 EVM summary: Portfolio BAC, PV, EV, AC, CPI, SPI, EAC, VAC)
+  - **Module:** M35 — PROJECTS & WBS / M28 — HRM / M17 — INVENTORY / M42 — COSTING / M30 — FINANCE
+  - **Auth:** JWT Required
+  - **Permission:** `projects:costing`, `projects:timesheets`, `projects:resources`
+  - **Database:** `project_resources`, `project_timesheets`, `project_cost_ledger`, `project_costs`, `stock_ledger`
+  - **Cross-Module Integrations:** M28 (Labor Rates), M17/M42 (WMS & Costing single writer), M30 (GL TK 621, 622, 623, 627 -> 154)
+  - **Frontend Consumer:** `ProjectResourcesTab.tsx`, `ProjectTimesheetsTab.tsx`, `ProjectJobCostingTab.tsx`, `ProjectEvmEngineTab.tsx`
+  - **Status:** Verified & Active
+
+**Entity: Billing & Margin**
+- `POST   /api/projects/:id/billing` (Delegate customer invoice creation to M31 Invoicing & post TK 131 / 511, 3331 to M30 GL)
+- `GET    /api/projects/:id/margin` (Calculate gross profit, gross margin %, unbilled amount, and VAS 15 / IFRS 15 POC revenue)
+  - **Module:** M35 — PROJECTS & WBS / M31 — INVOICING / M30 — FINANCE
+  - **Auth:** JWT Required
+  - **Permission:** `projects:billing`
+  - **Database:** `projects.billedAmount`, `invoices`, `accounting_entries`
+  - **Cross-Module Integrations:** M31 (Single-Writer Invoicing), M30 (Single-Writer General Ledger)
+  - **Frontend Consumer:** `ProjectJobCostingTab.tsx` (Billing Modal & POC Margin Engine)
+  - **Status:** Verified & Active
+
+
+**Entity: Asset Register, Criticality & Depreciation**
+- `GET    /api/eam/assets` (Fetch asset directory with hierarchy, location, run hours and criticality Tier A/B/C)
+- `GET    /api/eam/assets/:id` (Fetch detailed asset profile, maintenance history, and linked components)
+- `POST   /api/eam/assets` (Register or update equipment asset with criticality Tier A/B/C, parent asset and model)
+- `POST   /api/eam/assets/depreciation` (Execute periodic asset depreciation, delegating double-entry vouchers to M30 General Ledger)
+  - **Module:** M27 — EAM / M30 — FINANCE
+  - **Auth:** JWT Required
+  - **Permission:** `eam.asset.manage`, `eam.asset.view`
+  - **Database:** `fixed_assets`, `asset_hierarchy`, `accounting_entries`, `audit_logs`
+  - **Frontend Consumer:** `AssetMaintenanceWorkspace.tsx` (`AssetRegistryTab.tsx`)
+  - **Status:** Verified & Active
+
+**Entity: PM Schedule, Multi-Triggers & Work Order Lifecycle**
+- `GET    /api/eam/maintenance-schedules` (Fetch preventive maintenance schedules with trigger types)
+- `POST   /api/eam/maintenance-schedules` (Create recurring PM plan with CALENDAR, METER_RUN_HOURS, or CONDITION_IOT triggers)
+- `GET    /api/eam/work-orders` (Fetch work orders list with filter by status, priority, and sourceModule)
+- `GET    /api/eam/work-orders/:id` (Fetch work order detail with parts list and cost breakdown)
+- `POST   /api/eam/work-orders` (Create work order with origin tracking: Manual, M38 Service Desk ticket, or M15 RMA routing)
+- `PUT    /api/eam/work-orders/:id/status` (State machine transition: OPEN -> IN_PROGRESS -> WAITING_PART -> COMPLETED, terminal state guard)
+- `POST   /api/eam/work-orders/:id/issue-parts` (Issue spare parts, strictly delegating to M17 InventoryService single writer)
+- `POST   /api/eam/spare-parts/purchase-order` (Delegate spare part shortage procurement to M08 Purchase Order Single Writer)
+- `POST   /api/eam/work-orders/:id/complete` (Finalize work order sign-off, post M30 GL cost allocation Dr 627 / Cr 156, log M02 audit, and archive into M29 DMS vault)
+- `GET    /api/eam/analytics/reliability` (RAMS & OEE reliability analytics: MTBF, MTTR, Availability %, and Tier A/B/C breakdown)
+  - **Module:** M27 — EAM / M17 — INVENTORY / M08 — PURCHASING / M30 — FINANCE / M29 — DMS
+  - **Auth:** JWT Required
+  - **Permission:** `eam.workorder.manage`, `eam.workorder.execute`, `eam.parts.issue`
+  - **Database:** `maintenance_work_orders`, `maintenance_schedules`, `work_order_spare_parts`, `stock_ledger`, `stock_balances`, `purchase_orders`, `dms_documents`, `audit_logs`
+  - **Cross-Module Integrations:** M17 (Single-Writer Inventory), M08 (Single-Writer Purchasing), M30 (Single-Writer GL), M38 (Service Desk Incidents), M15 (RMA Repair Routing), M02 (Audit Log), M29 (DMS Vault)
+  - **Frontend Consumer:** `AssetMaintenanceWorkspace.tsx` (`WorkOrdersTab.tsx`, `PreventivePlansTab.tsx`, `IssueSparePartModal.tsx`, `CompleteWorkOrderModal.tsx`)
+  - **Status:** Verified & Active (13/13 Features Certified Passing)
+
+## M28 — HR & AUTOMATED PAYROLL MANAGEMENT
+
+**Entity: Employee Master, Department & Shift Management**
+- `GET    /api/hr/employees` (Fetch employees directory with joined department, position, contracts, and salary info)
+- `GET    /api/hr/employees/:id` (Fetch single employee 360 profile with contract history, attendance stats, and dependents)
+- `POST   /api/hr/employees` (Register new employee with automatic code generation EMP-xxxx, tax code, insurance salary, and dependents)
+- `GET    /api/hr/departments` (Fetch department hierarchy and manager assignments)
+- `GET    /api/hr/positions` (Fetch position directory with salary grades)
+- `GET    /api/hr/shifts` (Fetch work shifts: Fixed, Flexible, Rotating, Night with start/end time and night allowances)
+- `POST   /api/hr/shifts` (Create or update work shift schedule)
+  - **Module:** M28 — HR & PAYROLL MANAGEMENT
+  - **Auth:** JWT Required
+  - **Permission:** `hr:read`, `hr:write`, `hr:manage`
+  - **Database:** `employees`, `departments`, `positions`, `work_shifts`, `branches`, `audit_logs`
+  - **Cross-Module Integrations:** M35 (Project Resources), M27 (Maintenance Technicians), M06 (R&D Specialists), M14 (Sales Reps)
+  - **Frontend Consumer:** `HRWorkspace.tsx` (`EmployeeRegistryTab.tsx`, `TimeAttendanceTab.tsx`, `CreateEmployeeModal.tsx`)
+  - **Status:** Certified & Active
+
+**Entity: Time Attendance, Overtime & Leave Lifecycle**
+- `GET    /api/hr/attendance` (Fetch attendance records with status: PRESENT, LATE, EARLY_LEAVE, ABSENT, ON_LEAVE)
+- `POST   /api/hr/attendance` & `POST /api/hr/timesheets` (Ingest daily attendance timestamps and compute worked hours)
+- `POST   /api/hr/ess/checkin` (Self-service employee mobile/GPS check-in)
+- `GET    /api/hr/leaves` (Fetch leave request ledger with approval status)
+- `POST   /api/hr/leave-requests` & `POST /api/hr/leaves` (Submit leave request with annual, sick, maternity, or unpaid type)
+- `POST   /api/hr/leaves/:id/approve` (Approve leave request, deduct entitlement balance, and update timesheet status)
+- `POST   /api/hr/leaves/:id/reject` (Reject leave request with mandatory rejection reason)
+  - **Module:** M28 — HR & PAYROLL MANAGEMENT
+  - **Auth:** JWT Required
+  - **Permission:** `hr:attendance`, `hr:leave.manage`, `hr:leave.request`
+  - **Database:** `attendance_records`, `overtime_records`, `leave_requests`, `employees`, `audit_logs`
+  - **Frontend Consumer:** `HRWorkspace.tsx` (`TimeAttendanceTab.tsx`, `LeaveManagementTab.tsx`, `CreateLeaveRequestModal.tsx`)
+  - **Status:** Certified & Active
+
+**Entity: Labor Contracts, Statutory Payroll & GL/Treasury Delegation**
+- `GET    /api/hr/contracts` (Fetch employee labor contracts with terms, allowances, and validity dates)
+- `POST   /api/hr/contracts` (Create and activate labor contract with probation/fixed-term/indefinite types)
+- `GET    /api/hr/payrolls` (List periodic payroll runs with Gross, Insurance, PIT, and Net amounts)
+- `GET    /api/hr/payrolls/preview` (Simulate statutory payroll calculation with 10.5% insurance and 7-tier PIT)
+- `POST   /api/hr/payroll/run` & `POST /api/hr/payrolls/calculate` (Execute full statutory payroll calculation for period)
+- `GET    /api/hr/payrolls/:id/details` (Fetch full breakdown of payroll run with individual payslips)
+- `GET    /api/hr/payroll/:id/payslip` (Fetch single employee payslip with RBAC ownership guard)
+- `GET    /api/hr/ess/my-payslips` (Employee self-service confidential payslip lookup)
+- `POST   /api/hr/payroll/approve` (Approve payroll run and delegate balanced double-entry vouchers to M30 General Ledger: Dr 6421/6221 / Cr 3341, 3383, 3384, 3386, 3335)
+- `POST   /api/hr/payroll/:id/disburse` (Disburse net salary via M32 Treasury delegation: Dr 3341 / Cr 1121, set PAID status, and enforce period immutability)
+- `POST   /api/hr/seal-dossier` (Seal immutable payroll period snapshot into M29 DMS Vault with SHA-256 digital signature)
+- `GET    /api/hr/audit-logs` (Fetch tamper-evident HR audit trail from M02)
+  - **Module:** M28 — HR & PAYROLL MANAGEMENT / M30 — FINANCE / M32 — TREASURY / M29 — DMS
+  - **Auth:** JWT Required
+  - **Permission:** `hr:payroll.manage`, `hr:payroll.approve`, `hr:payroll.disburse`, `hr:payroll.view_self`
+  - **Database:** `payrolls`, `payslips`, `employee_contracts`, `employee_allowances`, `employee_deductions`, `accounting_entries`, `dms_documents`, `audit_logs`
+  - **Cross-Module Integrations:** M30 (General Ledger Accounting Single-Writer), M32 (Treasury & Bank Payment Single-Writer), M14 (Commission Ingestion), M02 (Audit Trail), M29 (DMS Cryptographic Vault)
+  - **Frontend Consumer:** `HRWorkspace.tsx` (`PayrollGlLedgerTab.tsx`, `EmployeeSelfServiceTab.tsx`, `PayrollCalculationGLModal.tsx`, `HrDmsAuditTab.tsx`, `HrDossierSealModal.tsx`)
+  - **Status:** Certified & Active
+
+---
+
+## M31 — INVOICES AR/AP & VAT MANAGEMENT
+
+**Entity: Invoices AR/AP Lifecycle & Decree 123/2020 E-Invoicing**
+- `GET    /api/invoices` (List all invoices with filters: AR/AP, status, paymentStatus, partnerId, date range)
+- `GET    /api/invoices/ar` (List customer sales invoices with VAT details, payment progress, and aging)
+- `POST   /api/invoices/ap` (Register vendor purchase invoice with PO link and VAT deductible rate)
+- `GET    /api/invoices/aging` & `GET /api/invoices/aging-report` (AR/AP debt aging breakdown: Current, 1-30, 31-60, 61-90, 90+ days)
+- `GET    /api/invoices/tax-declaration` (Central VAT tax report conforming to Circular 80/2021 Form 01/GTGT)
+- `GET    /api/invoices/:id` (Fetch detailed invoice with line items, partial payments, and journal entries)
+- `POST   /api/invoices` (Create invoice with line items via single-writer `InvoiceService.createInvoice()`)
+- `POST   /api/invoices/:id/issue` (Digital HSM signing and Tax Authority CQT code verification under Decree 123/2020)
+- `POST   /api/invoices/:id/cancel` (Cancel invoice with immutable reversal audit trail and GL reversing entries)
+- `POST   /api/invoices/:id/pay` & `POST /api/invoices/:id/payments` (Record partial/full payment with M30 GL delegation)
+- `POST   /api/invoices/:id/offset-credit-note` (Offset customer debt against credit note / return voucher)
+- `POST   /api/invoices/:id/3way-match` (Automated 3-way reconciliation between AP Invoice, PO, and GRN)
+- `POST   /api/invoices/:id/dunning` (Generate overdue payment reminder letter and dynamic VietQR string)
+- `POST   /api/invoices/:id/archive-dms` (Seal signed XML e-invoice and PDF representation into M29 DMS Vault with SHA-256 checksum)
+- `POST   /api/invoices/batch-archive-dms` (Batch archival of issued e-invoices with SHA-256 hash sealing to M29 DMS Vault)
+- `GET    /api/invoices/:id/dms-vault` (Query DMS vault retention status, SHA-256 checksum, and audit trail for an invoice)
+- `GET    /api/invoices/:id/xml` (Download signed XML e-invoice matching Decree 123/2020 schema)
+- `GET    /api/invoices/tax-declaration/xml` (Generate official HTKK/eTax XML for VAT Declaration Form 01/GTGT per TT 80/2021/TT-BTC)
+- `POST   /api/invoices/tax-declaration/submit-etax` (Submit tax declaration directly to General Department of Taxation eTax portal)
+- `POST   /api/invoices/:id/post-gl` (Explicit GL posting delegation to M30 Single Writer)
+- `GET    /api/invoices/vat-summary` (Summary of input/output VAT and payable balance)
+  - **Module:** M31 — INVOICES AR/AP & VAT / M30 — FINANCE / M32 — TREASURY / M08 — PURCHASE
+  - **Auth:** JWT Required
+  - **Permission:** `invoices:read`, `invoices:write`, `invoices:issue`, `invoices:pay`, `invoices:admin`
+  - **Database:** `invoices`, `invoice_items`, `payments`, `credit_notes`, `debit_notes`, `accounting_entries`, `audit_logs`
+  - **Cross-Module Integrations:** M13 (Sales Order Billing Delegation), M08 (PO & 3-Way Match), M17 (WMS Goods Receipts), M30 (GL Single Writer), M32 (Treasury Payments), M29 (DMS Invoicing Archival)
+  - **Frontend Consumer:** `M31InvoicesArApWorkspace.tsx` (`WS19_INVOICES`)
+  - **Status:** Certified & Active
+
+---
+
+## M32 — PAYMENTS & CASH (TREASURY MANAGEMENT)
+
+**Entity: Cash & Bank Vouchers (BTC Forms 01-TT & 02-TT) and Treasury Gateway**
+- `GET    /api/payments` & `GET /api/treasury/vouchers` (List cash & bank vouchers with comprehensive filters: voucherType, voucherForm, status, partnerType, sourceModule, bankAccountId, date range)
+- `GET    /api/treasury/vouchers/:id` (Fetch detailed cash voucher with amount in words and signatories)
+- `GET    /api/treasury/vouchers/:id/printable-form` (Generate full regulatory dataset for printing Official BTC Forms 01-TT and 02-TT)
+- `GET    /api/treasury/vouchers/:id/vietqr` (Generate dynamic NAPAS 247 VietQR image URL and payload for receipt vouchers)
+- `POST   /api/treasury/vouchers` (Create cash receipt/payment voucher with idempotency protection and overdraft guard)
+- `POST   /api/treasury/vouchers/:id/approve` (Maker-Checker approval, overdraft guard, single-writer GL post to M30, and M02 audit)
+- `POST   /api/treasury/vouchers/:id/cancel` (Cancel voucher, rollback bank balances, reverse GL references, and record M02 audit log)
+- `POST   /api/treasury/authorize-disbursement` & `POST /api/treasury/gateway/disburse` (M32-F06 Central Payout Gateway for M14 Commission, M15 RMA, M28 Payroll, M08 AP)
+- `POST   /api/treasury/authorize-collection` & `POST /api/treasury/gateway/collect` (M32-F06 Central Collection Gateway for M13 Sales, M16 POS Shift clearance, M31 Invoices)
+- `GET    /api/treasury/stats` (Real-time treasury dashboard metrics: total receipts, total payments, cash, bank, pending approvals)
+- `GET    /api/treasury/bank-accounts` (List bank and cash accounts with book balances and GL accounts)
+- `GET    /api/treasury/transfers` (List internal bank-to-bank and cash-to-bank fund transfers)
+- `POST   /api/treasury/transfers` (Execute internal fund transfer with overdraft guard and M30 GL post)
+- `GET    /api/treasury/bank-statements` (Query bank statements for automated reconciliation)
+- `POST   /api/treasury/reconcile` (Reconcile bank transaction with cash voucher)
+- `GET    /api/treasury/cashflow-forecast` (7/30/90 days rolling cash flow forecast)
+- `POST   /api/treasury/vietqr-payload` (Generate dynamic NAPAS 247 VietQR payload with memo and amount)
+  - **Module:** M32 — PAYMENTS & CASH / TREASURY MANAGEMENT
+  - **Auth:** JWT Required
+  - **Permission:** `treasury:view`, `treasury:create`, `treasury:approve`, `treasury:transfer`, `treasury:admin`
+  - **Database:** `cash_vouchers`, `bank_accounts`, `treasury_transfers`, `bank_transactions`, `accounting_entries`, `audit_logs`
+  - **Cross-Module Integrations:** M30 (GL Accounting Single-Writer), M02 (Cryptographic Audit Trail), M13 (Sales Collection), M14 (Commission Disbursement), M15 (RMA Refunds), M16 (POS Clearance), M28 (Payroll Disbursement), M08 (Supplier Payment), M31 (AR/AP Invoices)
+  - **Frontend Consumer:** `M32PaymentsTreasuryWorkspace.tsx` (`WS07_PAYMENTS` / `WS20_PAYMENTS`)
+  - **Status:** Certified & Active (Phases 01–12 100% E2E Live QA Certified)
+
+---
+
+## M33 — BANK RECONCILIATION & VIETQR ELECTRONIC FEEDS
+
+**Entity: Bank Accounts, Statements & Idempotent Feeds**
+- `GET    /api/bank/accounts` (List registered enterprise bank accounts with book balance, bank balance, and linked GL accounts)
+- `POST   /api/bank/accounts` (Register or update corporate bank account profile with branch, currency, and GL 1121 linkage)
+- `GET    /api/bank/statements` (Query bank statement transactions with filters: bankAccountId, status, date range, search)
+- `POST   /api/bank/statements/import` (Idempotent bank statement batch ingestion via SHA-256 checksum & transaction deduplication)
+
+**Entity: Automated Reconciliation, Discrepancy Ledger (Form 08-TT) & Overrides**
+- `POST   /api/bank/statements/auto-reconcile` (Execute 4-tier automated matching against M31 Invoices and M32 Vouchers: Exact Ref -> VietQR Memo -> Amount + Date Window -> Counterparty)
+- `GET    /api/bank/unmatched` (Fetch unmatched statement items, in-transit deposits, and unrecorded bank charges)
+- `GET    /api/bank/reconciliation-report` (Generate official Bank Reconciliation Statement Form 08-TT per Circular 200/2014/TT-BTC)
+- `GET    /api/bank/reconciled-history` (Query historical matched transactions with audit trail and matcher identity)
+- `POST   /api/bank/statements/manual-match` (Execute manual 1-to-1 or 1-to-N transaction matching with M02 audit logging)
+- `POST   /api/bank/statements/unmatch` (Rollback reconciled pair to UNMATCHED with M02 audit logging)
+
+**Entity: Dynamic VietQR & Automated Webhook Gateway**
+- `POST   /api/bank/vietqr/generate` (Generate dynamic EMVCo-compliant NAPAS 247 VietQR payload with CRC16 and transaction memo)
+- `POST   /api/bank/webhook/vietqr` (Webhook listener for real-time bank incoming transfers; automatically generates M32 01-TT Receipt Voucher & clears M31 Invoice via M32 Central Gateway)
+  - **Module:** M33 — BANK RECONCILIATION & VIETQR / M32 — TREASURY / M30 — FINANCE / M31 — INVOICES
+  - **Auth:** JWT Required (Webhook supports API Secret / HMAC-SHA256 signature verification)
+  - **Permission:** `bank:reconcile`, `bank:import`, `bank:vietqr`, `finance:admin`
+  - **Database:** `bank_accounts`, `bank_transactions`, `cash_vouchers`, `invoices`, `accounting_entries` (Read-only via M30), `audit_logs`
+  - **Cross-Module Integrations:** M32 (Central Treasury Gateway for auto-receipts), M30 (GL Accounting Single-Writer for balanced journal entries), M31 (AR Invoice debt clearance), M13 (Sales Order payment status propagation), M02 (Cryptographic Audit Trail)
+  - **Frontend Consumer:** `M33BankReconciliationWorkspace.tsx` (`WS21_BANK`)
+  - **Status:** Certified & Active (Phases 01–12 100% E2E Live QA Certified)
+
+---
+
+## M30 — FINANCE & GENERAL LEDGER (GL SINGLE-WRITER & VAS ENGINE)
+
+**Entity: Vietnamese Chart of Accounts (COA TT200) & Single-Writer GL Journaling**
+- `GET    /api/finance/accounts` & `GET /api/finance/chart-of-accounts` (Fetch hierarchical VAS TT200 Chart of Accounts with category balances)
+- `POST   /api/finance/gl/entries` & `POST /api/finance/gl/post` (Single-Writer double-entry journal voucher posting with Dr = Cr validation)
+- `POST   /api/finance/gl/reversal` (Standardized Storno reversal engine creating opposing journal entries and maintaining immutability)
+- `POST   /api/finance/verify-balance` (Verify General Ledger mathematical invariant equality: Total Debit = Total Credit)
+
+**Entity: VAS Financial Statements Package (B01-DN, B02-DN, B03-DN, B05-DN) & Period Close**
+- `GET    /api/finance/financial-statements` & `POST /api/finance/financial-statements` (Generate official VAS BCTC package: B01-DN Balance Sheet, B02-DN Income Statement, B03-DN Cash Flow, B05-DN Notes)
+- `POST   /api/finance/period-close` (Execute VAS 911 revenue/expense zeroing run and lock fiscal period against retroactive edits)
+
+**Entity: Multi-Dimensional Cost Center & Real-Time All-Module Cross-Reconciliation**
+- `GET    /api/finance/reports/cost-center-summary` (Aggregate expenses by Cost Center CC-PROD, CC-SALES, CC-ADMIN, CC-LOGISTICS, CC-RD)
+- `GET    /api/finance/reports/cross-reconciliation` (Real-time sub-ledger reconciliation: GL 131 vs M31 AR, GL 331 vs M31 AP, GL 156 vs M17 WMS, GL 1111/1121 vs M32 Cash/Bank)
+  - **Module:** M30 — FINANCE & GENERAL LEDGER
+  - **Auth:** JWT Required
+  - **Permission:** `finance:read`, `finance:write`, `finance:post`, `finance:close_period`, `finance:admin`
+  - **Database:** `chart_of_accounts`, `accounting_entries`, `period_closing_runs`, `audit_logs`
+  - **Cross-Module Integrations:** M31 (Invoices), M32 (Treasury), M17 (Inventory WMS), M28 (Payroll), M27 (EAM), M35 (Projects), M02 (Audit Trail)
+  - **Frontend Consumer:** `M30GeneralLedgerWorkspace.tsx` (`WS18_FINANCE`)
+  - **Status:** Certified & Active (Phases 01–12 100% Certified)
+
+## M34 — FINANCIAL CONSOLIDATION & MULTI-ENTITY REPORTING
+
+**Entity: Consolidation Scope & Entity Hierarchy**
+- `GET    /api/finance/consolidation/scope` (Fetch multi-entity hierarchy, ownership percentages, and consolidation method)
+- `GET    /api/finance/consolidation/entities` (List legal entities and operating branches under group scope)
+  - **Module:** M34 — FINANCIAL CONSOLIDATION & MULTI-ENTITY REPORTING
+  - **Auth:** JWT Required
+  - **Permission:** `finance:read`, `consolidation:manage`
+  - **Database:** `intercompany_scope`, `intercompany_party_map`
+  - **Frontend Consumer:** `M34FinancialConsolidationWorkspace.tsx` (`WS09_CONSOLIDATION`)
+  - **Status:** Verified
+
+**Entity: Consolidation Engine & Financial Statements**
+- `POST   /api/finance/consolidation/runs` (Execute multi-entity trial balance consolidation run with idempotency key guard)
+- `GET    /api/finance/consolidation/runs/:id` (Fetch details and line items of a specific consolidation run)
+- `POST   /api/finance/consolidation/runs/:id/approve` (Approve consolidation run with atomic optimistic locking guard)
+- `POST   /api/finance/consolidation/runs/:id/lock` (Lock consolidation run and enforce period immutability)
+- `POST   /api/finance/consolidation/runs/:id/seal-dms` (Seal consolidated financial statements into M29 DMS vault with SHA-256 signature)
+- `GET    /api/finance/consolidation/runs/:id/drill-down` (Multi-level drill-down from consolidated line item to branch trial balance and M30 GL entries)
+- `GET    /api/finance/consolidation/reports` (Retrieve consolidated Balance Sheet, P&L, and Cash Flow statements)
+- `GET    /api/finance/consolidation/eliminations` (Fetch automatically generated intercompany trade and debt elimination vouchers)
+- `GET    /api/finance/consolidation/reconciliations` (Intercompany AR/AP 131 vs 331 reconciliation and mismatch alert reporting)
+- `POST   /api/finance/consolidation/fx-rates` (Compute multi-currency translation adjustments using M03 rate engine)
+  - **Module:** M34 — FINANCIAL CONSOLIDATION & MULTI-ENTITY REPORTING / M30 — FINANCE / M02 — AUDIT / M29 — DMS / M05 — EVENT BUS
+  - **Auth:** JWT Required
+  - **Permission:** `finance:read`, `consolidation:manage`, `cfo:approve`
+  - **Database:** `consolidation_runs`, `consolidation_run_lines`, `elimination_entries`, `fx_adjustments`, `dms_documents`, `audit_logs`, `outbox_events`
+  - **Cross-Module Integrations:** M30 (GL Accounting Single-Writer Read-Only), M03 (Multi-Currency Rates), M02 (Cryptographic Audit Log), M29 (DMS Cryptographic Vault), M05 (Outbox Event Emission `finance.consolidation.run.completed.v1`), M37 (BI Analytics Consumption)
+  - **Frontend Consumer:** `M34FinancialConsolidationWorkspace.tsx` (`WS09_CONSOLIDATION` / `/consolidation`)
+  - **Status:** Verified
+
+
+## M29 — DIGITAL DOCUMENT MANAGEMENT (DMS) & SECURE VAULT
+
+**Entity: Document Vault, Sealing, Retention, Provenance & Integrity**
+- `GET    /api/dms/documents` (Query documents with category, status, classification filter, and RBAC metadata redaction)
+- `GET    /api/dms/documents/:id` (Fetch document details, provenance metadata, audit view log)
+- `GET    /api/dms/documents/:id/download` (Stream binary content with SHA-256 integrity check and M02 download audit log)
+- `GET    /api/dms/entity/:entityType/:entityId/attachments` (Query attached documents for a specific business voucher across modules)
+- `POST   /api/dms/vault` (Vault document with server-side SHA-256 calculation, MIME whitelist, 25MB limit, and idempotency deduplication)
+- `POST   /api/dms/documents/:id/sign` (Digitally seal document with internal e-signature, set status SEALED, and emit `dms.document.sealed.v1`)
+- `POST   /api/dms/documents/:id/verify` (Recalculate SHA-256 from binary and compare against stored seal hash)
+- `POST   /api/dms/documents/batch-verify` (Batch verify cryptographic integrity across all vaulted documents)
+- `PUT    /api/dms/retention` (Configure standard retention lifecycle presets)
+- `PUT    /api/dms/documents/:id/retention` (Update individual document retention schedule and toggle Legal Hold immutability shield)
+- `POST   /api/dms/documents/:id/request-disposal` (Submit disposal request to M28 governance council)
+- `POST   /api/dms/documents/:id/dispose` (Finalize document disposal with tombstone hash and permanent M02 audit log)
+- `POST   /api/dms/archive` (Cold-storage deep glacier packaging and archival for M31/M34/M06 dossiers)
+- `GET    /api/dms/reports/missing-attachments` (Scan unattached accounting and procurement records across M31, M08, M32)
+- `GET    /api/dms/retention-policies` (Query standard compliance retention policy presets)
+- `GET    /api/dms/signatures` (Audit electronic signatures and PKI certificate serials)
+  - **Module:** M29 — DIGITAL DOCUMENT MANAGEMENT (DMS)
+  - **Auth:** JWT Required / Context Bearer
+  - **Permission:** `dms:read`, `dms:write`, `dms:sign`, `dms:admin`, `dms.confidential.view`
+  - **Database:** `dms_documents`, `retention_policies`, `e_signatures`, `dms_archives`, `audit_logs`, `outbox_events`
+  - **Single-Writer Handover:** `DmsService` is sole writer for `dms_documents`. Zero mutation to foreign domain ledgers (`accounting_entries`, `stock_ledger`, `cost_layers`).
+  - **Cross-Module Consumers & Integrations:**
+    - M06 (R&D Projects & Formulas): Lab trial reports & technical dossiers
+    - M08 (Purchasing): PO contracts, vendor quotes, and receipt bills
+    - M10 (Strategic Sourcing): RFQ packages and supplier bids
+    - M13 (Sales Orders): VAT electronic invoice PDFs and order agreements
+    - M15 (Returns & RMA): RMA return claims, inspection photos, credit notes
+    - M17 (Inventory Core): Goods receipt inspection slips, delivery notes
+    - M25 (Manufacturing): Batch travelers, production inspection certs
+    - M26 (Supply Chain): MRP netting run snapshots and demand plans
+    - M27 (EAM Maintenance): Work order sign-offs, equipment calibration certs
+    - M28 (HR & Payroll): Signed employee contracts, monthly payroll registers
+    - M31 (Invoices AR/AP): XML e-Invoices, VAT declarations, bank receipts
+    - M32 (Treasury & Payments): Payment vouchers (01-TT, 02-TT) & bank statements
+    - M34 (Consolidation): Group financial statements & intercompany elimination sheets
+    - M35 (Projects WBS): Project charters, blueprints, handover minutes
+    - M36 (Logistics & TMS): Electronic Waybills and Proof of Delivery (e-POD)
+    - M39 (Quality QMS): Certificates of Analysis (COA) and Inspection Reports
+    - M02 (Audit & Compliance): Tamper-evident SHA-256 access logs & disposal tombstones
+    - M05 (EventBus): Outbox event publisher (`dms.document.sealed.v1`)
+  - **Frontend Consumer:** `src/modules/governance/m29-dms/components/DMSWorkspace.tsx` (`WS28_DMS` / `/dms`)
+  - **Status:** Verified (Live QA Certified: 2026-09-24)
+
+---
+
+## M38 — IT SERVICE DESK & INCIDENT SLA MANAGEMENT (ITIL v4)
+
+**Entity: Service Tickets, SLA Lifecycle & Incident Resolution**
+- `GET    /api/service-desk/tickets` (List service desk tickets with status, priority, type, and search filters)
+- `POST   /api/service-desk/tickets` (Create new ticket with M03 sequence code `IT-TKT-YYYY-NNNN`, SLA due dates, idempotency key)
+- `GET    /api/service-desk/tickets/:id` (Fetch full ticket detail including message history, append-only status log, and survey)
+- `POST   /api/service-desk/tickets/:id/assign` (Assign/reassign technician to ticket)
+- `POST   /api/service-desk/tickets/:id/accept` (Technician accepts ticket; sets status `IN_PROGRESS` and records first response time)
+- `POST   /api/service-desk/tickets/:id/pause` (Pause SLA clock on `PENDING` / `WAITING_USER` state)
+- `POST   /api/service-desk/tickets/:id/resume` (Resume SLA clock and record accumulated pause duration)
+- `POST   /api/service-desk/tickets/:id/resolve` (Resolve ticket; requires mandatory `rootCause` and `resolutionNote`)
+- `POST   /api/service-desk/tickets/:id/close` (Requester sign-off and close ticket; sets status `CLOSED` locked Read-Only)
+- `POST   /api/service-desk/tickets/:id/comment` (Add internal communication message)
+- `POST   /api/service-desk/tickets/:id/create-work-order` (Create corrective maintenance work order in M27 EAM with `sourceModule: 'M38'`)
+
+**Entity: SLA Engine, Policies & Escalation Simulator**
+- `GET    /api/service-desk/sla` (Evaluate active ticket SLA status; supports `?asOf=` virtual simulation for safe testing)
+- `GET    /api/service-desk/sla-policies` (List configured SLA policies P1–P4)
+- `PUT    /api/service-desk/sla-policies/:id` (Update SLA thresholds and business hours flag)
+
+**Entity: Access Requests & Segregation of Duties (SoD)**
+- `GET    /api/service-desk/access-requests` (List access request records with multi-stage approval status)
+- `POST   /api/service-desk/access-requests` (Create access request with target user, requested permission, and duration)
+- `POST   /api/service-desk/access-requests/:id/approve-manager` (Direct line manager approval; enforces Requester != Approver)
+- `POST   /api/service-desk/access-requests/:id/approve-security` (Security admin approval for high-risk permissions)
+- `POST   /api/service-desk/access-requests/:id/fulfill` (Execute fulfillment via M04 official path; enforces Requester != Fulfiller)
+
+**Entity: KPI Performance Metrics & Legacy Alias**
+- `GET    /api/service-desk/kpi` (Aggregate MTTR, on-time SLA compliance %, CSAT score, and category backlogs)
+- `GET    /api/issues/*` (Backward-compatibility alias forwarding directly to `serviceDeskRouter`)
+  - **Module:** M38 — IT SERVICE DESK & INCIDENT SLA MANAGEMENT
+  - **Auth:** JWT Required / Context Bearer
+  - **Permission:** `servicedesk:read`, `servicedesk:write`, `servicedesk.ticket.manage`, `servicedesk.sla.manage`, `servicedesk.access.approve`, `servicedesk.access.fulfill`
+  - **Database:** `tickets`, `ticket_messages`, `sla_policies`, `ticket_status_history`, `ticket_access_requests`, `ticket_surveys`, `ticket_relations`, `audit_logs`, `outbox_events`
+  - **Single-Writer Authority:** `ServiceDeskService` is the sole writer for `tickets` and M38 ITSM domain tables. Zero direct SQL mutations to M04 user/role permission tables, M27 work orders, or M30 general ledger.
+  - **Cross-Module Integrations:**
+    - M01 (Workspace Hub): WorkQueue consumption and unresolved ticket counting.
+    - M02 (Audit Trail): SHA-256 tamper-evident logging for all ticket mutations and approvals.
+    - M03 (Settings): Document sequence number generation (`IT-TKT-YYYY-NNNN`).
+    - M04 (RBAC): Official delegation / permission assignment execution upon access request fulfillment.
+    - M05 (EventBus): Outbox event emission (`servicedesk.ticket.created.v1`, `servicedesk.ticket.sla_breached.v1`, `servicedesk.ticket.resolved.v1`, `servicedesk.ticket.closed.v1`).
+    - M27 (EAM Maintenance): Corrective work order creation and automated callback synchronization upon WO completion.
+    - M28 (HRM): Employee direct manager resolution and active leave lookup for auto-assignment.
+    - M29 (DMS): Issue attachment linking with SHA-256 verification.
+    - M37 (BI Analytics): SLA compliance and MTTR KPI metric aggregation.
+  - **Frontend Consumer:** `src/modules/governance/m38-service-desk/components/ServiceDeskWorkspace.tsx` (`WS26_SERVICEDESK` / `/issue` / `/service-desk`)
+  - **Status:** Verified (Live QA Certified: 2026-09-24)
+
+---
+
+### M37 — BUSINESS INTELLIGENCE & EXECUTIVE ANALYTICS
+
+**Entity: Executive Analytics, VAS P&L, Cash Flow & Financial Ratios**
+- `GET    /api/analytics/pnl` (Detailed VAS Income Statement from M30 GL Single-Writer)
+- `GET    /api/analytics/cashflow` (Direct Cash Flow Statement from M32 Treasury & M33 Bank)
+- `GET    /api/analytics/turnover-ratios` (Inventory Turnover, DSO, DPO, CCC, Current/Quick Ratio from M17/M42)
+- `GET    /api/analytics/forecast` (90-Day Cashflow and Revenue Trend Forecast)
+- `GET    /api/analytics/kpis` (Executive C-Level KPI Metrics Summary)
+- `GET    /api/analytics/pnl-monthly` or `/api/reports/summary` (Legacy/Alias 12-month P&L chart dataset)
+- `GET    /api/analytics/category-drilldown` (Product category drilldown)
+- `GET    /api/analytics/channel-distribution` (Sales channel revenue share)
+- `GET    /api/analytics/branch-performance` (Branch performance and margin comparison)
+- `POST   /api/analytics/export` (Idempotent C-Level Excel/PDF report export with M29 DMS vault link)
+  - **Module:** M37 — BUSINESS INTELLIGENCE & EXECUTIVE ANALYTICS
+  - **Auth:** JWT Required / Context Bearer
+  - **Permission:** `analytics.executive.view`, `analytics.export`, `accounting:read`, `sales:read`
+  - **Database:** `report_definitions`, `export_jobs`, `dashboard_configs`, `kpi_threshold_configs` (Read-only on M30/M17/M42/M32/M33/M34)
+  - **Single-Writer Authority:** Read-Only Analytics Service. Tái sử dụng Trial Balance & Financial Statements của M30 General Ledger (GET `/api/finance/financial-statements`), tuyệt đối không tự tính lại Nợ/Có.
+  - **Cross-Module Integrations:**
+    - M30 (GL Accounting): Single-Writer SSOT for Income Statement & Trial Balance.
+    - M32/M33 (Treasury & Bank): Cash balance & bank reconciliation validation.
+    - M17/M42 (Inventory & Costing): COGS and inventory average value for turnover calculation.
+    - M34 (Consolidation): Group consolidated financial reports when locked run exists.
+    - M02 (Audit Trail): SHA-256 tamper-evident audit logging via `AuditService.recordAuditLog()`.
+    - M29 (DMS Vault): Exported document linking & vault storage.
+    - M05 (EventBus): Outbox event emission (`analytics.report.exported.v1`).
+  - **Frontend Consumer:** `src/modules/governance/m37-analytics/components/M37BiAnalyticsWorkspace.tsx` (`M37 - BI & Executive Analytics` / `/analytics` / `/reports`)
+  - **Status:** Verified (Live QA Certified: 2026-09-25)
+
+---
+
+### M40 — ENVIRONMENTAL HEALTH & SAFETY (EHS)
+
+**Entity: Workplace Incident Reporting & Investigation Lifecycle**
+- `GET    /api/ehs/incidents` (Query safety incidents with severity/status/warehouse filters)
+- `POST   /api/ehs/incidents` (Log new workplace incident with sequential numbering `INC-YYYY-NNNN`, location & victim info)
+- `GET    /api/ehs/incidents/:id` (Fetch detailed incident dossier and investigative actions)
+- `POST   /api/ehs/incidents/:id/investigate` (Update root-cause investigation findings & corrective measures)
+- `POST   /api/ehs/incidents/:id/close` (Close incident file with SHA-256 M02 audit lock — transition to immutable READ-ONLY)
+  - **Module:** M40 — ENVIRONMENTAL HEALTH & SAFETY (EHS)
+  - **Auth:** JWT Required / Context Bearer
+  - **Permission:** `ehs:read`, `ehs:write`, `ehs:incident:manage`
+  - **Database:** `ehs_incidents`
+  - **Single-Writer Authority:** `EhsService` (Sole writer for safety incidents & occupational safety records)
+  - **Cross-Module Integrations:**
+    - M18 (Warehouse/Site): Validates `warehouseId` site location.
+    - M28 (HRM): Validates victim employee `affectedEmployeeName` & safety officer details.
+    - M02 (Audit Trail): SHA-256 tamper-evident log for closed incidents.
+    - M05 (EventBus): Outbox event emission (`ehs.incident.logged.v1`, `ehs.incident.closed.v1`).
+
+**Entity: Job Safety Analysis (JSA 5×5 Risk Matrix)**
+- `GET    /api/ehs/risk-assessments` (List JSA risk assessments and high-risk job registers)
+- `POST   /api/ehs/risk-assessments` (Create JSA risk assessment, auto-computes Risk Score = Severity × Probability and level LOW/MEDIUM/HIGH/EXTREME)
+  - **Module:** M40 — ENVIRONMENTAL HEALTH & SAFETY (EHS)
+  - **Auth:** JWT Required
+  - **Permission:** `ehs:read`, `ehs:write`
+  - **Database:** `ehs_risk_assessments`
+
+**Entity: Safety CAPA & Audit Checklist Management**
+- `GET    /api/ehs/capas` (List EHS corrective actions by status and assignee)
+- `POST   /api/ehs/capas` (Open new safety CAPA linked to incident/audit)
+- `POST   /api/ehs/capas/:id/verify` (Verify field implementation of CAPA -> status `VERIFIED`)
+- `POST   /api/ehs/capas/:id/close` (Close CAPA -> status `CLOSED`)
+- `GET    /api/ehs/audits` (Query safety audit inspection logs)
+- `POST   /api/ehs/audits` (Execute safety inspection checklist; auto-calculates score % & triggers CAPA if mandatory item fails)
+  - **Module:** M40 — ENVIRONMENTAL HEALTH & SAFETY (EHS)
+  - **Auth:** JWT Required
+  - **Permission:** `ehs:read`, `ehs:write`, `ehs:audit:manage`
+  - **Database:** `ehs_capas`, `ehs_safety_audits`, `ehs_audit_checklist_items`
+
+**Entity: Fire Safety Equipment & Inspection Tracking**
+- `GET    /api/ehs/fire-safety/equipment` (List fire extinguishers, hydrants and alarm systems)
+- `POST   /api/ehs/fire-safety/equipment` (Register new PCCC equipment)
+- `POST   /api/ehs/fire-safety/equipment/:id/inspect` (Log 6-month periodic inspection, renew expiry date & check pressure gauge)
+  - **Module:** M40 — ENVIRONMENTAL HEALTH & SAFETY (EHS)
+  - **Auth:** JWT Required
+  - **Permission:** `ehs:read`, `ehs:write`
+  - **Database:** `ehs_fire_equipment`
+
+**Entity: Environmental Monitoring (QCVN Standards)**
+- `GET    /api/ehs/environmental/records` (Query effluent, air emission and noise level monitoring records)
+- `POST   /api/ehs/environmental/records` (Log measured value vs QCVN standard threshold; auto-flags `EXCEEDED` status)
+  - **Module:** M40 — ENVIRONMENTAL HEALTH & SAFETY (EHS)
+  - **Auth:** JWT Required
+  - **Permission:** `ehs:read`, `ehs:write`
+  - **Database:** `ehs_environmental_records`
+
+**Entity: Permit to Work, LOTO Isolation & M27 Gate API**
+- `GET    /api/ehs/permits` (List work permits and active Lockout/Tagout energy isolations)
+- `POST   /api/ehs/permits` (Issue new work permit / LOTO tag linked to asset)
+- `POST   /api/ehs/permits/:id/close` (Close work permit & confirm LOTO tag removal)
+- `GET    /api/ehs/permits/asset/:assetId/active` (Read-only active permit check API for M27 EAM Work Order gatekeeper)
+  - **Module:** M40 — ENVIRONMENTAL HEALTH & SAFETY (EHS)
+  - **Auth:** JWT Required / Internal Service
+  - **Permission:** `ehs:read`, `ehs:write`
+  - **Database:** `ehs_safety_permits`
+  - **Cross-Module Integration:**
+    - M27 (EAM Maintenance): Read-only integration checking active LOTO permit for asset prior to high-voltage or hot-work WO release.
+  - **Frontend Consumer:** `src/modules/governance/m40-ehs/components/EHSWorkspace.tsx` (`WS29_EHS` / `/ehs`)
+  - **Status:** Verified (Live QA Certified: 2026-09-25)
+
+---
+
+## 43. M43 — INDUSTRY PROFILES (HỒ SƠ NGÀNH HÀNG)
+
+**Domain:** `MASTER DATA / CONFIG`  
+**Group:** 01. Dữ liệu Chủ & Thiết lập (Master Data & Setup)  
+**Workspace:** `WS32_INDUSTRY` | **Route:** `/industry-profiles`  
+**Frontend Consumer:** `src/modules/master-data/industry-profiles/components/IndustryProfileWorkspace.tsx`  
+**Router:** `src/routes/industryProfiles.routes.ts`
+
+**Entity: Industry Profiles & Master Operating Parameters**
+- `GET    /api/industry-profiles` (Danh sách hồ sơ ngành hàng: Manufacturing, Healthcare, Retail, Logistics, Technology...)
+- `GET    /api/industry-profiles/:id` (Chi tiết hồ sơ ngành hàng theo ID)
+- `POST   /api/industry-profiles` (Tạo mới hồ sơ ngành hàng: code, sector, valuationMethod, complianceStandards, defaultTaxRate)
+- `PUT    /api/industry-profiles/:id` (Cập nhật hồ sơ ngành hàng)
+- `DELETE /api/industry-profiles/:id` (Xóa hồ sơ ngành hàng)
+- `POST   /api/industry-profiles/reset-defaults` (Khôi phục các hồ sơ ngành hàng tiêu chuẩn mặc định)
+  - **Module:** M43 — INDUSTRY PROFILES (HỒ SƠ NGÀNH HÀNG)
+  - **Auth:** Internal / Session Auth
+  - **Permission:** `admin`, `manager`
+  - **Database:** `industry_profiles`
+  - **Cross-Module Integration:**
+    - M07 (Master Data): Thiết lập thông số và tiêu chuẩn tuân thủ mặc định cho danh mục sản phẩm/vật tư theo ngành.
+    - M17/M42 (Inventory & Costing): Thiết lập phương pháp tính giá tồn kho mặc định (FIFO, LIFO, Weighted Average).
+  - **Status:** Verified & Certified (2026-09-27)
 
 
 

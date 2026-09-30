@@ -103,11 +103,39 @@ This document defines the strict business rules, workflows, and constraints of t
 - **Cost Layers:** Inbound inventory (via GR) creates `cost_layers`. Outbound inventory (via POS, SO, Goods Issue) consumes these layers to calculate the exact `totalCogs`.
 - **Costing Method:** The system supports global costing methods (e.g., WEIGHTED_AVERAGE, FIFO) defined in `costing_settings`. The Costing Engine reads this setting to apply the correct math.
 
-## 4. Accounting (Double-Entry General Ledger)
+## 4. Accounting (Double-Entry General Ledger - Module M30)
 
-**Rules:**
-- **Strict Double-Entry:** Every financial transaction MUST generate a balanced entry in `accounting_entries`. Total Debits MUST equal Total Credits.
-- **Immutability:** Once an accounting entry is posted, it CANNOT be deleted. Mistakes must be corrected by posting a Reversal Entry (opposite debit/credit).
+**Core Architectural Invariants & Single-Writer Governance:**
+1. **Single-Writer Accounting Authority (`AccountingService` / `AccountingEngine` SSOT)**:
+   - Module M30 is the SOLE authority permitted to mutate `accounting_entries`.
+   - External modules (M13 Sales, M31 Invoices, M32 Treasury, M17 WMS, M28 Payroll, M27 EAM, M35 Projects) MUST route all double-entry postings through M30 service methods (`postJournal()`, `postTreasuryVoucherJournal()`, `postInventoryValuationJournal()`, `postPayrollJournal()`). Zero direct `INSERT INTO accounting_entries` calls outside M30.
+2. **Double-Entry Mathematical Invariant**:
+   - Every journal entry MUST satisfy: $\sum \text{Total Debit Amount} = \sum \text{Total Credit Amount}$.
+   - Entries with unequal total debits and credits, or entries with identical debit and credit account IDs ($\text{debitAccountId} = \text{creditAccountId}$), are strictly rejected (`DOUBLE_ENTRY_UNBALANCED_ERROR`).
+3. **Standardized Vietnamese Accounting System (VAS Chart of Accounts TT200/TT133)**:
+   - Class 1 (Tài sản ngắn hạn): 1111 (Tiền mặt), 1121 (Tiền gửi ngân hàng), 1311 (Phải thu khách hàng), 1331 (Thuế GTGT được khấu trừ), 1561 (Hàng hóa), 154 (Chi phí SXKD dở dang).
+   - Class 3 (Nợ phải trả): 3311 (Phải trả người bán), 33311 (Thuế GTGT đầu ra), 3341 (Phải trả người lao động), 3383 (Bảo hiểm xã hội).
+   - Class 4 (Vốn chủ sở hữu): 4111 (Vốn góp chủ sở hữu), 4212 (Lợi nhuận sau thuế chưa phân phối).
+   - Class 5/7 (Doanh thu & Thu nhập): 5111 (Doanh thu bán hàng), 711 (Thu nhập khác).
+   - Class 6/8 (Chi phí): 632 (Giá vốn hàng bán), 641 (Chi phí bán hàng), 642 (Chi phí quản lý), 621/622/623/627 (Chi phí sản xuất/dự án), 811 (Chi phí khác).
+   - Class 9 (Xác định kết quả kinh doanh): 911 (Xác định kết quả kinh doanh).
+4. **Storno Reversal Engine & Absolute Immutability Law (M30-F08)**:
+   - Posted general ledger journal entries are **100% immutable**. Direct `DELETE` or `UPDATE` operations on `accounting_entries` are strictly prohibited.
+   - Corrections MUST be executed via the Standardized Storno Reversal Engine (`POST /api/finance/gl/reversal`), generating an opposing reversing entry (Debit original Credit account, Credit original Debit account) with clear reference to the original entry ID (`stornoOriginalId`).
+5. **Fiscal Period Closing & TK 911 Zero-Balance Netting (M30-F05)**:
+   - Period closing executes automated zero-balance transfer entries for all temporary revenue (Class 5, 7) and expense (Class 6, 8) accounts into Account 911.
+   - The net balance of Account 911 is transferred to Account 4212 (Lợi nhuận sau thuế).
+   - Once a fiscal period is locked (`status = 'CLOSED'`), all retroactive posting requests targeting that period are rejected by the Period Lock Guard (`PERIOD_CLOSED_LOCK_ERROR`).
+6. **Multi-Dimensional Cost Center & Department Cost Allocation (M30-F07)**:
+   - Journal entries for operational expenses (Class 641, 642, 627) capture mandatory `costCenterId` (`CC-PROD`, `CC-SALES`, `CC-ADMIN`, `CC-LOGISTICS`, `CC-RD`) and `departmentId`.
+   - Real-time cost center analytics provide cost distribution metrics without mutating frozen financial tables.
+7. **Real-Time All-Module Sub-Ledger Cross-Reconciliation (M30-F09)**:
+   - Evaluates real-time control accounts against sub-ledger totals:
+     - GL 131 (Phải thu) vs M31 AR Invoice Open Debt.
+     - GL 331 (Phải trả) vs M31 AP Invoice Open Debt.
+     - GL 156 (Hàng hóa) vs M17 WMS Inventory Valuation Layer Total.
+     - GL 1111/1121 (Tiền mặt/Ngân hàng) vs M32 Treasury & Bank Account Balances.
+   - Variances trigger real-time reconciliation warnings for immediate CFO audit review.
 
 ## 5. Inventory Control Architecture & 3-State Stock Invariants
 
@@ -718,6 +746,509 @@ The engine continuously evaluates planning discrepancies and categorizes them in
 - **Centralized Tamper-Evident Audit (M02 SSOT):** All 6 planning lifecycle events (`FORECAST_CREATE`, `MPS_SCHEDULE`, `MRP_RUN_EXECUTE`, `PR_DELEGATE_PO`, `MO_SUGGEST_CREATE`, `EXCEPTION_RESOLVE`) are recorded via `AuditService.recordAuditLog()`.
 - **DMS Vaulting (M29 SSOT):** MRP run summaries, supply-demand balance matrices, and exception reports are cryptographically hashed (SHA-256) and archived into M29 DMS (`dms_documents`) under category `SUPPLY_CHAIN_REPORT`.
 
+---
+
+## 15. M27 — Enterprise Asset Management (EAM / CMMS)
+
+### 15.1. Asset Criticality & Hierarchy Classification
+- **Criticality Tiers (ISO 55000 / RCM Standard):**
+  - **Tier A (VITAL / PRODUCTION-CRITICAL):** Equipment whose failure halts critical production lines or causes severe EHS safety hazards. Demands predictive IoT monitoring and prioritized emergency work orders.
+  - **Tier B (ESSENTIAL / IMPORTANT):** Equipment with backup redundancy or non-bottleneck capacity where repair delays incur manageable costs.
+  - **Tier C (STANDARD / RUN-TO-FAILURE):** Auxiliary or non-critical assets repaired on standard schedule.
+- **Hierarchical Lineage:** Assets support parent-child relationships (`parentId`) establishing equipment parentage (Plant -> Production Line -> Machine Cell -> Sub-component).
+
+### 15.2. Multi-Trigger Preventive Maintenance (PM) Scheduling
+- **Trigger Types:**
+  - `CALENDAR`: Recurring time intervals (`intervalDays`, e.g., every 30, 90, 180 days).
+  - `METER_RUN_HOURS`: Operating hour meter thresholds (`meterIntervalHours`, `lastTriggerMeterHours`). Automatically compared against equipment cumulative running hours.
+  - `CONDITION_IOT`: Real-time sensor condition thresholds (`conditionMetric`, `conditionThreshold`, e.g., Vibration RMS $> 4.5\text{ mm/s}$, Bearing Temp $> 75^\circ\text{C}$).
+- **Automatic WO Generation:** When any trigger condition is met, the system transitions the schedule into an active work order docket.
+
+### 15.3. Work Order State Machine & Terminal Immutability Guard
+- **Strict Lifecycle:** `OPEN` $\rightarrow$ `IN_PROGRESS` $\rightarrow$ `WAITING_PART` $\rightarrow$ `COMPLETED` $\rightarrow$ `CLOSED`.
+- **Terminal Lock:** Once a work order reaches `COMPLETED` or `CLOSED`, its state, cost, and spare parts list are permanently locked and immutable. Re-opening a closed WO is strictly forbidden; follow-up tasks require a new inspection or corrective work order.
+
+### 15.4. Cross-Module Ingestion Triggers (M38 & M15)
+- **M38 Service Desk Trigger:** Facility breakdown or plant machinery incidents logged in M38 create corrective work orders with `sourceModule: 'M38'` and reference ticket `INC-xxxx`.
+- **M15 RMA Repair Routing:** Customer return goods routed for in-house repair inspection trigger an EAM work order with `sourceModule: 'M15'` and reference docket `RMA-xxxx`.
+
+### 15.5. Single-Writer Spare Part Deduction via M17 InventoryService
+- **Strict Non-Authority:** M27 NEVER mutates `stock_balances` or `stock_ledger` directly.
+- **Consumption Delegation:** Issuing replacement spare parts (`POST /api/eam/work-orders/:id/issue-parts`) calls `InventoryService.postTransaction()` with `movementType: 'MAINTENANCE_ISSUE'`. Stock availability is verified prior to issuing; negative stock is strictly blocked.
+
+### 15.6. Shortage Procurement Delegation to M08 Purchase Order Single Writer
+- **Procurement Gate:** When required maintenance spare parts are out of stock in warehouse, EAM initiates a procurement delegation (`POST /api/eam/spare-parts/purchase-order`).
+- **M08 Single-Writer Boundary:** Creates official records in `purchase_orders` and `purchase_order_items` via M08 Purchase Order gateway, preserving `sourceType: 'EAM_SPARE_PART'` and traceability to the originating Work Order.
+
+### 15.7. Equipment Reliability & RAMS Analytics (OEE)
+- **MTBF (Mean Time Between Failures):** $\text{MTBF} = \frac{\text{Total Operating Hours}}{\text{Total Failure Count}}$.
+- **MTTR (Mean Time To Repair):** $\text{MTTR} = \frac{\text{Total Repair Downtime Hours}}{\text{Total Corrective Repair Count}}$.
+- **Availability (Độ sẵn sàng thiết bị):** $\text{Availability \%} = \frac{\text{MTBF}}{\text{MTBF} + \text{MTTR}} \times 100\%$.
+- **Downtime Hours:** Tracked per asset and aggregated into overall equipment effectiveness (OEE).
+
+## 16. Projects & Work Breakdown Structure (WBS) Core Rules (Module M35)
+
+### 16.1. Single-Writer Authority Boundaries & Non-Authority Invariants
+- **Exclusive Authority:** Project definitions, WBS hierarchy, Milestones, Project Resources, Timesheets, and Job Cost Ledger.
+- **Inventory Authority (M17 SSOT):** M35 NEVER mutates `stock_balances` or `stock_ledger` directly. Issuing project materials (`POST /api/projects/:id/material-issue`) strictly invokes `InventoryService.postTransaction()` with `type: 'GOODS_ISSUE'`.
+- **Costing Authority (M42 SSOT):** Material unit valuation is resolved dynamically via `CostingEngine.resolveUnitCost()`. M35 never hardcodes or invents material costs.
+- **Accounting Authority (M30 SSOT):** All project financial entries (TK 621, 622, 623, 627, 154, 131, 511, 3331) are posted strictly through `AccountingEngine` / `AccountingService`.
+- **Invoicing Authority (M31 SSOT):** Milestone and progress invoices are generated exclusively by delegating to `InvoiceService.createInvoice()`. M35 does not generate standalone invoices.
+- **Audit Authority (M02 SSOT):** All lifecycle operations (`CREATE_PROJECT`, `WBS_UPDATE`, `LOG_TIMESHEET`, `ISSUE_MATERIAL`, `JOB_COST_CLOSE`, `BILL`, `CHANGE_ORDER`) record immutable audit trails via `AuditService.recordAuditLog()`.
+- **Document Authority (M29 SSOT):** Project charters, signed contracts, and milestone acceptance sign-offs are archived into `dms_documents`.
+
+### 16.2. Multi-Tier WBS Hierarchy & Dependency Scheduling
+- Multi-level WBS nodes (Level 1 Phase, Level 2 Deliverable, Level 3 Work Package / Task).
+- Predecessor dependencies (`dependencyCode`, finish-to-start / start-to-start) with automatic Critical Path identification.
+- Roll-up calculations: Child tasks aggregate progress % and actual costs up to parent phases and overall project.
+
+### 16.3. Timesheets & Labor Costing (M28 HRM Integration)
+- Standard and overtime hourly rates are pulled from resource profiles or M28 employee records.
+- Logging a timesheet creates an entry in `project_timesheets`, computes `laborCostVND = hoursLogged * hourlyRateVND`, logs into `project_cost_ledger`, and records double-entry vouchers to General Ledger (Nợ TK 622 / Có TK 334).
+
+### 16.4. Aggregated 5-Component Job Costing
+- Job costing aggregates five standard enterprise cost components:
+  1. **Direct Labor (TK 622):** Timesheet hours $\times$ standard hourly rates.
+  2. **Direct Materials (TK 621):** Stock issued via M17 InventoryService valued at M42 unit costs.
+  3. **Equipment & Machinery (TK 623):** Plant/equipment usage and rental allocations from M27.
+  4. **Subcontractor Costs (TK 154 / 331):** External service dockets and purchase order commitments from M08/M10.
+  5. **General Overhead (TK 627):** Project-specific administrative and site overhead allocations from M30.
+
+### 16.5. ISO 21508 Earned Value Management (EVM)
+- **Budget at Completion (BAC):** Total approved baseline budget.
+- **Planned Value (PV):** $\text{PV} = \text{BAC} \times \text{Planned Progress \%}$.
+- **Earned Value (EV):** $\text{EV} = \text{BAC} \times \text{Actual Progress \%}$.
+- **Actual Cost (AC):** Cumulative incurred cost from unified cost ledger.
+- **Cost Variance (CV):** $\text{CV} = \text{EV} - \text{AC}$.
+- **Schedule Variance (SV):** $\text{SV} = \text{EV} - \text{PV}$.
+- **Cost Performance Index (CPI):** $\text{CPI} = \frac{\text{EV}}{\text{AC}}$. ($\text{CPI} > 1.0$ = Under budget).
+- **Schedule Performance Index (SPI):** $\text{SPI} = \frac{\text{EV}}{\text{PV}}$. ($\text{SPI} > 1.0$ = Ahead of schedule).
+- **Estimate at Completion (EAC):** $\text{EAC} = \frac{\text{BAC}}{\text{CPI}}$.
+- **Variance at Completion (VAC):** $\text{VAC} = \text{BAC} - \text{EAC}$.
+
+### 16.6. Percentage of Completion (POC) Revenue Recognition (VAS 15 / IFRS 15)
+- $\text{POC \%} = \min\left(1.0, \frac{\text{Actual Cost}}{\text{Total Budget}}\right)$.
+- $\text{Recognized Revenue} = \text{Contract Value} \times \text{POC \%}$.
+- $\text{POC Margin} = \text{Recognized Revenue} - \text{Actual Cost}$.
+- Gross Margin $\% = \frac{\text{Contract Value} - \text{Actual Cost}}{\text{Contract Value}} \times 100\%$.
+
+### 16.7. Scope Change Orders & Budget Baseline Revisions
+- All modifications to contract scope or approved budget require a formal Change Order (`project_budget_versions`).
+- Previous budget baselines are versioned (`revisionNo`) and preserved for audit.
+- Adjustments to completed or closed projects must be initiated via an authorized Change Order, never by retroactive mutation of historical records.
+
+### 16.8. Project Terminal State Immutability
+- Valid lifecycle transitions: `DRAFT` $\rightarrow$ `APPROVED` $\rightarrow$ `ACTIVE` $\rightarrow$ `ON_HOLD` $\rightarrow$ `COMPLETED` $\rightarrow$ `CLOSED`.
+- Once a project is in `COMPLETED` or `CLOSED` state, all tasks, milestones, timesheets, and material issues are permanently locked.
+
+---
+
+## 17. M31 — INVOICES AR/AP & VAT COMPLIANCE RULES
+
+### 17.1. Decree 123/2020/NĐ-CP & Circular 78/2021/TT-BTC Immutability Rule
+- Once an invoice is transitioned to `ISSUED` status (signed via Cloud HSM and assigned a Tax Authority Code `cqtCode`), it is legally and cryptographically immutable.
+- Direct `UPDATE` or `DELETE` operations on issued invoices are strictly prohibited.
+- Corrections, discounts, or returns must be performed exclusively via formal Credit Notes (M15), Debit Notes, or adjusting/reversing invoices with an explicit audit trail in M02.
+
+### 17.2. Single-Writer Invoicing Authority (M31 SSOT)
+- `InvoiceService` (`engines/invoiceService.ts`) is the sole single-writer authority for the `invoices` and `invoice_items` tables.
+- Upstream modules (M13 Sales, M08 Purchasing, M35 Projects) MUST NOT directly insert into `invoices` or create parallel invoicing logic; they must delegate via `invoiceService.createInvoice()`.
+
+### 17.3. 3-Way Match Verification for Accounts Payable (AP)
+- All AP invoices linked to vendor purchase orders must pass an automated 3-Way Match reconciliation prior to payment clearance:
+  1. **AP Invoice Lines** vs. **PO Unit Prices & Quantities** (M08).
+  2. **AP Invoice Quantities** vs. **Goods Receipt Notes (GRN)** received into WMS (M17).
+- Discrepancies exceeding the tolerance threshold (default: $\pm 2\%$) automatically set match status to `DISCREPANCY_PRICE` or `DISCREPANCY_QTY`, placing the invoice on payment hold until manual CFO/Chief Accountant override.
+
+### 17.4. Partial Payment Allocation & M30 General Ledger Delegation
+- Multi-tranche payments for invoices update the cumulative paid amount and advance `paymentStatus` (`UNPAID` $\rightarrow$ `PARTIAL` $\rightarrow$ `PAID`).
+- Every payment automatically triggers single-writer GL entry creation via `accountingEngine.postJournal()`:
+  - **AR Receipt:** Dr TK 1121 (Bank) / 1111 (Cash) | Cr TK 131 (Customer Receivables).
+  - **AP Disbursement:** Dr TK 331 (Vendor Payables) | Cr TK 1121 (Bank) / 1111 (Cash).
+
+### 17.5. VAT Tax Reporting Compliance (Circular 80/2021/TT-BTC Form 01/GTGT)
+- Centralized tax calculation aggregates Output VAT from AR invoices and Deductible Input VAT from AP invoices.
+- System automatically reconciles Box 21 to Box 32 and determines Net VAT Payable (Box 40) or VAT Carried Forward (Box 43).
+
+### 17.6. Legal Archival & Audit Logging (M29 DMS & M02 Central Audit)
+- All invoice operations (`ISSUE_VAT_INVOICE`, `3WAY_MATCH`, `RECORD_PAYMENT`, `CANCEL_INVOICE`, `OFFSET_CREDIT_NOTE`, `ARCHIVE_DMS`) log tamper-evident audit events into `audit_logs` (M02) with SHA-256 chained checksums and actor metadata.
+- E-invoice XML and PDF visual representations are sealed into M29 DMS under statutory 10-year retention with cryptographic SHA-256 verification.
+
+### 17.7. Automated Dunning Notice & VietQR NAPAS 247 Integration
+- Overdue invoices generate formal dunning notices (`CÔNG VĂN NHẮC NỢ`) based on overdue aging days (Tầng 1: Nhắc nợ thông thường 1-15 ngày, Tầng 2: Cảnh báo nợ quá hạn 16-30 ngày, Tầng 3: Thông báo chế tài & đình chỉ dịch vụ >30 ngày).
+- Overdue interest calculation conforms strictly to Article 306, Commercial Law 2005:
+  $$\text{Tiền Lãi Chậm Trả} = \text{Dư Nợ Còn Lại} \times \frac{\text{Lãi Suất (\% / năm)}}{365} \times \text{Số Ngày Quá Hạn}$$
+- Dynamic VietQR is generated complying with NAPAS 247 standard with designated corporate bank (970422 - MBBank), clearing account, exact invoice reference code, and payable amount.
+
+### 17.8. Decree 123/2020 Cancellation Protocol & Automated GL Reversal
+- In accordance with Article 19 of Decree 123/2020/NĐ-CP, cancellation of an issued electronic invoice requires generation and bilateral digital signing of a formal Cancellation Protocol (`BIÊN BẢN HỦY HÓA ĐƠN ĐIỆN TỬ`).
+- The cancellation triggers an automatic reversing journal entry in M30 General Ledger:
+  - **AR Reversal:** Dr TK 511 / Dr TK 3331 (Negative/Reversal) | Cr TK 131 (Full invoice amount reversed).
+  - **AP Reversal:** Dr TK 331 | Cr TK 156 / Cr TK 1331 (Vendor liability and deductible input VAT reversed).
+
+### 17.9. M29 DMS 10-Year Digital Vault Sealing & XMLDSig RSA-SHA256
+- E-invoices in `ISSUED` status are archived to M29 DMS Vault (`dmsDocuments` table) with:
+  - Storage Tier: `ACTIVE_VAULT_HOT`
+  - Retention Period: 10 Years per Article 41, Accounting Law 2015 (Luật Kế toán 2015).
+  - Cryptographic Validation: Full SHA-256 digest calculated from canonical Decree 123 XML schema (`DLHDon` payload + `DSCKS` Viettel-CA Cloud HSM signature).
+  - Batch Archival: Enterprise batch runner processes and seals all unarchived issued invoices with atomic M02 audit trail entries.
+
+---
+
+## 18. M32 — PAYMENTS & TREASURY CASH MANAGEMENT RULES
+
+### 18.1. Single-Writer Authority & Non-Authority Protection
+- **Treasury Single-Writer (M32 SSOT):** `TreasuryService` (`engines/treasuryService.ts`) is the sole authoritative single-writer for `cash_vouchers`, `treasury_transfers`, and `bank_accounts` balance operations.
+- **Accounting Single-Writer Delegation (M30 SSOT):** M32 is NOT an authority for General Ledger. All double-entry vouchers (TK 1111, 1121, 131, 331, 334, 3388, 642, 811) MUST be delegated exclusively to `AccountingEngine.postTreasuryVoucherJournal()` and `postTreasuryTransferJournal()`. Direct writes to `accounting_entries` from treasury controllers or UI are strictly prohibited.
+
+### 18.2. Official BTC Regulatory Voucher Standards (Mẫu 01-TT & Mẫu 02-TT)
+- All cash and bank transactions must conform strictly to Circular 200/2014/TT-BTC and Circular 133/2016/TT-BTC:
+  - **Phiếu Thu (Mẫu 01 - TT):** Receipt voucher issued with sequential numbering `PT-YYYY-XXXX`, debit/credit accounts, legal entity header, full amount in Vietnamese words (`numberToVietnameseWords()`), and 5 mandatory signature blocks (Thủ trưởng đơn vị / Giám đốc, Kế toán trưởng, Người nộp tiền, Người lập phiếu, Thủ quỹ).
+  - **Phiếu Chi (Mẫu 02 - TT):** Payment voucher issued with sequential numbering `PC-YYYY-XXXX`, debit/credit accounts, detailed business reason, full amount in Vietnamese words, attached original documents count, and 5 mandatory signature blocks.
+
+### 18.3. Cash Balance Overdraft Guard (Anti-Negative Balance Invariant)
+- Prior to creating or approving any Payment Voucher (PC) or executing an Internal Transfer:
+  - The system evaluates available book balance: `currentBalance = Number(account.bookBalance) || 0`.
+  - If `allowOverdraft = false` (default) and `currentBalance < requiredAmount`, the transaction is blocked with HTTP 400 and code `OVERDRAFT_GUARD_BLOCKED`.
+  - Overdraft overrides require explicit CFO/Director justification recorded in the audit trail.
+
+### 18.4. Idempotency & Transaction Wrap
+- All state-changing treasury endpoints (`POST /api/treasury/vouchers`, `POST /api/treasury/transfers`, `POST /api/treasury/gateway/*`) require an `idempotencyKey`.
+- Replaying a request with the same `idempotencyKey` returns the cached existing transaction (`isIdempotentReplay = true`) and NEVER creates duplicate vouchers, double-posts to the GL, or double-deducts bank balances.
+
+### 18.5. Central Treasury Gateway (M32-F06 Authorized Single Gateway)
+- External modules (M13 Sales, M14 Commission, M15 RMA, M16 POS, M28 HR & Payroll, M08 Procurement AP) MUST NOT record cash/bank transactions or post GL entries directly.
+- All monetary disbursements and collections must route through:
+  - `TreasuryService.authorizeDisbursementGateway()` (`POST /api/treasury/gateway/disburse`)
+  - `TreasuryService.authorizeCollectionGateway()` (`POST /api/treasury/gateway/collect`)
+- The origin module, source document type, source document ID, and reference number (`sourceReferenceNo`) are permanently captured in the voucher record.
+
+### 18.6. Dynamic VietQR (NAPAS 247) Integration
+- Receipts to bank accounts generate standardized VietQR compliant with NAPAS 247 dynamic payment standards (`https://img.vietqr.io/image/:bank-:account-compact2.png`).
+- Embedded memo pattern: `[PT_CODE] [PARTNER_NAME]` with exact transaction amount for instant automated reconciliation.
+
+### 18.7. Cryptographic Audit Logging (M02) & Immutability Protocol
+- Approved vouchers (`status = 'APPROVED'` or `'POSTED'`) cannot be modified in place.
+- Cancellations require a formal cancellation reason, rollback account balances atomically, reverse GL journal references, and record an immutable audit log via `AuditService.recordAuditLog()` (M02) with SHA-256 state hashing.
+
+### 18.8. Rolling 7/30/90 Days Cash Flow Forecasting & Automated Reconciliation
+- Real-time aggregation of opening balances, expected AR inflows (M31 Invoices AR aging), and committed AP outflows (M08 POs & M31 AP aging).
+- Algorithmic reconciliation matches bank transactions against cash vouchers by reference number, amount, and date window ($\pm 3$ days).
+
+---
+
+## 19. M33 — BANK RECONCILIATION & VIETQR ELECTRONIC FEEDS RULES
+
+### 19.1. Single-Writer Authority & Non-Authority Protection
+- **Bank Clearing & Reconciliation SSOT (M33):** `BankReconciliationEngine` (`engines/bankReconciliationEngine.ts`) is the authoritative engine for bank statement ingestion, deduplication, discrepancy ledger calculations, and dynamic VietQR generation.
+- **Accounting & Voucher Delegation (M32 & M30 SSOT):** M33 is strictly a Non-Authority for General Ledger and Cash accounts. Direct writes to `accounting_entries` from M33 are strictly forbidden. When statement ingestion or VietQR webhooks require voucher generation, M33 delegates creation to M32 Central Treasury Gateway (`POST /api/treasury/gateway/collect` or `authorizeCollectionGateway()`).
+
+### 19.2. Statement Ingestion Idempotency & SHA-256 Checksum Invariant
+- Every statement ingestion batch computes a SHA-256 checksum over the raw payload and maps transactions with a unique `bankTransactionId`.
+- Repeated imports with the same transaction fingerprint or batch checksum are detected and skipped with 100% idempotency, preventing duplicate lines in `bank_transactions`.
+
+### 19.3. 4-Tier Automated Matching Engine
+- Automated reconciliation executes a rigorous 4-tier matching algorithm:
+  1. **Tier 1 (Exact Reference / Invoice Code):** Direct matching on invoice numbers (`INV-AR-...`, `SO-...`).
+  2. **Tier 2 (VietQR Dynamic Memo):** Extraction and resolution of embedded VietQR metadata in transaction narratives.
+  3. **Tier 3 (Amount & Date Window):** Exact monetary amount match within $\pm 3$ calendar days window against open AR/AP ledger items.
+  4. **Tier 4 (Counterparty Tax Code & Account):** Matching based on partner tax identification and beneficiary account.
+
+### 19.4. Discrepancy Ledger & Form 08-TT Circular 200 Compliance
+- Generates official Bank Reconciliation Statement Mẫu 08-TT according to Circular 200/2014/TT-BTC:
+  - **Section I (Adjusted Bank Balance):** Bank Balance on Statement + Outstanding Deposits (Tiền gửi đang chuyển) - Outstanding Checks (Séc/Lệnh chi đang chuyển).
+  - **Section II (Adjusted Book Balance TK 1121):** Book Balance on GL + Unrecorded Credits (Thu ngân hàng chưa ghi sổ) - Unrecorded Debits (Phí/Chi ngân hàng chưa ghi sổ).
+  - Validates balance equality ($\text{Adjusted Bank Balance} = \text{Adjusted Book Balance}$).
+
+### 19.5. Dynamic VietQR NAPAS 247 & Webhook Realtime Clearing
+- Generates EMVCo-compliant dynamic QR payloads with CRC16-CCITT checksum validation, bank BIN mapping (e.g. VCB 970436, MB 970422), and customer invoice memo.
+- Webhook endpoint (`POST /api/bank/webhook/vietqr`) receives incoming transfer notifications, validates idempotency, delegates 01-TT Receipt Voucher creation to M32 Treasury Gateway, and clears customer debt in M31 Invoicing.
+
+### 19.6. Manual Match, 1-N Aggregation & Cryptographic Audit Trail (M02)
+- Supports manual 1-1 and 1-N (1 statement line to multiple invoice lines) matching and unmatching.
+- Every auto-match, manual override, rollback, and statement import triggers an immutable audit log via `AuditService.recordAuditLog()` (M02) with SHA-256 state chaining.
+
+---
+
+## 20. M30 — FISCAL PERIOD-END CLOSING & VAS 911 TRANSFER RULES
+
+### 20.1. Sole Single-Writer Accounting Authority (M30 SSOT)
+- `AccountingEngineService` (`engines/accountingEngine.ts`) is the exclusive single-writer for double-entry General Ledger journal entries (`accounting_entries`), fiscal period locks (`period_closing_runs`), and VAS Financial Statements.
+- All host modules (M13 Sales, M17 Inventory, M20 WMS, M28 Payroll, M31 Invoices, M32 Treasury, M35 Projects, M42 Costing) MUST delegate General Ledger postings exclusively to `AccountingEngineService.postJournal()`. Direct writes to `accounting_entries` from any external controller or UI are strictly prohibited.
+
+### 20.2. Double-Entry Invariant Guard (Nợ = Có Balance Rule)
+- Every posted General Ledger journal entry must satisfy $\sum \text{Debit Amount} = \sum \text{Credit Amount}$ with absolute precision ($0.0000$ VNĐ discrepancy).
+- Attempts to post unbalanced journal entries are rejected immediately with HTTP 400 (`UNBALANCED_JOURNAL_ENTRY`).
+
+### 20.3. Closed-Period Invariant Guard (M30-X02 Anti-Retroactive Mutation)
+- Before creating or modifying any journal entry, the system evaluates the target transaction date against `period_closing_runs` and `fiscal_periods`.
+- If the fiscal period corresponding to the entry date is marked `LOCKED` or `CLOSED`, posting is blocked with HTTP 403 `CLOSED_PERIOD_FORBIDDEN` (`Kỳ kế toán đã bị KHÓA SỔ. Cấm tuyệt đối ghi nhận/điều chỉnh bút toán Sổ cái GL`).
+- Unlocking closed periods requires executive authorization and leaves a SHA-256 audit log in M02.
+
+### 20.4. VAS 911 Period-End Closing Engine (M30-F05)
+- **Revenue Account Zeroing (TK 5xx, 7xx):**
+  - Debit TK 511, 515, 711 / Credit TK 911 (Xác định kết quả kinh doanh) for total accumulated revenue.
+- **Expense Account Zeroing (TK 6xx, 8xx):**
+  - Debit TK 911 / Credit TK 632, 635, 641, 642, 811 for total accumulated expenses.
+- **Net Profit / Loss Transfer to TK 4212 (Lợi nhuận sau thuế chưa phân phối năm nay):**
+  - If $\text{Total Revenue} > \text{Total Expenses}$ ($\text{Net Profit} > 0$): Debit TK 911 / Credit TK 4212.
+  - If $\text{Total Revenue} < \text{Total Expenses}$ ($\text{Net Loss} > 0$): Debit TK 4212 / Credit TK 911.
+- Upon completion, the revenue (5xx, 7xx) and expense (6xx, 8xx) balances for the period are zeroed out, and the period status in `period_closing_runs` transitions to `LOCKED`.
+
+### 20.5. Replay Safety & Idempotency Guarantee
+- Every period closing execution registers a unique `periodCode` (e.g. `T09/2026`, `Q3/2026`, `Y2026`).
+- Executing period closing multiple times on the same period returns the existing run summary (`isIdempotent: true`) and NEVER generates duplicate closing entries or double-transfers net profit/loss to TK 4212.
+
+### 20.6. Storno Reversal Protocol & Journal Immutability
+- Posted journal entries in `accounting_entries` are immutable and CANNOT be updated or deleted.
+- Corrections or cancellations MUST be executed via Storno Reversal Entries (`POST /api/finance/gl/reversal`), generating opposing Debit/Credit entries with exact negative/opposing amounts and referencing the original document code (`sourceReferenceNo`), preserving a full audit trail.
+
+---
+
+## 21. M34 — FINANCIAL CONSOLIDATION & MULTI-ENTITY REPORTING RULES
+
+### 21.1. Read-Only Single-Writer Observer Guard (M34 SSOT Boundary)
+- `ConsolidationService` operates exclusively as a **Read-Only Observer** over branch and entity underlying ledgers (`accounting_entries` in M30, `stock_ledger` in M17, `cost_layers` in M42).
+- M34 MUST NEVER write, alter, or inject entries directly into M30 General Ledger, M17 Inventory Ledger, or M42 Costing Ledger. All consolidation adjustments and intercompany eliminations are maintained in a isolated consolidation presentation layer (`consolidation_runs`, `consolidation_run_lines`, `elimination_entries`, `fx_adjustments`).
+
+### 21.2. Dedicated Intercompany Elimination Layer (Self-Trade & Debt Elimination)
+- Self-sales, internal revenue/cost of goods sold, and intercompany debt balances (Accounts Receivable TK 131 vs Accounts Payable TK 331) are automatically identified and netted out.
+- Elimination entries are persisted in `elimination_entries` referencing the active `run_id`. They serve solely to adjust group consolidated totals and do NOT modify individual entity branch Trial Balances in M30.
+
+### 21.3. Consolidation Run Lifecycle & Terminal Immutability
+- A consolidation run follows the strict lifecycle: `PENDING` $\rightarrow$ `APPROVED` $\rightarrow$ `LOCKED`.
+- Once a consolidation run transitions to `APPROVED` or `LOCKED`, its status is terminal and immutable. Any attempt to re-approve, modify line items, or delete the run is rejected with HTTP 400 (`ALREADY_PROCESSED` / `TERMINAL_STATE_LOCKED`).
+
+### 21.4. Idempotency & Replay Safety Guarantee
+- Consolidation execution (`POST /api/finance/consolidation/runs`) requires an `idempotencyKey` header/body parameter.
+- Re-executing a consolidation request with the same `idempotencyKey` returns the exact existing `runId` and summary without re-aggregating trial balances or duplicating consolidation records.
+
+### 21.5. Balance Sheet Mathematical Invariant & Discrepancy Tolerance
+- Every consolidated financial statement must satisfy the accounting balance equation:
+  $$\text{Total Consolidated Assets} = \text{Total Consolidated Liabilities} + \text{Total Consolidated Equity}$$
+- Discrepancy tolerance is strictly $0.0000$ VNĐ. Any unmapped account or imbalanced elimination triggers an explicit audit warning and blocks approval.
+
+### 21.6. Executive Authorization (CFO/ADMIN) & DMS Cryptographic Vault Sealing
+- Approval and locking of consolidated financial statements require explicit executive roles (`CFO` or `ADMIN`).
+- Upon approval, M34 automatically:
+  1. Records a tamper-evident audit log in M02 (`AuditService.recordAuditLog()`).
+  2. Seals the consolidated report package in M29 DMS (`dms_documents`) with a SHA-256 cryptographic hash.
+  3. Emits the cross-module outbox event `finance.consolidation.run.completed.v1` via M05 for downstream BI consumption in M37.
+
+---
+
+## 22. M29 — DIGITAL DOCUMENT MANAGEMENT (DMS) & CRYPTOGRAPHIC VAULT RULES
+
+### 22.1. Mandatory Server-Side SHA-256 Hashing & Cryptographic Sealing
+- Every binary payload vaulted in M29 MUST have its SHA-256 hash computed directly on the server from the raw byte stream (`crypto.createHash('sha256')`).
+- Client-declared hashes (if provided) are strictly validated against the server-computed hash; any mismatch is rejected with HTTP 400 (`CHECKSUM_MISMATCH`).
+- Once a document is digitally signed or sealed (`status = 'SEALED'`), its content, title, and provenance metadata become immutable.
+
+### 22.2. Zero-Overwrite Versioning & Superseded Ledger Integrity
+- Modifying a vaulted document requires creating a new version (`POST /api/dms/vault` with `supersedesId`).
+- The system automatically increments the major/minor version (e.g., `v1.0` $\rightarrow$ `v2.0`), marks the predecessor document as `SUPERSEDED`, and keeps the previous binary and SHA-256 hash intact for audit verification.
+- In-place updates (`PUT /api/dms/documents/:id`) or hard deletion (`DELETE`) on sealed documents are strictly forbidden and blocked with HTTP 403 (`DOCUMENT_SEALED_IMMUTABLE`).
+
+### 22.3. Retention Schedule & Legal Hold Immutability Shield
+- Documents are governed by predefined retention schedules (Standard Business: 5 years, VAS Financial/Tax: 10 years, Legal Permanent: 100 years).
+- Any attempt to dispose of a document before its `retentionUntil` timestamp is blocked with HTTP 403 (`RETENTION_PERIOD_ACTIVE`).
+- When `legalHold` is activated on a document, ALL disposal and archival transitions are immediately frozen, overriding standard expiration dates until explicitly released by authorized Legal/Compliance roles.
+
+### 22.4. Multi-Tier Security Classification & RBAC Metadata Redaction
+- Documents are categorized into four security levels: `PUBLIC`, `INTERNAL`, `CONFIDENTIAL`, and `RESTRICTED`.
+- Users without elevated permissions (`dms.confidential.view` or `SUPER_ADMIN`/`DIRECTOR`) querying documents will receive sanitized responses: `title` is redacted to `[TÀI LIỆU BẢO MẬT]`, and direct binary streaming via `/api/dms/documents/:id/download` is blocked with HTTP 403.
+
+### 22.5. Append-Only Cross-Module Attachment Linking & Entity Provenance
+- All cross-module attachments (PO contracts in M08, VAT invoice PDFs in M13/M31, Payment receipts in M32, COAs in M39) are registered via `DmsEntityLinker`.
+- The entity linker validates that the host business voucher exists in the database before accepting the document.
+- Documents are linked in an append-only manner without mutating host document state, ledger balances, or financial amounts.
+
+### 22.6. Prohibition of External File Storage & MIME Whitelisting
+- All files must be stored within the managed DMS storage engine with strict MIME type enforcement (`application/pdf`, `image/png`, `image/jpeg`, `application/xml`, `text/xml`, `application/vnd.openxmlformats-officedocument.*`).
+- Executable files (`.exe`, `.sh`, `.bat`, `.js`) and unwhitelisted binaries are rejected with HTTP 415 (`UNSUPPORTED_MEDIA_TYPE`). File size is capped at 25MB (HTTP 413).
+
+### 22.7. Idempotency & Duplicate Submission Protection
+- All upload and vault operations support the `idempotencyKey` parameter.
+- Resubmissions with the same `idempotencyKey` return the existing document record (`alreadyProcessed: true`) without creating duplicate records or re-hashing.
+- Uploads with matching SHA-256 checksum and identical entity linkage return a duplicate advisory (`duplicate: true`) to prevent repository clutter.
+
+### 22.8. Controlled Disposal Workflow & Permanent M02 Audit Tombstone
+- Final disposal requires a multi-step workflow: submission to governance council (M28) $\rightarrow$ validation against retention/legal hold $\rightarrow$ binary purging.
+- Upon disposal, a permanent tombstone record with the original document code, disposal reason, approving authority, and timestamp is logged to M02 `audit_logs`. The document entry is updated with status `DISPOSED` and a tombstone checksum prefix (`TOMBSTONE-...`).
+
+---
+
+## 23. M38 — IT SERVICE DESK & INCIDENT SLA MANAGEMENT (ITIL v4) RULES
+
+### 23.1. Single-Writer Authority & Non-Authority Boundaries
+- **M38 Domain Authority**: `ServiceDeskService` (`engines/serviceDeskService.ts`) is the exclusive single-writer for IT incident and support tickets (`tickets`), status transition history (`ticket_status_history`), SLA policies (`sla_policies`), access request records (`ticket_access_requests`), and satisfaction surveys (`ticket_surveys`).
+- **Prohibition of Direct RBAC Mutation**: M38 MUST NOT execute direct SQL `INSERT/UPDATE/DELETE` on `users`, `roles`, `role_permissions`, or `user_permissions` (M04). All access request fulfillments are executed strictly through official M04 APIs (`POST /api/rbac/users/:id/permissions` or role delegation).
+- **Prohibition of Direct Ledger Mutations**: M38 is strictly prohibited from mutating `stock_ledger` (M17), `accounting_entries` (M30), or `cost_layers` (M42). Hardware maintenance actions are delegated solely via M27 Work Orders (`POST /api/eam/work-orders`).
+
+### 23.2. ITIL Incident Lifecycle & Terminal State Immutability
+- Tickets follow a deterministic state machine:
+  $$\text{OPEN} \rightarrow \text{ASSIGNED} \rightarrow \text{IN\_PROGRESS} \rightarrow \text{PENDING} \rightarrow \text{RESOLVED} \rightarrow \text{CLOSED}$$
+- **Mandatory Root Cause Guard**: Transitioning to `RESOLVED` requires non-empty `rootCause` (nguyên nhân gốc rễ) and `resolutionNote` (giải pháp kỹ thuật).
+- **Terminal Lock on CLOSED**: Once a ticket transitions to `CLOSED` (or `CANCELLED`), its record becomes **Read-Only vĩnh viễn**. Any attempt to modify, re-resolve, or alter a closed ticket is rejected with HTTP 400 (`TICKET_LOCKED_READ_ONLY`). Re-occurring incidents must be logged as a new ticket referencing `parentTicketId` with relation type `REOPENED_FROM`.
+- **Append-Only History**: Every status transition generates an immutable record in `ticket_status_history`.
+
+### 23.3. SLA Calculation, Pause Protocol & Single-Trigger Escalation
+- **Priority Calculation Matrix**: Priority is automatically determined from Impact $\times$ Urgency:
+  - Critical $\times$ Critical $\rightarrow$ `P1 - URGENT` (Response: 15m, Resolution: 2.0h, 24/7/365)
+  - Critical/High $\times$ High $\rightarrow$ `P2 - HIGH` (Response: 30m, Resolution: 4.0h, Business hours)
+  - High/Medium $\times$ Medium $\rightarrow$ `P3 - NORMAL` (Response: 2.0h, Resolution: 8.0h, Business hours)
+  - Any $\times$ Low $\rightarrow$ `P4 - LOW` (Response: 4.0h, Resolution: 24.0h, Business hours)
+- **SLA Clock Pause**: When placed in `PENDING` (Waiting for user / Waiting for vendor parts), the SLA timer is paused. Resuming increments `slaPausedSeconds` and extends the effective resolution due date by the exact pause duration.
+- **Single-Trigger Warning & Breach Guard**: Escalation flags (`warning75Sent`, `warning90Sent`, `isSlaBreached`) are strictly idempotent and fire at most once per threshold level per ticket.
+- **Virtual Simulation Guard**: The `GET /api/service-desk/sla?asOf=` simulator calculates virtual breaches for testing without firing real notification webhooks.
+
+### 23.4. Access Request Governance & Segregation of Duties (SoD)
+- **Multi-Level Approval Chain**:
+  - Standard permissions: Requester $\rightarrow$ Direct Line Manager (M28) $\rightarrow$ Administrator Fulfill (M04).
+  - High-risk permissions (`SUPER_ADMIN`, `ADMIN`, `rbac:manage`, `accounting:post_gl`, `pricing:override_approval`, `costing:allocate`, `inventory:force_adjust`): Requester $\rightarrow$ Direct Line Manager (M28) $\rightarrow$ IT Security Officer $\rightarrow$ Administrator Fulfill (M04).
+- **Segregation of Duties (SoD) Invariant**: $\text{Requester} \neq \text{Approver} \neq \text{Fulfiller}$. Self-approval or self-fulfillment is strictly blocked by the server.
+- **Time-Bound Validity & Expiration**: Every granted access request MUST have an `expiresAt` timestamp (default 30 days) and supports manual or automatic revocation.
+
+### 23.5. DMS Vault Integration & EAM 2-Way Hardware Synchronization
+- All error logs, screenshots, and diagnostic reports must be vaulted in M29 DMS (`dms_documents`) with SHA-256 integrity verification.
+- Corrective work orders dispatched to M27 EAM carry `sourceModule = 'M38'` and `sourceReferenceId = ticket.id`. When the technician completes the work order in M27, M27 synchronizes back and marks the ticket `RESOLVED` with downtime and technician notes.
+
+### 23.6. Idempotency & Concurrency Safety
+- All ticket creation, resolution, closure, and access request mutations require an `idempotencyKey`. Duplicate submissions return the existing record without creating duplicate tickets or history rows.
+
+---
+
+## 24. M37 — BUSINESS INTELLIGENCE & EXECUTIVE ANALYTICS RULES
+
+### 24.1. Single-Writer Authority & Zero Duplicate GL Engine
+- **M37 IS PURELY READ-ONLY**: M37 does not own financial or operational transaction ledgers. It MUST NOT execute double-entry postings or direct GL calculations on raw accounting entries.
+- **SSOT Delegation to M30**: All VAS P&L Income Statement figures and Trial Balance line items are directly generated via M30 `accountingEngine.generateFinancialStatements()`. M37 MUST NOT re-calculate debit/credit accounts or maintain parallel revenue/cost calculations.
+
+### 24.2. Cash Flow & Financial Ratios Formulation
+- **Direct Cash Flow Validation**: Closing cash balance on the Cash Flow statement MUST equal total actual cash and bank account balances from M32 Treasury (`cash_journals`) and M33 Bank Reconciliation (`bank_accounts`).
+- **Inventory Turnover & Working Capital**: Inventory turnover ratio = `COGS (from M42 Costing Engine) / Average Inventory Value (from M17 Stock Balances & M42 Cost Layers)`. Days Sales in Inventory (DSI) = `365 / Inventory Turnover Ratio`. Days Sales Outstanding (DSO) = `(Accounts Receivable 131 / Net Revenue) * 365`. Days Payable Outstanding (DPO) = `(Accounts Payable 331 / COGS) * 365`.
+
+### 24.3. Immutability of Closed Periods & Consolidated Fallback
+- **Closed Period Immutability**: Historical financial statement metrics for closed/locked periods in M30 MUST remain completely immutable across repeated views or export runs.
+- **Consolidation Fallback Guard**: When scope = `CONSOLIDATED`, M37 queries M34 for locked consolidation runs (`consolidation_runs.status = 'LOCKED'`). If no locked consolidation run exists for the period, M37 falls back safely to current branch/company operational data with clear UI origin indicators.
+
+### 24.4. Idempotent Export Engine & Audit Compliance
+- **Export Idempotency**: Ad-hoc report exports require a unique `idempotencyKey`. Concurrent or repeated export requests with the same key return the identical `export_jobs` record without re-generating duplicate files.
+- **Cryptographic Audit & EventBus Outbox**: Viewing or exporting C-Level executive reports records an immutable audit log via M02 `AuditService.recordAuditLog()` and publishes a transactional event `analytics.report.exported.v1` on M05 EventBus outbox.
+
+---
+
+## 25. M40 — ENVIRONMENTAL HEALTH & SAFETY (EHS) RULES
+
+### 25.1. Single-Writer Authority & Lifecycle Invariants
+- **EhsService Authority**: `EhsService` is the sole writer for safety incident logs (`ehs_incidents`), job safety assessments (`ehs_risk_assessments`), EHS CAPAs (`ehs_capas`), safety audits (`ehs_safety_audits`), fire safety equipment inspections (`ehs_fire_equipment`), environmental monitoring records (`ehs_environmental_records`), and work permits / LOTO tags (`ehs_safety_permits`).
+- **Incident Immutability**: Closed safety incidents (`status = 'CLOSED'`) are permanently locked and transitioned to READ-ONLY mode. Any subsequent investigation or edit attempts throw an invariant violation error ("Sự cố đã đóng, không thể chỉnh sửa"). Closed incidents are cryptographically signed and logged in M02 `audit_logs`.
+- **Sequential Incident Code**: Incident numbers are generated using sequential number series `INC-YYYY-NNNN`. Duplicate sequence numbers are blocked.
+
+### 25.2. JSA 5×5 Risk Matrix Calculation Engine
+- **Formula**: Risk Score = `severityScore (1-5)` × `probabilityScore (1-5)`. Range 1 to 25.
+- **Risk Level Thresholds**:
+  - `1 - 4`: `LOW` (Low risk, standard controls suffice)
+  - `5 - 9`: `MEDIUM` (Moderate risk, requires departmental supervision)
+  - `10 - 14`: `HIGH` (High risk, mandatory PPE and pre-task briefing)
+  - `15 - 25`: `EXTREME` (Extreme risk, **immediate work prohibition** until engineering controls & EHS approval granted)
+
+### 25.3. Safety Audit & Auto-CAPA Trigger
+- **Scoring**: Score % = `(Passed Items / Total Checklist Items) × 100`. Result is `PASS` if score >= 80% and all mandatory items pass; otherwise `FAIL`.
+- **Automated CAPA Dispatch**: If any mandatory checklist item fails during a field audit, `EhsService` automatically triggers an emergency CAPA record linked to the audit ID with target SLA due date.
+
+### 25.4. Fire Safety (PCCC) & Inspection Expiry Rules
+- **6-Month Periodic Inspection Rule**: Fire safety equipment (extinguishers, hydrants, alarm panels) must undergo periodic physical inspection every 6 months (180 days).
+- **Expiry Status Transition**: When `expiryDate < today`, equipment status automatically evaluates to `EXPIRED`. Active work permits or audits in warehouses with expired PCCC equipment throw safety warnings.
+
+### 25.5. Environmental Monitoring & QCVN Threshold Guard
+- **Automated Compliance Evaluation**: When logging environmental parameters (e.g., COD, BOD5, TSS, Noise dBA), `complianceStatus` is automatically evaluated:
+  - If `measuredValue <= standardThreshold` $\rightarrow$ `COMPLIANT`.
+  - If `measuredValue > standardThreshold` $\rightarrow$ `EXCEEDED` (triggers warning notification & auto-flags environmental incident requirement).
+
+### 25.6. Permit to Work, LOTO Isolation & M27 Read-Only Gate
+- **LOTO Tagging**: Energy isolation (Lockout/Tagout) permits require `lotoTagNumber` and specific `targetAssetId`.
+- **M27 Read-Only Gatekeeper Integration**: EHS provides a read-only probe API `GET /api/ehs/permits/asset/:assetId/active` for M27 EAM. M27 checks active LOTO permits before releasing high-risk Work Orders without modifying M27 code or database.
+- **LOTO Removal Verification**: Closing a LOTO permit (`POST /api/ehs/permits/:id/close`) requires explicit verification that maintenance work is complete and physical energy locks have been safely removed.
+
+### 25.7. Idempotency & Outbox Event Emission
+- **Idempotency Guard**: All state-mutating requests (`POST /api/ehs/incidents`, `POST /api/ehs/risk-assessments`, `POST /api/ehs/capas`, `POST /api/ehs/audits`, `POST /api/ehs/environmental/records`, `POST /api/ehs/permits`) require an `idempotencyKey`.
+- **EventBus Emissions**: Major lifecycle events publish transactional outbox events on M05 EventBus: `ehs.incident.logged.v1`, `ehs.incident.closed.v1`, `ehs.permit.issued.v1`, `ehs.audit.failed.v1`.
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+## 26. M01 — Activity & Task Center Rules
+
+### 26.1. Single-Writer Authority Boundary (Read-Only Aggregator)
+- M01 is strictly an Operational Aggregation and Gateway Dispatcher, NOT a domain authority for stock, accounting, pricing, or costing.
+- Direct mutations to `stock_ledger`, `stock_balances`, `accounting_entries`, `cost_layers`, or `pricing_rules` from M01 components or routes are strictly prohibited.
+- All actions MUST be delegated to official domain services (`StockAdjustmentService`, `InventoryService`, `purchaseOrders`, `tickets`, etc.) using explicit domain methods.
+
+### 26.2. Multi-Source Work Queue Ingestion
+- Work items are aggregated dynamically from authentic enterprise sources:
+  1. **M08 Procurement**: Purchase Orders in `DRAFT` status awaiting management approval.
+  2. **M20 Stock Adjustment**: Stock Adjustments in `DRAFT` status requiring warehouse/financial manager review.
+  3. **M38 IT Service Desk**: Support Tickets in `OPEN`, `ASSIGNED`, `IN_PROGRESS`, or `PENDING` status.
+  4. **M16 Retail & Omnichannel**: Sales Orders in pending fulfillment or payment status.
+  5. **M31 Invoices & VAS**: High-value e-Invoices awaiting digital signature and issuance.
+
+### 26.3. Server-Side Permission Filtering & RBAC
+- Access control is evaluated server-side per work item:
+  - Users with requisite domain permissions (`purchase:approve`, `stock_adjustment.approve`, `servicedesk.ticket.manage`, etc.) receive `canAction = true` and active action buttons.
+  - Users lacking operational permissions receive `canAction = false` and `isReadOnly = true` ("Chưa có quyền duyệt" / "Chỉ xem").
+
+### 26.4. Whitelisted Fast Actions & Idempotency Guarantee
+- Fast actions are restricted to an explicit whitelist (M08 approve/reject, M20 approve/reject, M38 take/assign).
+- Every execution generates a cryptographic SHA-256 audit log in M02 (`AuditService.recordAuditLog`).
+- Replay calls with identical `idempotencyKey` or already-processed items return status `ALREADY_PROCESSED` without duplicating tasks or re-mutating underlying states.
+
+### 26.5. Batch Bulk Action Isolation
+- Bulk actions (`POST /api/workspace/work-items/bulk-action`) execute sequentially with individual `idempotencyKey` per row item.
+- Failure of a single row does not abort the batch; each item returns independent execution status (`success`, `error`, `status`).
+
+### 26.6. Honest SLA & Task Age Computation
+- SLA policies and thresholds are bound strictly to authentic data from `sla_policies` (M38 IT Service Desk).
+- For all other sources without formal SLA definitions, the system displays "Chưa có SLA" alongside exact elapsed age (`now - createdAt`), strictly prohibiting synthetic SLA thresholds.
+
+---
+
+## 27. M22/M23 — Traceability 360 & Product Genealogy Rules
+
+### 27.1. Read-Only Zero-Mutation Guarantee
+- The 360° Traceability Aggregator (`TraceabilityAggregationService`) is strictly read-only.
+- Inspecting lot genealogies or unit serial dossiers must never issue `INSERT`, `UPDATE`, or `DELETE` operations against operational database tables (`stock_ledger`, `stock_balances`, `lots`, `serial_numbers`, `accounting_entries`, `cost_layers`).
+
+### 27.2. Explicit Linkage Anomaly & Gap Flagging
+- Every node in the bi-directional genealogy tree must explicitly declare its status:
+  - `OK`: Valid verified record linked upstream/downstream.
+  - `MISSING_LINK`: Document reference missing (e.g., lot without inbound PO/GRN, or orphaned serial).
+  - `QTY_MISMATCH`: Material quantity divergence between source issuance and consumer order.
+- The system strictly forbids hiding broken links or synthesizing artificial fallback nodes.
+
+### 27.3. Field-Level RBAC & Graceful Restriction
+- If a user lacks specific domain permissions (e.g., `FINANCE_VIEW` or `SALES_VIEW`), the corresponding subsections (COGS unit cost, GL journals, Customer names) must return `{ restricted: true }`.
+- Under no circumstances should field-level permission checks abort the entire dossier with HTTP 403/500 errors; the overall dossier remains HTTP 200 OK with masked sensitive nodes.
+
+### 27.4. Inventory Quantity Conservation Invariant
+- The inventory conservation rule must hold across the trace tree:
+  $$\sum \text{Stock Inbound} - \sum \text{Stock Outbound} = \text{Lot Physical Balance}$$
+- Any discrepancy between $\Sigma(\text{movements})$ in `stock_ledger` and the lot balance must be flagged with exact numerical variance.
+
+### 27.5. Read-Audit Separation
+- Pure read queries and dossier lookups must not write telemetry or clutter `audit_logs`.
+- Audit log generation is reserved exclusively for state-altering transactions (quarantine locking, status modifications, digital signing).
+
+### 27.6. Traversal Depth & Loop Protection
+- Graph traversals must enforce `maxDepth` (default: 5) and `maxNodes` (default: 500) boundaries with a `visitedSet` to eliminate infinite circular reference loops.
+- When graph limits are reached, the system must set `isTruncated = true` and display exact node counts to inform the operator.

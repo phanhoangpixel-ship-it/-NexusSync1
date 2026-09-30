@@ -7,6 +7,9 @@ import { formatNumber, parseNumber } from '../../../../utils/numberFormat';
 import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import { usePagination } from '../../../../hooks/usePagination';
 import { PaginationControl } from '../../../../components/common/PaginationControl';
+import { TablePagination } from '../../../../components/common/TablePagination';
+import { BulkActionBar } from '../../../../components/common/BulkActionBar';
+import { StatusBadge } from '../../../../components/common/StatusBadge';
 import {
   Users,
   Package,
@@ -16,6 +19,7 @@ import {
   RefreshCw,
   Download,
   CheckCircle2,
+  AlertCircle,
   AlertTriangle,
   Building2,
   DollarSign,
@@ -72,6 +76,9 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
       console.error(e);
     }
   }, [items]);
+
+  // Customer Search
+  const [customerSearch, setCustomerSearch] = useState('');
 
   // Item Master Filters & Search
   const [itemSearch, setItemSearch] = useState(() => {
@@ -371,6 +378,25 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
     onNotify('success', 'Xuất Excel Thành Công', 'Đã tải xuống danh mục Item Master SKU định dạng .xlsx');
   };
 
+  const handleExportExcelCustomers = () => {
+    const dataToExport = customers.map(c => ({
+      'Mã Khách Hàng': c.id,
+      'Tên Khách Hàng (B2B)': c.name,
+      'Phân Hạng (Tier)': c.tier,
+      'Hạn Mức Tín Dụng (VND)': c.creditLimit,
+      'Công Nợ Hiện Tại (VND)': c.currentDebt,
+      'Hạn Thanh Toán': c.paymentTerms || 'Net 30',
+      'Số Điện Thoại': c.phone || 'N/A',
+      'Địa Chỉ': c.address || 'N/A',
+      'Trạng Thái': c.status
+    }));
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "B2B_Customers");
+    XLSX.writeFile(wb, "NexusSync_B2B_Customers.xlsx");
+    onNotify('success', 'Xuất Excel Thành Công', 'Đã tải xuống danh bạ khách hàng B2B định dạng .xlsx');
+  };
+
   const handleSelectCustomer = (cust: any) => {
     setSelectedEntityForModal(cust);
     onSelectEntity({
@@ -422,40 +448,120 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
     <div ref={containerRef} style={minHeightStyle} className="space-y-6 pb-12 relative">
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
 
-      {/* Header Banner (L0 Master Header) */}
-      <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 to-[#1e293b] text-white shadow-md flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold rounded border border-emerald-400/30">
-              M07 • ITEM MASTER & B2B COMMERCE SSOT
-            </span>
-            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-[11px] font-semibold flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Catalog Governance Seal</span>
-            </span>
-          </div>
-          <h1 className="text-xl font-bold text-white mt-1.5 tracking-tight">
-            Danh Mục Sản Phẩm (Item Master) & Kho Vận M17
-          </h1>
-          <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
-            Khai báo đầy đủ thông số SKU, tồn kho, vị trí ô kệ, số lô và điều kiện bảo quản đồng bộ hoàn toàn với phân hệ Kho Vận M17 và Bảng Giá M41.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
+      {/* ================= OPTION C: INTEGRATED TAB-TOOLBAR MASTER BAR ================= */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs p-2 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3">
+        {/* Left: Scrollable Operational Tab Strip */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1 min-w-0 py-0.5">
           <button
-            onClick={() => { setLoading(true); setTimeout(() => setLoading(false), 400); onNotify('info', 'Làm Mới Dữ Liệu', 'Đã đồng bộ thời gian thực Item Master.'); }}
-            className="flex items-center gap-2 px-3.5 py-2 bg-white/10 hover:bg-white/15 text-white rounded-xl text-xs font-semibold transition-all border border-white/10 cursor-pointer"
+            type="button"
+            onClick={() => setActiveTab('items')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+              activeTab === 'items'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+            }`}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span>Đồng Bộ Trực Tiếp</span>
+            <Package className="w-4 h-4 shrink-0" />
+            <span>Vật Tư & Hàng Hóa (SKU)</span>
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-bold shrink-0 ${
+              activeTab === 'items' ? 'bg-blue-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+            }`}>
+              {items.length}
+            </span>
           </button>
           <button
-            onClick={handleExportExcelItems}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+            type="button"
+            onClick={() => setActiveTab('customers')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+              activeTab === 'customers'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Users className="w-4 h-4 shrink-0" />
+            <span>Khách Hàng B2B</span>
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-bold shrink-0 ${
+              activeTab === 'customers' ? 'bg-blue-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+            }`}>
+              {customers.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('credit')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+              activeTab === 'credit'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <CreditCard className="w-4 h-4 shrink-0" />
+            <span>Hạn Mức Tín Dụng</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('pricing')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+              activeTab === 'pricing'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Tag className="w-4 h-4 shrink-0" />
+            <span>Bảng Giá B2B</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('identity-matrix')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
+              activeTab === 'identity-matrix'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Database className="w-4 h-4 shrink-0" />
+            <span>Ma Trận Định Danh</span>
+          </button>
+        </div>
+
+        {/* Right: Integrated Actions & Quick Search */}
+        <div className="flex items-center gap-2 shrink-0 border-t xl:border-t-0 pt-2 xl:pt-0 border-slate-100 dark:border-slate-800">
+          <div className="relative w-full sm:w-56">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder={activeTab === 'customers' ? 'Tìm khách hàng...' : 'Tìm nhanh SKU, Barcode...'}
+              value={activeTab === 'customers' ? customerSearch : itemSearch}
+              onChange={(e) => activeTab === 'customers' ? setCustomerSearch(e.target.value) : setItemSearch(e.target.value)}
+              className="w-full pl-8 pr-7 py-1.5 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white placeholder-slate-400 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            {(activeTab === 'customers' ? customerSearch : itemSearch) && (
+              <button
+                type="button"
+                onClick={() => activeTab === 'customers' ? setCustomerSearch('') : setItemSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white text-xs cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={() => { setLoading(true); setTimeout(() => setLoading(false), 400); onNotify('info', 'Làm Mới Dữ Liệu', 'Đã đồng bộ thời gian thực Item Master.'); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold transition-all border border-slate-200 dark:border-slate-700 cursor-pointer shrink-0"
+            title="Đồng bộ lại danh mục dữ liệu chủ"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : 'text-slate-500 dark:text-slate-400'}`} />
+            <span className="hidden sm:inline">Đồng Bộ</span>
+          </button>
+
+          <button
+            onClick={activeTab === 'customers' ? handleExportExcelCustomers : handleExportExcelItems}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0"
+            title="Xuất file Excel"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Xuất Excel (.xlsx)</span>
+            <span className="hidden sm:inline">Xuất Excel</span>
           </button>
         </div>
       </div>
@@ -524,93 +630,6 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-500"></span>
             <span>≤ 15 Units Ngưỡng Sàn</span>
           </div>
-        </div>
-      </div>
-
-      {/* ================= TẦNG L1: SUB-TABS NAVIGATION BAR (M41 MASTER SPEC) ================= */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs p-1.5 flex items-center justify-between gap-2.5 min-w-0">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1 min-w-0 py-0.5">
-          <button
-            type="button"
-            onClick={() => setActiveTab('items')}
-            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
-              activeTab === 'items'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <Package className="w-4 h-4 shrink-0" />
-            <span>Danh mục Vật tư & Hàng hóa (SKU)</span>
-            <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold shrink-0 ${
-              activeTab === 'items' ? 'bg-blue-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-            }`}>
-              {items.length}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('customers')}
-            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
-              activeTab === 'customers'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <Users className="w-4 h-4 shrink-0" />
-            <span>Khách Hàng B2B & Đại Lý</span>
-            <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold shrink-0 ${
-              activeTab === 'customers' ? 'bg-blue-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-            }`}>
-              {customers.length}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('credit')}
-            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
-              activeTab === 'credit'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <CreditCard className="w-4 h-4 shrink-0" />
-            <span>Hạn Mức Tín Dụng & Công Nợ</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('pricing')}
-            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
-              activeTab === 'pricing'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <Tag className="w-4 h-4 shrink-0" />
-            <span>Bảng Giá B2B (Tier Pricing)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('identity-matrix')}
-            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 select-none ${
-              activeTab === 'identity-matrix'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <Database className="w-4 h-4 shrink-0" />
-            <span>Identity Matrix (SSOT)</span>
-          </button>
-        </div>
-
-        <div className="hidden 2xl:flex items-center gap-3 px-3 py-1 text-xs text-slate-500 dark:text-slate-400 shrink-0 border-l border-slate-200 dark:border-slate-800 pl-3">
-          <div className="flex items-center gap-1.5 font-medium">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Master Data Graph Active</span>
-          </div>
-          <span className="h-3 w-px bg-slate-200 dark:bg-slate-700"></span>
-          <span className="font-mono text-[11px] text-slate-700 dark:text-slate-300 font-semibold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md border border-slate-200/80 dark:border-slate-700/80">
-            M07 SSOT
-          </span>
         </div>
       </div>
 
@@ -1048,7 +1067,17 @@ export const M07CustomersItemMasterWorkspace: React.FC<M07CustomersItemMasterWor
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-700/80 text-xs">
-                      {customers.map((c) => (
+                      {customers
+                        .filter(c => {
+                          if (!customerSearch.trim()) return true;
+                          const q = customerSearch.toLowerCase();
+                          return (
+                            (c.id && c.id.toLowerCase().includes(q)) ||
+                            (c.name && c.name.toLowerCase().includes(q)) ||
+                            (c.tier && c.tier.toLowerCase().includes(q))
+                          );
+                        })
+                        .map((c) => (
                         <tr key={c.id} className="hover:bg-slate-100/80 dark:hover:bg-slate-700/60 transition-colors duration-150">
                           <td className="py-3.5 px-3">
                             <span className="font-mono text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2.5 py-1 rounded border border-slate-200 dark:border-slate-600">

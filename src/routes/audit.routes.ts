@@ -127,10 +127,10 @@ auditRouter.get('/api/audit/logs/:id', async (req, res) => {
 });
 
 /**
- * GET /api/audit/verify
+ * GET & POST /api/audit/verify & /api/audit/verify-chain
  * Cryptographic SHA-256 chain verification API
  */
-auditRouter.get('/api/audit/verify', async (req, res) => {
+auditRouter.all(['/api/audit/verify', '/api/audit/verify-chain'], async (req, res) => {
   try {
     const segment = (req.query.segment as 'all' | 'recent' | 'range') || 'all';
     const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;

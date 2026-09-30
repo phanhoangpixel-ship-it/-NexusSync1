@@ -1,248 +1,448 @@
 import { Router } from "express";
+import { ehsService } from "../../engines/ehsService";
 
 const router = Router();
 
-let seedEhsIncidents: any[] = [
-  { 
-    id: 1, 
-    recordCode: "EHS-INC-2026-001", 
-    title: "Tràn đổ dung môi hữu cơ tại kho hóa chất", 
-    incidentType: "ENVIRONMENTAL_SPILL", 
-    severity: "HIGH", 
-    location: "Khu vực kho hóa chất - Nhà xưởng 2", 
-    reportedDate: "2026-08-28", 
-    status: "INVESTIGATING", 
-    actionTaken: "Cô lập bán kính 15m, rải cát hấp thụ và thu gom vào thùng chứa rác nguy hại.", 
-    inspector: "Nguyễn Văn An" 
-  },
-  { 
-    id: 2, 
-    recordCode: "EHS-INC-2026-002", 
-    title: "Chập điện cục bộ tại máy mài CNC số 4", 
-    incidentType: "SAFETY_HAZARD", 
-    severity: "CRITICAL", 
-    location: "Xưởng cơ khí - Line CNC 1", 
-    reportedDate: "2026-08-27", 
-    status: "CLOSED", 
-    actionTaken: "Ngắt cầu dao tổng, thay thế cụm dây nguồn chống cháy và tái đào tạo vận hành.", 
-    inspector: "Trần Thị Bích" 
-  },
-  { 
-    id: 3, 
-    recordCode: "EHS-INC-2026-003", 
-    title: "Suýt rơi pallet linh kiện từ xe nâng cao", 
-    incidentType: "NEAR_MISS", 
-    severity: "MEDIUM", 
-    location: "Kho Tổng Logistics M17 - Dãy C", 
-    reportedDate: "2026-08-25", 
-    status: "RESOLVED", 
-    actionTaken: "Căn chỉnh lại giới hạn tải trọng xe nâng và kẻ lại vạch an toàn lối đi bộ.", 
-    inspector: "Lê Hoàng Nam" 
-  },
-  { 
-    id: 4, 
-    recordCode: "EHS-INC-2026-004", 
-    title: "Xước da nhẹ khi thao tác đóng gói", 
-    incidentType: "FIRST_AID", 
-    severity: "LOW", 
-    location: "Phân xưởng Lắp ráp hoàn thiện", 
-    reportedDate: "2026-08-20", 
-    status: "CLOSED", 
-    actionTaken: "Sát trùng, dán băng gạc y tế tại chỗ và cấp mới găng tay chống cắt cấp 5.", 
-    inspector: "Phạm Minh Đức" 
+// Helper to extract actor information from headers / simulated session
+const getActor = (req: any) => {
+  const userId = req.headers['x-user-id'] ? Number(req.headers['x-user-id']) : (req.user?.id || 1);
+  const username = req.headers['x-user-name'] || req.user?.name || req.user?.username || 'Admin EHS';
+  return { userId, username };
+};
+
+// =========================================================================
+// 1. INCIDENTS (F01, F09, F10)
+// =========================================================================
+
+router.get("/api/ehs/incidents", async (req, res) => {
+  try {
+    const { warehouseId, severity, status, search } = req.query;
+    const records = await ehsService.getIncidents({
+      warehouseId: warehouseId ? Number(warehouseId) : undefined,
+      severity: severity as string,
+      status: status as string,
+      search: search as string,
+    });
+    res.json(records);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Lỗi tải danh sách sự cố" });
   }
-];
+});
 
-let seedEhsInspections: any[] = [
-  { 
-    id: 1, 
-    inspectionCode: "EHS-INSP-2026-001", 
-    title: "Kiểm định Hệ thống Báo cháy & Bình chữa cháy PCCC",
-    type: "FIRE_SAFETY", 
-    location: "Khu phức hợp Văn phòng & Nhà xưởng 1", 
-    date: "2026-08-20", 
-    status: "PASSED", 
-    findings: "50/50 bình chữa cháy CO2 & Bột ABC còn hạn kiểm định, lối thoát hiểm Exit thông thoáng.",
-    inspector: "Đội PCCC Cơ sở & Phòng CS PCCC",
-    totalItems: 25,
-    passedItems: 25
-  },
-  { 
-    id: 2, 
-    inspectionCode: "EHS-INSP-2026-002", 
-    title: "Thanh tra Quản lý Rác thải Nguy hại & Nước thải",
-    type: "WASTE_MANAGEMENT", 
-    location: "Khu vực Lưu trữ Tạm thời & Trạm Xử lý Nước thải", 
-    date: "2026-08-25", 
-    status: "FAILED", 
-    findings: "Phát hiện 2 thùng đựng giẻ lau dính dầu chưa dán nhãn chất thải nguy hại theo quy chuẩn.",
-    inspector: "Ban Môi trường ISO 14001",
-    totalItems: 20,
-    passedItems: 18
-  },
-  { 
-    id: 3, 
-    inspectionCode: "EHS-INSP-2026-003", 
-    title: "Kiểm tra An toàn Điện & Tiếp địa Chống sét",
-    type: "ELECTRICAL", 
-    location: "Trạm Biến áp 1000kVA & Tủ điện phân phối chính", 
-    date: "2026-08-15", 
-    status: "PASSED", 
-    findings: "Điện trở tiếp địa đạt < 4 Ohm, thảm cách điện cao áp đạt chuẩn an toàn 24kV.",
-    inspector: "Trung tâm Kiểm định Kỹ thuật An toàn",
-    totalItems: 15,
-    passedItems: 15
-  },
-  { 
-    id: 4, 
-    inspectionCode: "EHS-INSP-2026-004", 
-    title: "Kiểm định Nồi hơi Áp lực & Bình khí nén trung tâm",
-    type: "PRESSURE_VESSEL", 
-    location: "Phòng Máy nén khí & Cung cấp Nhiệt", 
-    date: "2026-08-10", 
-    status: "PASSED", 
-    findings: "Van an toàn xả đúng áp suất 10 bar, chứng chỉ kiểm định hợp quy có hiệu lực đến 2027.",
-    inspector: "Vinacontrol",
-    totalItems: 12,
-    passedItems: 12
+router.get("/api/ehs/incidents/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const incident = await ehsService.getIncidentById(id);
+    if (!incident) return res.status(404).json({ error: "Không tìm thấy hồ sơ sự cố" });
+    res.json(incident);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Lỗi tải chi tiết sự cố" });
   }
-];
+});
 
-let seedEhsTrainings: any[] = [
-  {
-    id: 1,
-    courseCode: "TRN-EHS-2026-01",
-    courseName: "Huấn luyện An toàn Vận hành Thiết bị Nâng & Xe nâng (Nhóm 3)",
-    targetGroup: "Nhóm 3 (Nghị định 44/2016)",
-    trainer: "Viện An toàn Lao động Việt Nam",
-    date: "2026-08-15",
-    attendeesCount: 35,
-    passedCount: 35,
-    status: "COMPLETED",
-    certificateExpiry: "2028-08-15"
-  },
-  {
-    id: 2,
-    courseCode: "TRN-EHS-2026-02",
-    courseName: "Kỹ năng Nhận diện Mối nguy & Sơ tán PCCC Cơ sở",
-    targetGroup: "Toàn thể CBNV (Nhóm 4 & Nhóm 6)",
-    trainer: "Cảnh sát PCCC & CNCH Tỉnh",
-    date: "2026-07-20",
-    attendeesCount: 280,
-    passedCount: 280,
-    status: "COMPLETED",
-    certificateExpiry: "2027-07-20"
-  },
-  {
-    id: 3,
-    courseCode: "TRN-EHS-2026-03",
-    courseName: "Đào tạo Nghiệp vụ Cán bộ Chuyên trách An toàn ISO 45001",
-    targetGroup: "Nhóm 2 (Cán bộ EHS)",
-    trainer: "TÜV Rheinland Vietnam",
-    date: "2026-09-02",
-    attendeesCount: 8,
-    passedCount: 8,
-    status: "COMPLETED",
-    certificateExpiry: "2028-09-02"
+router.post("/api/ehs/incidents", async (req, res) => {
+  try {
+    const actor = getActor(req);
+    const result = await ehsService.createIncident(req.body, actor);
+    res.status(201).json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Lỗi tạo báo cáo sự cố" });
   }
-];
-
-// --- INCIDENTS ENDPOINTS ---
-router.get("/api/ehs/records", (req, res) => {
-  res.json(seedEhsIncidents);
 });
 
-router.post("/api/ehs/records", (req, res) => {
-  const { title, incidentType, severity, location, actionTaken, inspector } = req.body;
-  const newRecord = {
-    id: seedEhsIncidents.length + 1,
-    recordCode: `EHS-INC-2026-${String(seedEhsIncidents.length + 1).padStart(3, '0')}`,
-    title: title || 'Báo cáo Sự cố An toàn Mới',
-    incidentType: incidentType || 'SAFETY_HAZARD',
-    severity: severity || 'MEDIUM',
-    location: location || 'Khu vực Nhà xưởng',
-    reportedDate: new Date().toISOString().slice(0, 10),
-    status: 'OPEN',
-    actionTaken: actionTaken || 'Đã ghi nhận, chờ đội an toàn xử lý CAPA',
-    inspector: inspector || 'Hoàng Nam (EHS Officer)',
-  };
-  seedEhsIncidents.unshift(newRecord);
-  res.status(201).json(newRecord);
-});
-
-router.put("/api/ehs/records/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const index = seedEhsIncidents.findIndex(i => i.id === id);
-  if (index === -1) {
-    return res.status(404).json({ error: "Không tìm thấy hồ sơ sự cố" });
+router.post("/api/ehs/incidents/:id/investigate", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const actor = getActor(req);
+    const result = await ehsService.investigateIncident(id, req.body, actor);
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Lỗi cập nhật điều tra sự cố" });
   }
-  seedEhsIncidents[index] = {
-    ...seedEhsIncidents[index],
-    ...req.body,
-    updatedAt: new Date().toISOString()
-  };
-  res.json(seedEhsIncidents[index]);
 });
 
-// --- INSPECTIONS ENDPOINTS ---
-router.get("/api/ehs/inspections", (req, res) => {
-  res.json(seedEhsInspections);
-});
-
-router.post("/api/ehs/inspections", (req, res) => {
-  const { title, type, location, findings, inspector, status, totalItems, passedItems } = req.body;
-  const newInsp = {
-    id: seedEhsInspections.length + 1,
-    inspectionCode: `EHS-INSP-2026-${String(seedEhsInspections.length + 1).padStart(3, '0')}`,
-    title: title || 'Kiểm định An toàn Lao động Mới',
-    type: type || 'FIRE_SAFETY',
-    location: location || 'Nhà máy & Kho bãi',
-    date: new Date().toISOString().slice(0, 10),
-    status: status || 'PASSED',
-    findings: findings || 'Đã hoàn tất kiểm tra hiện trường, các tiêu chuẩn được đáp ứng.',
-    inspector: inspector || 'Ban An toàn & Môi trường EHS',
-    totalItems: totalItems ? Number(totalItems) : 20,
-    passedItems: passedItems ? Number(passedItems) : (status === 'FAILED' ? 18 : 20)
-  };
-  seedEhsInspections.unshift(newInsp);
-  res.status(201).json(newInsp);
-});
-
-router.put("/api/ehs/inspections/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const index = seedEhsInspections.findIndex(i => i.id === id);
-  if (index === -1) {
-    return res.status(404).json({ error: "Không tìm thấy đợt kiểm định" });
+router.post("/api/ehs/incidents/:id/close", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const actor = getActor(req);
+    const result = await ehsService.closeIncident(id, req.body?.notes, actor);
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Lỗi đóng hồ sơ sự cố" });
   }
-  seedEhsInspections[index] = {
-    ...seedEhsInspections[index],
-    ...req.body,
-    updatedAt: new Date().toISOString()
-  };
-  res.json(seedEhsInspections[index]);
 });
 
-// --- TRAININGS ENDPOINTS ---
-router.get("/api/ehs/trainings", (req, res) => {
-  res.json(seedEhsTrainings);
+// =========================================================================
+// 2. RISK ASSESSMENTS / JSA MATRIX (F02)
+// =========================================================================
+
+router.get("/api/ehs/risk-assessments", async (req, res) => {
+  try {
+    const { warehouseId, riskLevel, search } = req.query;
+    const records = await ehsService.getRiskAssessments({
+      warehouseId: warehouseId ? Number(warehouseId) : undefined,
+      riskLevel: riskLevel as string,
+      search: search as string,
+    });
+    res.json(records);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Lỗi tải danh sách JSA" });
+  }
 });
 
-router.post("/api/ehs/trainings", (req, res) => {
-  const { courseName, targetGroup, trainer, attendeesCount, passedCount, certificateExpiry } = req.body;
-  const newTraining = {
-    id: seedEhsTrainings.length + 1,
-    courseCode: `TRN-EHS-2026-${String(seedEhsTrainings.length + 1).padStart(2, '0')}`,
-    courseName: courseName || 'Khóa Huấn luyện ATLĐ Định kỳ',
-    targetGroup: targetGroup || 'Nhóm 3 (Nghị định 44/2016)',
-    trainer: trainer || 'Trung tâm Kiểm định & Đào tạo ATLĐ',
-    date: new Date().toISOString().slice(0, 10),
-    attendeesCount: Number(attendeesCount) || 20,
-    passedCount: Number(passedCount) || Number(attendeesCount) || 20,
-    status: 'COMPLETED',
-    certificateExpiry: certificateExpiry || new Date(Date.now() + 2 * 365 * 24 * 3600 * 1000).toISOString().slice(0, 10)
-  };
-  seedEhsTrainings.unshift(newTraining);
-  res.status(201).json(newTraining);
+router.post("/api/ehs/risk-assessments", async (req, res) => {
+  try {
+    const actor = getActor(req);
+    const result = await ehsService.createRiskAssessment(req.body, actor);
+    res.status(201).json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Lỗi tạo đánh giá rủi ro JSA" });
+  }
+});
+
+// =========================================================================
+// 3. CAPA MANAGEMENT (F03, F11)
+// =========================================================================
+
+router.get("/api/ehs/capas", async (req, res) => {
+  try {
+    const { warehouseId, status, search } = req.query;
+    const records = await ehsService.getCapas({
+      warehouseId: warehouseId ? Number(warehouseId) : undefined,
+      status: status as string,
+      search: search as string,
+    });
+    res.json(records);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Lỗi tải danh sách CAPA" });
+  }
+});
+
+router.post("/api/ehs/capas", async (req, res) => {
+  try {
+    const actor = getActor(req);
+    const result = await ehsService.createCapa(req.body, actor);
+    res.status(201).json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Lỗi tạo phiếu CAPA" });
+  }
+});
+
+router.post("/api/ehs/capas/:id/verify", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const actor = getActor(req);
+    const result = await ehsService.verifyCapa(id, req.body, actor);
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Lỗi nghiệm thu CAPA" });
+  }
+});
+
+router.post("/api/ehs/capas/:id/close", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const actor = getActor(req);
+    const result = await ehsService.closeCapa(id, actor);
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Lỗi đóng phiếu CAPA" });
+  }
+});
+
+// =========================================================================
+// 4. SAFETY AUDITS & CHECKLIST (F04, F12)
+// =========================================================================
+
+router.get("/api/ehs/audits", async (req, res) => {
+  try {
+    const { warehouseId, result, search } = req.query;
+    const records = await ehsService.getAudits({
+      warehouseId: warehouseId ? Number(warehouseId) : undefined,
+      result: result as string,
+      search: search as string,
+    });
+    res.json(records);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Lỗi tải danh sách đợt audit" });
+  }
+});
+
+router.get("/api/ehs/audits/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const audit = await ehsService.getAuditById(id);
+    if (!audit) return res.status(404).json({ error: "Không tìm thấy đợt audit" });
+    res.json(audit);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Lỗi tải chi tiết đợt audit" });
+  }
+});
+
+router.post("/api/ehs/audits", async (req, res) => {
+  try {
+    const actor = getActor(req);
+    const result = await ehsService.executeSafetyAudit(req.body, actor);
+    res.status(201).json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Lỗi thực hiện audit" });
+  }
+});
+
+// =========================================================================
+// 5. FIRE SAFETY EQUIPMENT REGISTRY (F05)
+// =========================================================================
+
+router.get("/api/ehs/fire-safety/equipment", async (req, res) => {
+  try {
+    const { warehouseId, status, search } = req.query;
+    const records = await ehsService.getFireEquipment({
+      warehouseId: warehouseId ? Number(warehouseId) : undefined,
+      status: status as string,
+      search: search as string,
+    });
+    res.json(records);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Lỗi tải thiết bị PCCC" });
+  }
+});
+
+router.post("/api/ehs/fire-safety/equipment", async (req, res) => {
+  try {
+    const actor = getActor(req);
+    const result = await ehsService.createFireEquipment(req.body, actor);
+    res.status(201).json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Lỗi đăng ký thiết bị PCCC" });
+  }
+});
+
+router.post("/api/ehs/fire-safety/equipment/:id/inspect", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const actor = getActor(req);
+    const result = await ehsService.inspectFireEquipment(id, req.body, actor);
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Lỗi ghi nhận kiểm định PCCC" });
+  }
+});
+
+// =========================================================================
+// 6. ENVIRONMENTAL MONITORING (F06)
+// =========================================================================
+
+router.get("/api/ehs/environmental/records", async (req, res) => {
+  try {
+    const { warehouseId, recordType, status } = req.query;
+    const records = await ehsService.getEnvironmentalRecords({
+      warehouseId: warehouseId ? Number(warehouseId) : undefined,
+      recordType: recordType as string,
+      status: status as string,
+    });
+    res.json(records);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Lỗi tải số liệu quan trắc môi trường" });
+  }
+});
+
+router.post("/api/ehs/environmental/records", async (req, res) => {
+  try {
+    const actor = getActor(req);
+    const result = await ehsService.createEnvironmentalRecord(req.body, actor);
+    res.status(201).json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Lỗi ghi nhận số liệu quan trắc" });
+  }
+});
+
+// =========================================================================
+// 7. SAFETY PERMITS & LOTO (F08)
+// =========================================================================
+
+router.get("/api/ehs/permits", async (req, res) => {
+  try {
+    const { warehouseId, status, assetId } = req.query;
+    const records = await ehsService.getPermits({
+      warehouseId: warehouseId ? Number(warehouseId) : undefined,
+      status: status as string,
+      assetId: assetId ? Number(assetId) : undefined,
+    });
+    res.json(records);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Lỗi tải giấy phép an toàn" });
+  }
+});
+
+/**
+ * READ-ONLY Open API for M27 EAM or any external service
+ */
+router.get("/api/ehs/permits/asset/:assetId/active", async (req, res) => {
+  try {
+    const assetId = Number(req.params.assetId);
+    const result = await ehsService.getActivePermitForAsset(assetId);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Lỗi tra cứu giấy phép an toàn thiết bị" });
+  }
+});
+
+router.get("/api/ehs/permits/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const permit = await ehsService.getPermitById(id);
+    if (!permit) return res.status(404).json({ error: "Không tìm thấy giấy phép an toàn" });
+    res.json(permit);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Lỗi tải chi tiết giấy phép" });
+  }
+});
+
+router.post("/api/ehs/permits", async (req, res) => {
+  try {
+    const actor = getActor(req);
+    const result = await ehsService.createPermit(req.body, actor);
+    res.status(201).json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Lỗi tạo giấy phép an toàn" });
+  }
+});
+
+router.post("/api/ehs/permits/:id/activate", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const actor = getActor(req);
+    const result = await ehsService.activatePermit(id, actor);
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Lỗi kích hoạt giấy phép" });
+  }
+});
+
+router.post("/api/ehs/permits/:id/close", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const actor = getActor(req);
+    const result = await ehsService.closePermit(id, req.body?.notes, actor);
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Lỗi đóng giấy phép an toàn" });
+  }
+});
+
+// =========================================================================
+// 8. SITE SCOPE & KPI (F07, F16)
+// =========================================================================
+
+router.get("/api/ehs/site-scope", async (req, res) => {
+  try {
+    const records = await ehsService.getSiteScopes();
+    res.json(records);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Lỗi tải phạm vi an toàn" });
+  }
+});
+
+router.post("/api/ehs/site-scope", async (req, res) => {
+  try {
+    const { warehouseId, safetyOfficerId, safetyOfficerName, auditFrequencyDays, emergencyContact } = req.body;
+    const result = await ehsService.setSiteScope(Number(warehouseId), {
+      safetyOfficerId: safetyOfficerId ? Number(safetyOfficerId) : undefined,
+      safetyOfficerName,
+      auditFrequencyDays: Number(auditFrequencyDays),
+      emergencyContact,
+    });
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Lỗi lưu cấu hình phạm vi an toàn" });
+  }
+});
+
+router.get("/api/ehs/kpi", async (req, res) => {
+  try {
+    const summary = await ehsService.getKpiSummary();
+    res.json(summary);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Lỗi tải tổng hợp KPI an toàn" });
+  }
+});
+
+// =========================================================================
+// CANONICAL BACKWARD COMPATIBILITY ENDPOINTS (MODULE_MAP / Legacy)
+// =========================================================================
+
+router.get("/api/ehs/records", async (req, res) => {
+  try {
+    const records = await ehsService.getCanonicalRecords();
+    res.json(records);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Lỗi tải hồ sơ an toàn tổng hợp" });
+  }
+});
+
+router.post("/api/ehs/records", async (req, res) => {
+  try {
+    const actor = getActor(req);
+    const incident = await ehsService.createIncident({
+      title: req.body.title || 'Báo cáo sự cố an toàn',
+      incidentType: req.body.incidentType || 'SAFETY_HAZARD',
+      severity: req.body.severity || 'MEDIUM',
+      locationDetail: req.body.location,
+      immediateAction: req.body.actionTaken,
+      description: req.body.description || req.body.title || 'Ghi nhận sự cố hiện trường',
+      reportedByName: req.body.inspector,
+    }, actor);
+    res.status(201).json(incident);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Lỗi tạo hồ sơ" });
+  }
+});
+
+// Legacy Inspections wrapper
+router.get("/api/ehs/inspections", async (req, res) => {
+  try {
+    const audits = await ehsService.getAudits();
+    res.json(audits.map(a => ({
+      id: a.id,
+      inspectionCode: a.auditNumber,
+      title: a.title,
+      type: a.auditType,
+      location: a.warehouseName || 'Khu vực Kho bãi',
+      date: a.auditDate,
+      status: a.result === 'PASS' ? 'PASSED' : 'FAILED',
+      findings: a.remarks,
+      inspector: a.auditorName,
+      totalItems: a.totalItems,
+      passedItems: a.passedItems,
+    })));
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Lỗi tải inspections" });
+  }
+});
+
+router.post("/api/ehs/inspections", async (req, res) => {
+  try {
+    const actor = getActor(req);
+    const audit = await ehsService.executeSafetyAudit({
+      title: req.body.title || 'Kiểm định An toàn Lao động',
+      auditType: req.body.type || 'FIRE_SAFETY',
+      warehouseId: req.body.warehouseId ? Number(req.body.warehouseId) : 1,
+      auditDate: req.body.date || new Date().toISOString().slice(0, 10),
+      auditorName: req.body.inspector || 'Cán bộ EHS',
+      checklistItems: [
+        {
+          itemDescription: req.body.findings || 'Kiểm tra tổng quan hệ thống PCCC & an toàn',
+          category: 'PCCC_GENERAL',
+          isMandatory: true,
+          status: req.body.status === 'FAILED' ? 'FAIL' : 'PASS',
+        }
+      ],
+      remarks: req.body.findings,
+    }, actor);
+    res.status(201).json(audit);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Lỗi tạo inspection" });
+  }
 });
 
 export default router;

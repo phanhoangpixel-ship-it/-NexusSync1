@@ -466,7 +466,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
     permissions: ['hr', 'manager', 'admin', 'cfo'],
     description: 'Quản trị nhân sự HRM, hồ sơ nhân viên, chấm công, bảo hiểm & bảng lương tự động.',
     iconName: 'UserPlus',
-    workspaceId: 'WS18_FINANCE'
+    workspaceId: 'WS26_HR'
   },
   {
     moduleId: 'M35',

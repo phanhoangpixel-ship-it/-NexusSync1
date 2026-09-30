@@ -17,8 +17,10 @@ import {
   ShieldCheck,
   CheckCircle2,
   AlertTriangle,
+  FileCheck,
 } from 'lucide-react';
 import { downloadPayslipPdf } from '../../../../utils/pdfExporter';
+import { M28EContractSigningModal } from './M28EContractSigningModal';
 
 interface EmployeeRegistryTabProps {
   employees: any[];
@@ -47,6 +49,7 @@ export const EmployeeRegistryTab: React.FC<EmployeeRegistryTabProps> = ({
   const [departmentFilter, setDepartmentFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [contractEmp, setContractEmp] = useState<any | null>(null);
 
   const departments = Array.from(new Set(employees.map((e) => e.departmentName).filter(Boolean)));
 
@@ -275,6 +278,14 @@ export const EmployeeRegistryTab: React.FC<EmployeeRegistryTabProps> = ({
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                             <button
+                              onClick={() => setContractEmp(emp)}
+                              className="px-2 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800 text-xs font-semibold flex items-center gap-1 transition-colors"
+                              title="Ký Số Hợp Đồng Lao Động Điện Tử"
+                            >
+                              <FileCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                              <span>Ký HĐLĐ</span>
+                            </button>
+                            <button
                               onClick={() => onOpenEmployee360(emp)}
                               className="px-2.5 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 text-xs font-semibold flex items-center gap-1 transition-colors"
                               title="Hồ sơ 360° & Hạch toán"
@@ -372,6 +383,17 @@ export const EmployeeRegistryTab: React.FC<EmployeeRegistryTabProps> = ({
           })}
         </div>
       )}
+
+      {/* e-Contract Signing Modal (Phase 2) */}
+      <M28EContractSigningModal
+        isOpen={Boolean(contractEmp)}
+        employee={contractEmp}
+        onClose={() => setContractEmp(null)}
+        onSignComplete={(info) => {
+          onNotify('success', 'Đã Ký HĐLĐ Điện Tử', `Hợp đồng ${info.contractNo} cho nhân viên ${info.employeeName} đã được niêm phong.`);
+        }}
+        onNotify={onNotify}
+      />
     </div>
   );
 };

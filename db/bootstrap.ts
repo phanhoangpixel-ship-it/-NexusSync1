@@ -13,6 +13,29 @@ export async function ensureSchemaSynchronized() {
   try {
     await client.execute("PRAGMA journal_mode = WAL;");
     await client.execute("PRAGMA busy_timeout = 10000;");
+    // Ensure system_config singleton is initialized with CHECK ("id" = 1) constraint
+    await client.execute(`CREATE TABLE IF NOT EXISTS "system_config" (
+      "id" INTEGER PRIMARY KEY CHECK ("id" = 1),
+      "is_initialized" INTEGER NOT NULL DEFAULT 0,
+      "app_display_name" TEXT,
+      "logo_dms_doc_id" INTEGER REFERENCES "dms_documents"("id"),
+      "favicon_dms_doc_id" INTEGER REFERENCES "dms_documents"("id"),
+      "login_background_dms_doc_id" INTEGER REFERENCES "dms_documents"("id"),
+      "primary_color" TEXT,
+      "secondary_color" TEXT,
+      "legal_company_name" TEXT,
+      "tax_code" TEXT,
+      "company_address" TEXT,
+      "company_hotline" TEXT,
+      "company_email" TEXT,
+      "default_language" TEXT DEFAULT 'vi',
+      "default_currency" TEXT DEFAULT 'VND',
+      "timezone" TEXT DEFAULT 'Asia/Ho_Chi_Minh',
+      "date_format" TEXT DEFAULT 'DD/MM/YYYY',
+      "fiscal_year_start_month" INTEGER DEFAULT 1,
+      "updated_by" INTEGER REFERENCES "users"("id"),
+      "updated_at" INTEGER
+    );`);
   } catch (_) {}
 
   // Ensure all tables defined in schema.ts are created
@@ -50,8 +73,23 @@ export async function ensureSchemaSynchronized() {
     `ALTER TABLE bank_accounts ADD COLUMN account_type TEXT DEFAULT 'SAVINGS'`,
     `ALTER TABLE bank_accounts ADD COLUMN book_balance REAL DEFAULT 0`,
     `ALTER TABLE bank_accounts ADD COLUMN bank_balance REAL DEFAULT 0`,
+    `ALTER TABLE bank_accounts ADD COLUMN bank_branch TEXT`,
+    `ALTER TABLE bank_accounts ADD COLUMN swift_code TEXT`,
     `ALTER TABLE bank_transactions ADD COLUMN bank_ref TEXT`,
+    `ALTER TABLE bank_transactions ADD COLUMN match_type TEXT`,
+    `ALTER TABLE bank_transactions ADD COLUMN import_checksum TEXT`,
+    `ALTER TABLE bank_transactions ADD COLUMN transaction_hash TEXT`,
+    `ALTER TABLE bank_transactions ADD COLUMN reconciled_invoice_id INTEGER`,
+    `ALTER TABLE bank_transactions ADD COLUMN reconciled_voucher_id INTEGER`,
+    `ALTER TABLE bank_transactions ADD COLUMN reconciled_by INTEGER`,
+    `ALTER TABLE bank_transactions ADD COLUMN reconciled_at INTEGER`,
+    `ALTER TABLE bank_transactions ADD COLUMN partner_name TEXT`,
+    `ALTER TABLE bank_transactions ADD COLUMN partner_account TEXT`,
+    `ALTER TABLE bank_transactions ADD COLUMN counterparty_bank TEXT`,
+    `ALTER TABLE bank_transactions ADD COLUMN virtual_account TEXT`,
+    `ALTER TABLE bank_transactions ADD COLUMN notes TEXT`,
     `ALTER TABLE purchase_requisitions ADD COLUMN mrp_result_id INTEGER`,
+    `ALTER TABLE projects ADD COLUMN billed_amount REAL DEFAULT 0`,
     `CREATE TABLE IF NOT EXISTS processed_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_id TEXT NOT NULL,
@@ -84,6 +122,11 @@ export async function ensureSchemaSynchronized() {
     `CREATE INDEX IF NOT EXISTS idx_stock_balances_lookup ON stock_balances (product_id, warehouse_id)`,
     `CREATE INDEX IF NOT EXISTS idx_accounting_entries_doc ON accounting_entries (source_document_type, source_reference_no)`,
     `CREATE INDEX IF NOT EXISTS idx_accounting_entries_accounts ON accounting_entries (debit_account, credit_account)`,
+    `ALTER TABLE accounting_entries ADD COLUMN cost_center TEXT`,
+    `ALTER TABLE accounting_entries ADD COLUMN department_id INTEGER`,
+    `ALTER TABLE accounting_entries ADD COLUMN is_reversal INTEGER DEFAULT 0`,
+    `ALTER TABLE accounting_entries ADD COLUMN reversed_entry_id INTEGER`,
+    `ALTER TABLE accounting_entries ADD COLUMN reversal_reason TEXT`,
     `CREATE INDEX IF NOT EXISTS idx_journal_entries_date ON journal_entries (entry_date, status)`,
     `CREATE INDEX IF NOT EXISTS idx_journal_lines_account ON journal_lines (account_id, entry_id)`,
     `CREATE INDEX IF NOT EXISTS idx_outbox_events_status_retry ON outbox_events (status, next_retry_at)`,
@@ -197,6 +240,147 @@ export async function ensureSchemaSynchronized() {
     `CREATE INDEX IF NOT EXISTS sourcing_awards_bid_id_idx ON sourcing_awards (bid_id)`,
     `CREATE INDEX IF NOT EXISTS sourcing_awards_supplier_id_idx ON sourcing_awards (supplier_id)`,
     `ALTER TABLE srm_rfqs ADD COLUMN current_round INTEGER DEFAULT 1`,
+    // M34 Financial Consolidation Migrations
+    `ALTER TABLE consolidation_runs ADD COLUMN period_id TEXT`,
+    `ALTER TABLE consolidation_runs ADD COLUMN revision_no INTEGER DEFAULT 1`,
+    `ALTER TABLE consolidation_runs ADD COLUMN idempotency_key TEXT`,
+    `ALTER TABLE consolidation_runs ADD COLUMN total_eliminated REAL DEFAULT 0`,
+    `ALTER TABLE consolidation_runs ADD COLUMN approved_by TEXT`,
+    `ALTER TABLE consolidation_runs ADD COLUMN approved_at INTEGER`,
+    `ALTER TABLE consolidation_runs ADD COLUMN locked_at INTEGER`,
+    `ALTER TABLE consolidation_runs ADD COLUMN sealed_dms_doc_id INTEGER`,
+    `ALTER TABLE consolidation_runs ADD COLUMN notes TEXT`,
+    `CREATE INDEX IF NOT EXISTS idx_consolidation_runs_period ON consolidation_runs (period_id, status)`,
+    `CREATE INDEX IF NOT EXISTS idx_consolidation_run_lines_run ON consolidation_run_lines (run_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_elimination_entries_run ON elimination_entries (run_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_fx_adjustments_run ON fx_adjustments (run_id)`,
+    `CREATE TABLE IF NOT EXISTS dms_documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      doc_code TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'GENERAL',
+      category_name TEXT,
+      version TEXT DEFAULT 'v1.0',
+      file_size TEXT,
+      format TEXT DEFAULT 'PDF',
+      status TEXT NOT NULL DEFAULT 'DRAFT',
+      security_level TEXT DEFAULT 'INTERNAL',
+      sha256_hash TEXT,
+      signed_by TEXT,
+      signed_at TEXT,
+      linked_module TEXT,
+      ref_doc_no TEXT,
+      storage_tier TEXT DEFAULT 'ACTIVE_VAULT',
+      retention_years INTEGER DEFAULT 5,
+      expire_date TEXT,
+      workflow_stage INTEGER DEFAULT 1,
+      workflow_steps TEXT,
+      created_at INTEGER,
+      entity_type TEXT,
+      entity_id TEXT,
+      classification TEXT DEFAULT 'INTERNAL',
+      retention_class TEXT,
+      retention_until INTEGER,
+      legal_hold INTEGER DEFAULT 0,
+      supersedes_id INTEGER,
+      hash_scope TEXT DEFAULT 'FILE_CONTENT',
+      size_bytes INTEGER,
+      mime_type TEXT,
+      idempotency_key TEXT UNIQUE
+    )`,
+    `ALTER TABLE dms_documents ADD COLUMN entity_type TEXT`,
+    `ALTER TABLE dms_documents ADD COLUMN entity_id TEXT`,
+    `ALTER TABLE dms_documents ADD COLUMN classification TEXT DEFAULT 'INTERNAL'`,
+    `ALTER TABLE dms_documents ADD COLUMN retention_class TEXT`,
+    `ALTER TABLE dms_documents ADD COLUMN retention_until INTEGER`,
+    `ALTER TABLE dms_documents ADD COLUMN legal_hold INTEGER DEFAULT 0`,
+    `ALTER TABLE dms_documents ADD COLUMN supersedes_id INTEGER`,
+    `ALTER TABLE dms_documents ADD COLUMN hash_scope TEXT DEFAULT 'FILE_CONTENT'`,
+    `ALTER TABLE dms_documents ADD COLUMN size_bytes INTEGER`,
+    `ALTER TABLE dms_documents ADD COLUMN mime_type TEXT`,
+    `ALTER TABLE dms_documents ADD COLUMN idempotency_key TEXT`,
+    `ALTER TABLE dms_documents ADD COLUMN file_content_base64 TEXT`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_dms_idempotency ON dms_documents (idempotency_key)`,
+    // M16/M21 SCM Demand Forecast & MPS Tables
+    `CREATE TABLE IF NOT EXISTS scm_forecasts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      forecast_code TEXT NOT NULL UNIQUE,
+      product_id INTEGER NOT NULL,
+      product_name TEXT,
+      sku TEXT,
+      warehouse_id INTEGER,
+      period TEXT NOT NULL DEFAULT 'MONTHLY',
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      historical_avg_demand REAL DEFAULT 100,
+      forecast_quantity REAL NOT NULL,
+      actual_sales_quantity REAL DEFAULT 0,
+      forecast_method TEXT NOT NULL DEFAULT 'EXPONENTIAL_SMOOTHING',
+      accuracy_mae REAL DEFAULT 5,
+      accuracy_mape REAL DEFAULT 4.2,
+      confidence_level REAL DEFAULT 95.0,
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      notes TEXT,
+      created_by TEXT DEFAULT 'SCM Planner',
+      created_at INTEGER,
+      updated_at INTEGER
+    )`,
+    `CREATE TABLE IF NOT EXISTS mps_schedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      mps_code TEXT NOT NULL UNIQUE,
+      product_id INTEGER NOT NULL,
+      product_name TEXT,
+      sku TEXT,
+      warehouse_id INTEGER,
+      period TEXT NOT NULL DEFAULT 'WEEKLY',
+      period_start_date TEXT NOT NULL,
+      period_end_date TEXT NOT NULL,
+      forecast_demand REAL NOT NULL DEFAULT 0,
+      sales_order_demand REAL NOT NULL DEFAULT 0,
+      total_gross_demand REAL NOT NULL DEFAULT 0,
+      projected_available_balance REAL NOT NULL DEFAULT 0,
+      available_to_promise REAL NOT NULL DEFAULT 0,
+      planned_production_qty REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'PLANNED',
+      is_frozen INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      created_at INTEGER,
+      updated_at INTEGER
+    )`,
+    // M32 Treasury Management (BTC Form 01-TT & 02-TT Compliance)
+    `ALTER TABLE cash_vouchers ADD COLUMN voucher_form TEXT DEFAULT '01-TT'`,
+    `ALTER TABLE cash_vouchers ADD COLUMN voucher_category TEXT DEFAULT 'DEBT_COLLECTION'`,
+    `ALTER TABLE cash_vouchers ADD COLUMN partner_id INTEGER`,
+    `ALTER TABLE cash_vouchers ADD COLUMN partner_address TEXT`,
+    `ALTER TABLE cash_vouchers ADD COLUMN partner_tax_code TEXT`,
+    `ALTER TABLE cash_vouchers ADD COLUMN receiver_or_payer_name TEXT`,
+    `ALTER TABLE cash_vouchers ADD COLUMN amount_in_words TEXT`,
+    `ALTER TABLE cash_vouchers ADD COLUMN currency TEXT DEFAULT 'VND'`,
+    `ALTER TABLE cash_vouchers ADD COLUMN exchange_rate REAL DEFAULT 1`,
+    `ALTER TABLE cash_vouchers ADD COLUMN debit_account TEXT DEFAULT '1111'`,
+    `ALTER TABLE cash_vouchers ADD COLUMN credit_account TEXT DEFAULT '131'`,
+    `ALTER TABLE cash_vouchers ADD COLUMN bank_account_number TEXT`,
+    `ALTER TABLE cash_vouchers ADD COLUMN posting_date TEXT`,
+    `ALTER TABLE cash_vouchers ADD COLUMN attached_docs_count INTEGER DEFAULT 0`,
+    `ALTER TABLE cash_vouchers ADD COLUMN attached_docs_description TEXT`,
+    `ALTER TABLE cash_vouchers ADD COLUMN source_module TEXT DEFAULT 'M32'`,
+    `ALTER TABLE cash_vouchers ADD COLUMN source_document_type TEXT`,
+    `ALTER TABLE cash_vouchers ADD COLUMN source_document_id INTEGER`,
+    `ALTER TABLE cash_vouchers ADD COLUMN source_reference_no TEXT`,
+    `ALTER TABLE cash_vouchers ADD COLUMN idempotency_key TEXT`,
+    `ALTER TABLE cash_vouchers ADD COLUMN accounting_entry_id INTEGER`,
+    `ALTER TABLE cash_vouchers ADD COLUMN posted_gl INTEGER DEFAULT 0`,
+    `ALTER TABLE cash_vouchers ADD COLUMN director_signature TEXT`,
+    `ALTER TABLE cash_vouchers ADD COLUMN chief_accountant_signature TEXT`,
+    `ALTER TABLE cash_vouchers ADD COLUMN cashier_signature TEXT`,
+    `ALTER TABLE cash_vouchers ADD COLUMN payer_or_receiver_signature TEXT`,
+    `ALTER TABLE cash_vouchers ADD COLUMN preparer_signature TEXT`,
+    `ALTER TABLE cash_vouchers ADD COLUMN created_by_id INTEGER`,
+    `ALTER TABLE cash_vouchers ADD COLUMN approved_by_id INTEGER`,
+    `ALTER TABLE cash_vouchers ADD COLUMN approved_at INTEGER`,
+    `ALTER TABLE cash_vouchers ADD COLUMN updated_at INTEGER`,
+    `CREATE INDEX IF NOT EXISTS idx_cash_vouchers_idempotency ON cash_vouchers (idempotency_key)`,
+    `CREATE INDEX IF NOT EXISTS idx_cash_vouchers_type_status ON cash_vouchers (voucher_type, status)`,
     // M06 Innovation R&D Stage-Gate & Handover Enhancements
     `ALTER TABLE rd_projects ADD COLUMN stage TEXT DEFAULT 'DRAFT'`,
     `ALTER TABLE rd_projects ADD COLUMN target_sku TEXT`,
@@ -395,7 +579,166 @@ export async function ensureSchemaSynchronized() {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_commission_disputes_code ON commission_disputes (dispute_code)`,
     `CREATE INDEX IF NOT EXISTS idx_commission_disputes_salesperson ON commission_disputes (sales_person_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_commission_disputes_status ON commission_disputes (status)`
+    `CREATE INDEX IF NOT EXISTS idx_commission_disputes_status ON commission_disputes (status)`,
+
+    // M27 EAM Enterprise Asset Management Upgrade
+    `CREATE TABLE IF NOT EXISTS fixed_assets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      category_id INTEGER,
+      category_name TEXT,
+      asset_type TEXT DEFAULT 'MACHINERY',
+      serial_number TEXT,
+      model TEXT,
+      manufacturer TEXT,
+      supplier_id INTEGER,
+      supplier_name TEXT,
+      purchase_date TEXT,
+      purchase_cost REAL NOT NULL DEFAULT 0,
+      salvage_value REAL NOT NULL DEFAULT 0,
+      useful_life_months INTEGER NOT NULL DEFAULT 60,
+      depreciation_method TEXT NOT NULL DEFAULT 'STRAIGHT_LINE',
+      accumulated_depreciation REAL NOT NULL DEFAULT 0,
+      book_value REAL NOT NULL DEFAULT 0,
+      monthly_depreciation REAL NOT NULL DEFAULT 0,
+      last_depreciation_date TEXT,
+      branch_id INTEGER,
+      department_id INTEGER,
+      location TEXT,
+      responsible_employee_id INTEGER,
+      responsible_employee_name TEXT,
+      gl_asset_account TEXT DEFAULT 'TK 211',
+      gl_depreciation_account TEXT DEFAULT 'TK 214',
+      gl_expense_account TEXT DEFAULT 'TK 627',
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      created_at INTEGER,
+      updated_at INTEGER
+    )`,
+    `CREATE TABLE IF NOT EXISTS asset_hierarchy (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      parent_id INTEGER,
+      asset_id INTEGER,
+      hierarchy_level TEXT NOT NULL DEFAULT 'MACHINE',
+      node_code TEXT NOT NULL,
+      node_name TEXT NOT NULL,
+      location TEXT,
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      sort_order INTEGER DEFAULT 0,
+      created_at INTEGER,
+      updated_at INTEGER
+    )`,
+    `CREATE TABLE IF NOT EXISTS maintenance_schedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      asset_id INTEGER NOT NULL,
+      schedule_code TEXT NOT NULL,
+      title TEXT NOT NULL,
+      maintenance_type TEXT NOT NULL DEFAULT 'PREVENTIVE',
+      frequency_type TEXT DEFAULT 'DAYS',
+      interval_days INTEGER DEFAULT 30,
+      interval_hours REAL DEFAULT 0,
+      description TEXT,
+      last_performed_date TEXT,
+      next_due_date TEXT,
+      assigned_technician TEXT,
+      estimated_cost REAL DEFAULT 0,
+      estimated_hours REAL DEFAULT 2,
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      created_at INTEGER
+    )`,
+    `ALTER TABLE maintenance_workOrders ADD COLUMN source_module TEXT`,
+    `ALTER TABLE maintenance_workOrders ADD COLUMN source_reference_id INTEGER`,
+    `ALTER TABLE maintenance_workOrders ADD COLUMN source_reference_code TEXT`,
+    `ALTER TABLE maintenance_workOrders ADD COLUMN resolution_notes TEXT`,
+    `ALTER TABLE maintenance_workOrders ADD COLUMN actual_hours REAL DEFAULT 0`,
+    `ALTER TABLE maintenance_work_orders ADD COLUMN source_module TEXT`,
+    `ALTER TABLE maintenance_work_orders ADD COLUMN source_reference_id INTEGER`,
+    `ALTER TABLE maintenance_work_orders ADD COLUMN source_reference_code TEXT`,
+    `ALTER TABLE maintenance_work_orders ADD COLUMN resolution_notes TEXT`,
+    `ALTER TABLE maintenance_work_orders ADD COLUMN actual_hours REAL DEFAULT 0`,
+    `CREATE INDEX IF NOT EXISTS idx_fixed_assets_code ON fixed_assets (code)`,
+    `CREATE INDEX IF NOT EXISTS idx_asset_hierarchy_parent ON asset_hierarchy (parent_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_asset_hierarchy_asset ON asset_hierarchy (asset_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_asset ON maintenance_schedules (asset_id)`,
+
+    // M38 IT Service Desk & ITSM SLA Enhancements
+    `ALTER TABLE tickets ADD COLUMN type TEXT DEFAULT 'INCIDENT'`,
+    `ALTER TABLE tickets ADD COLUMN impact TEXT DEFAULT 'LOW'`,
+    `ALTER TABLE tickets ADD COLUMN urgency TEXT DEFAULT 'LOW'`,
+    `ALTER TABLE tickets ADD COLUMN requester_id INTEGER`,
+    `ALTER TABLE tickets ADD COLUMN requester_name TEXT`,
+    `ALTER TABLE tickets ADD COLUMN requester_email TEXT`,
+    `ALTER TABLE tickets ADD COLUMN requester_department TEXT`,
+    `ALTER TABLE tickets ADD COLUMN asset_id INTEGER`,
+    `ALTER TABLE tickets ADD COLUMN asset_code TEXT`,
+    `ALTER TABLE tickets ADD COLUMN asset_name TEXT`,
+    `ALTER TABLE tickets ADD COLUMN serial_id INTEGER`,
+    `ALTER TABLE tickets ADD COLUMN serial_number TEXT`,
+    `ALTER TABLE tickets ADD COLUMN sla_policy_id INTEGER`,
+    `ALTER TABLE tickets ADD COLUMN response_due_at INTEGER`,
+    `ALTER TABLE tickets ADD COLUMN resolve_due_at INTEGER`,
+    `ALTER TABLE tickets ADD COLUMN sla_paused_at INTEGER`,
+    `ALTER TABLE tickets ADD COLUMN sla_paused_seconds INTEGER DEFAULT 0`,
+    `ALTER TABLE tickets ADD COLUMN first_response_at INTEGER`,
+    `ALTER TABLE tickets ADD COLUMN resolved_at INTEGER`,
+    `ALTER TABLE tickets ADD COLUMN closed_at INTEGER`,
+    `ALTER TABLE tickets ADD COLUMN root_cause TEXT`,
+    `ALTER TABLE tickets ADD COLUMN resolution_note TEXT`,
+    `ALTER TABLE tickets ADD COLUMN source_module TEXT`,
+    `ALTER TABLE tickets ADD COLUMN source_id TEXT`,
+    `ALTER TABLE tickets ADD COLUMN idempotency_key TEXT`,
+    `ALTER TABLE tickets ADD COLUMN parent_ticket_id INTEGER`,
+    `ALTER TABLE tickets ADD COLUMN work_order_id INTEGER`,
+    `ALTER TABLE tickets ADD COLUMN work_order_code TEXT`,
+    `ALTER TABLE tickets ADD COLUMN dms_attachment_ids TEXT`,
+    `ALTER TABLE tickets ADD COLUMN warning_75_sent INTEGER DEFAULT 0`,
+    `ALTER TABLE tickets ADD COLUMN warning_90_sent INTEGER DEFAULT 0`,
+    `ALTER TABLE tickets ADD COLUMN escalation_level INTEGER DEFAULT 0`,
+    `ALTER TABLE tickets ADD COLUMN feedback_score INTEGER`,
+    `ALTER TABLE tickets ADD COLUMN feedback_comment TEXT`,
+    `CREATE INDEX IF NOT EXISTS idx_tickets_code ON tickets (ticket_code)`,
+    `CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets (status)`,
+    `CREATE INDEX IF NOT EXISTS idx_tickets_priority ON tickets (priority)`,
+    `CREATE INDEX IF NOT EXISTS idx_tickets_requester ON tickets (requester_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_tickets_assignee ON tickets (assigned_agent_id)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_tickets_idempotency ON tickets (idempotency_key)`,
+    `CREATE INDEX IF NOT EXISTS idx_sla_policies_code ON sla_policies (policy_code)`,
+    `CREATE INDEX IF NOT EXISTS idx_ticket_status_history_ticket ON ticket_status_history (ticket_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_ticket_access_requests_code ON ticket_access_requests (request_code)`,
+    `CREATE INDEX IF NOT EXISTS idx_ticket_access_requests_target ON ticket_access_requests (target_user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_ticket_access_requests_status ON ticket_access_requests (status)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_ticket_surveys_ticket ON ticket_surveys (ticket_id)`,
+    // M03 System Configuration & Branding Migrations (Phase 1)
+    `CREATE TABLE IF NOT EXISTS system_config (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      is_initialized INTEGER NOT NULL DEFAULT 0,
+      app_display_name TEXT,
+      logo_dms_doc_id INTEGER REFERENCES dms_documents(id),
+      favicon_dms_doc_id INTEGER REFERENCES dms_documents(id),
+      login_background_dms_doc_id INTEGER REFERENCES dms_documents(id),
+      primary_color TEXT,
+      secondary_color TEXT,
+      legal_company_name TEXT,
+      tax_code TEXT,
+      company_address TEXT,
+      company_hotline TEXT,
+      company_email TEXT,
+      default_language TEXT DEFAULT 'vi',
+      default_currency TEXT DEFAULT 'VND',
+      timezone TEXT DEFAULT 'Asia/Ho_Chi_Minh',
+      date_format TEXT DEFAULT 'DD/MM/YYYY',
+      fiscal_year_start_month INTEGER DEFAULT 1,
+      updated_by INTEGER REFERENCES users(id),
+      updated_at INTEGER
+    )`,
+    `CREATE TABLE IF NOT EXISTS number_series (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      document_type TEXT UNIQUE,
+      prefix TEXT,
+      next_sequence INTEGER DEFAULT 1,
+      reset_frequency TEXT DEFAULT 'YEARLY',
+      branch_id INTEGER REFERENCES branches(id)
+    )`
   ];
 
   for (const stmt of migrations) {
@@ -844,6 +1187,75 @@ export async function bootstrapDatabase() {
         INSERT INTO maintenance_work_orders (id, wo_code, asset_id, asset_name, maintenance_type, priority, description, assigned_technician_name, planned_start, planned_end, status, total_cost, downtime_hours)
         VALUES (2, 'WO-2026-0002', 2, 'Máy Phay Nhôm CNC 5 Trục Fanuc Robodrill', 'CORRECTIVE', 'HIGH', 'Thay chổi than động cơ trục chính & lọc dầu', 'Kỹ thuật viên Lê Quốc Tuấn', '2026-08-20 14:00', '2026-08-20 17:30', 'COMPLETED', 7200000, 3.5)
       `);
+    }
+
+    // 10b. Seed Fixed Assets, Asset Hierarchy & Maintenance Schedules if none exist
+    try {
+      const fixedAssetCount = await client.execute(`SELECT count(*) as count FROM fixed_assets`);
+      if (Number(fixedAssetCount.rows[0]?.count || 0) === 0) {
+        await client.execute(`
+          INSERT INTO fixed_assets (id, code, name, category_id, category_name, asset_type, serial_number, model, manufacturer, purchase_date, purchase_cost, salvage_value, useful_life_months, depreciation_method, accumulated_depreciation, book_value, monthly_depreciation, location, responsible_employee_name, gl_asset_account, gl_depreciation_account, gl_expense_account, status)
+          VALUES (1, 'AST-0001', 'Máy Gắn Chíp SMT Tự Động Yamaha YSM20R', 1, 'Máy Móc Dây Chuyền SMT', 'MACHINERY', 'SN-YMH-2024-889', 'YSM20R Dual Beam', 'Yamaha Motor Corp', '2024-03-15', 1850000000, 50000000, 60, 'STRAIGHT_LINE', 330000000, 1520000000, 30000000, 'Xưởng SMT - Dây chuyền 1', 'Trần Văn Hùng (Kỹ thuật trưởng)', 'TK 211', 'TK 214', 'TK 627', 'ACTIVE')
+        `);
+        await client.execute(`
+          INSERT INTO fixed_assets (id, code, name, category_id, category_name, asset_type, serial_number, model, manufacturer, purchase_date, purchase_cost, salvage_value, useful_life_months, depreciation_method, accumulated_depreciation, book_value, monthly_depreciation, location, responsible_employee_name, gl_asset_account, gl_depreciation_account, gl_expense_account, status)
+          VALUES (2, 'AST-0002', 'Máy Phay Nhôm CNC 5 Trục Fanuc Robodrill', 2, 'Máy Gia Công Cơ Khí CNC', 'MACHINERY', 'SN-FNC-2023-412', 'Robodrill D21LiB5', 'FANUC Japan', '2023-11-20', 1250000000, 50000000, 48, 'STRAIGHT_LINE', 270000000, 980000000, 25000000, 'Xưởng Cơ Khí Chế Tạo', 'Lê Quốc Tuấn (KTV CNC)', 'TK 211', 'TK 214', 'TK 627', 'IN_USE')
+        `);
+        await client.execute(`
+          INSERT INTO fixed_assets (id, code, name, category_id, category_name, asset_type, serial_number, model, manufacturer, purchase_date, purchase_cost, salvage_value, useful_life_months, depreciation_method, accumulated_depreciation, book_value, monthly_depreciation, location, responsible_employee_name, gl_asset_account, gl_depreciation_account, gl_expense_account, status)
+          VALUES (3, 'AST-0003', 'Tủ Thử Nghiệm Sốc Nhiệt Khí Hậu ESPEC', 1, 'Máy Móc Dây Chuyền SMT', 'MACHINERY', 'SN-ESP-2025-101', 'Platinous Series', 'ESPEC Corp', '2025-01-10', 450000000, 0, 36, 'STRAIGHT_LINE', 30000000, 420000000, 12500000, 'Phòng Lab QC Test', 'Nguyễn Thu Trang (Trưởng Lab)', 'TK 211', 'TK 214', 'TK 627', 'ACTIVE')
+        `);
+      }
+
+      const hierarchyCount = await client.execute(`SELECT count(*) as count FROM asset_hierarchy`);
+      if (Number(hierarchyCount.rows[0]?.count || 0) === 0) {
+        await client.execute(`
+          INSERT INTO asset_hierarchy (id, parent_id, asset_id, hierarchy_level, node_code, node_name, location, status, sort_order)
+          VALUES (1, NULL, NULL, 'SITE', 'SITE-HCM', 'Nhà Máy Sản Xuất & Trung Tâm Logistics TP.HCM', 'Khu Công Nghệ Cao Quận 9', 'ACTIVE', 1)
+        `);
+        await client.execute(`
+          INSERT INTO asset_hierarchy (id, parent_id, asset_id, hierarchy_level, node_code, node_name, location, status, sort_order)
+          VALUES (2, 1, NULL, 'PRODUCTION_LINE', 'LINE-SMT-01', 'Dây Chuyền Bản Mạch Điện Tử SMT 01', 'Khu Vực Phòng Sạch Lầu 2', 'ACTIVE', 2)
+        `);
+        await client.execute(`
+          INSERT INTO asset_hierarchy (id, parent_id, asset_id, hierarchy_level, node_code, node_name, location, status, sort_order)
+          VALUES (3, 2, 1, 'MACHINE', 'AST-0001', 'Máy Gắn Chíp SMT Tự Động Yamaha YSM20R', 'Xưởng SMT - Dây chuyền 1', 'ACTIVE', 3)
+        `);
+        await client.execute(`
+          INSERT INTO asset_hierarchy (id, parent_id, asset_id, hierarchy_level, node_code, node_name, location, status, sort_order)
+          VALUES (4, 1, NULL, 'PRODUCTION_LINE', 'LINE-CNC-01', 'Xưởng Gia Công Cơ Khí & Khuôn Mẫu', 'Xưởng Cơ Khí A1 Tầng Trệt', 'ACTIVE', 4)
+        `);
+        await client.execute(`
+          INSERT INTO asset_hierarchy (id, parent_id, asset_id, hierarchy_level, node_code, node_name, location, status, sort_order)
+          VALUES (5, 4, 2, 'MACHINE', 'AST-0002', 'Máy Phay Nhôm CNC 5 Trục Fanuc Robodrill', 'Xưởng Cơ Khí Chế Tạo', 'ACTIVE', 5)
+        `);
+        await client.execute(`
+          INSERT INTO asset_hierarchy (id, parent_id, asset_id, hierarchy_level, node_code, node_name, location, status, sort_order)
+          VALUES (6, 1, NULL, 'PRODUCTION_LINE', 'LAB-QC-01', 'Phòng Thử Nghiệm Kiểm Chuẩn & Thẩm Định', 'Lab QC Trung Tâm', 'ACTIVE', 6)
+        `);
+        await client.execute(`
+          INSERT INTO asset_hierarchy (id, parent_id, asset_id, hierarchy_level, node_code, node_name, location, status, sort_order)
+          VALUES (7, 6, 3, 'MACHINE', 'AST-0003', 'Tủ Thử Nghiệm Sốc Nhiệt Khí Hậu ESPEC', 'Phòng Lab QC Test', 'ACTIVE', 7)
+        `);
+      }
+
+      const scheduleCount = await client.execute(`SELECT count(*) as count FROM maintenance_schedules`);
+      if (Number(scheduleCount.rows[0]?.count || 0) === 0) {
+        await client.execute(`
+          INSERT INTO maintenance_schedules (id, asset_id, schedule_code, title, maintenance_type, frequency_type, interval_days, interval_hours, description, last_performed_date, next_due_date, assigned_technician, estimated_cost, estimated_hours, status)
+          VALUES (1, 1, 'PMS-001', 'Bảo dưỡng tra dầu & hiệu chuẩn đầu gắp SMT định kỳ', 'PREVENTIVE', 'DAYS', 30, 240, 'Vệ sinh quang học camera, tra mỡ trục vít me, cân chỉnh nozzle', '2026-08-01', '2026-08-31', 'Trần Văn Hùng', 3500000, 4.0, 'ACTIVE')
+        `);
+        await client.execute(`
+          INSERT INTO maintenance_schedules (id, asset_id, schedule_code, title, maintenance_type, frequency_type, interval_days, interval_hours, description, last_performed_date, next_due_date, assigned_technician, estimated_cost, estimated_hours, status)
+          VALUES (2, 2, 'PMS-002', 'Kiểm tra dao phay & cân bằng động trục chính CNC', 'PREVENTIVE', 'DAYS', 15, 120, 'Đo độ đảo trục chính spindle, kiểm tra dầu giải nhiệt và màng lọc', '2026-08-15', '2026-08-30', 'Lê Quốc Tuấn', 2800000, 2.5, 'ACTIVE')
+        `);
+        await client.execute(`
+          INSERT INTO maintenance_schedules (id, asset_id, schedule_code, title, maintenance_type, frequency_type, interval_days, interval_hours, description, last_performed_date, next_due_date, assigned_technician, estimated_cost, estimated_hours, status)
+          VALUES (3, 3, 'PMS-003', 'Hiệu chuẩn cảm biến nhiệt & chu trình gas lạnh buồng thử', 'PREVENTIVE', 'DAYS', 90, 720, 'Kiểm tra áp suất gas R404A, hiệu chuẩn sensor nhiệt độ và độ ẩm', '2026-06-01', '2026-09-01', 'Đội Kỹ Thuật Lạnh', 4200000, 3.0, 'ACTIVE')
+        `);
+      }
+    } catch (eamErr) {
+      console.warn('EAM seeding notice:', eamErr);
     }
 
     // 11. Seed Audit Logs if none exist
@@ -1522,6 +1934,157 @@ export async function bootstrapDatabase() {
         (2, 'PR-2026-0002', 1, 4, 4, 'PRD-004', 'Wireless Mouse', 50, 'Cái', 250000, 12500000, 1, 'Công ty TNHH Thiết bị Công nghệ Minh Quân', 1, '2026-09-28', 'NORMAL', 'CONVERTED_TO_PO', 1, 'PO-2026-0001', ?, 'SCM Engine (Delegated to M08)', 'MRP Engine', 'Đã ủy quyền thành công sang M08', ?, ?),
         (3, 'PR-2026-0003', 1, 5, 5, 'SKU-ENG-088', 'Bơm thủy lực cao áp P-1000', 20, 'Cái', 18500000, 370000000, 2, 'Công ty Cổ phần Thép & Chế tạo Máy Nam Định', 1, '2026-10-10', 'URGENT', 'PENDING', NULL, NULL, NULL, NULL, 'MRP Engine', 'Dự phòng phụ tùng cho khách hàng Hòa Phát', ?, ?)`,
         args: [scmNow, scmNow, scmNow, scmNow, scmNow, scmNow]
+      });
+    }
+
+    // ==========================================
+    // SEED M38 IT SERVICE DESK & SLA POLICIES
+    // ==========================================
+    const m38Perms = [
+      'servicedesk:read', 'servicedesk:write', 'servicedesk.ticket.manage',
+      'servicedesk.sla.manage', 'servicedesk.access.approve', 'servicedesk.access.fulfill'
+    ];
+    for (const p of m38Perms) {
+      await client.execute({
+        sql: `INSERT OR IGNORE INTO permissions (code) VALUES (?)`,
+        args: [p]
+      });
+    }
+    await client.execute(`
+      INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r, permissions p
+      WHERE r.name IN ('SUPER_ADMIN', 'ADMIN') AND p.code LIKE 'servicedesk%'
+    `);
+
+    const slaCheck = await client.execute("SELECT count(*) as count FROM sla_policies");
+    if ((slaCheck.rows[0] as any)?.count === 0) {
+      console.log("Seeding M38 default SLA policies...");
+      const m38Now = Math.floor(Date.now() / 1000);
+      await client.execute({
+        sql: `INSERT INTO sla_policies (
+          id, policy_code, policy_name, priority, response_hours, resolution_hours,
+          warning_75_threshold_pct, warning_90_threshold_pct, business_hours_only,
+          escalation_target_role_id, description, is_active, created_at, updated_at
+        ) VALUES
+        (1, 'SLA-P1', 'P1 - URGENT (Khẩn cấp: Tê liệt hệ thống/POS/Kho)', 'URGENT', 0.25, 2.0, 75.0, 90.0, 0, 'IT_LEAD', 'Cam kết phản hồi 15 phút, xử lý trong 2 giờ. Hỗ trợ 24/7/365.', 1, ?, ?),
+        (2, 'SLA-P2', 'P2 - HIGH (Ưu tiên cao: Gián đoạn một phần nghiệp vụ)', 'HIGH', 0.5, 4.0, 75.0, 90.0, 1, 'IT_SUPPORT_TIER2', 'Cam kết phản hồi 30 phút, xử lý trong 4 giờ hành chính.', 1, ?, ?),
+        (3, 'SLA-P3', 'P3 - NORMAL (Bình thường: Sự cố cá nhân/Lỗi ứng dụng)', 'NORMAL', 2.0, 8.0, 75.0, 90.0, 1, 'IT_SUPPORT_TIER1', 'Cam kết phản hồi 2 giờ, xử lý trong 8 giờ hành chính (1 ngày làm việc).', 1, ?, ?),
+        (4, 'SLA-P4', 'P4 - LOW (Thấp: Yêu cầu cấp quyền/Tư vấn/Tài liệu)', 'LOW', 4.0, 24.0, 75.0, 90.0, 1, 'IT_SUPPORT_TIER1', 'Cam kết phản hồi 4 giờ, hoàn tất trong 24 giờ hành chính (3 ngày làm việc).', 1, ?, ?)`,
+        args: [m38Now, m38Now, m38Now, m38Now, m38Now, m38Now, m38Now, m38Now]
+      });
+    }
+
+    // ==========================================
+    // SEED M40 EHS SAFETY & ENVIRONMENT
+    // ==========================================
+    const m40Perms = [
+      'ehs:read', 'ehs:write', 'ehs.incident.manage', 'ehs.audit.manage',
+      'ehs.capa.manage', 'ehs.permit.approve', 'ehs.environmental.manage'
+    ];
+    for (const p of m40Perms) {
+      await client.execute({
+        sql: `INSERT OR IGNORE INTO permissions (code) VALUES (?)`,
+        args: [p]
+      });
+    }
+    await client.execute(`
+      INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r, permissions p
+      WHERE r.name IN ('SUPER_ADMIN', 'ADMIN') AND p.code LIKE 'ehs%'
+    `);
+
+    const ehsFireCheck = await client.execute("SELECT count(*) as count FROM ehs_fire_equipment");
+    if ((ehsFireCheck.rows[0] as any)?.count === 0) {
+      console.log("Seeding M40 EHS Safety, Fire Equipment, JSA, and Audits...");
+      const nowTs = Math.floor(Date.now() / 1000);
+      
+      // 1. Fire Safety Equipment (with 1 overdue item FE-WH01-003 for Golden Test Verification!)
+      await client.execute({
+        sql: `INSERT INTO ehs_fire_equipment (
+          id, equipment_code, name, type, warehouse_id, warehouse_name,
+          specific_location, last_inspection_date, expiry_date, weight_kg,
+          pressure_status, status, related_asset_id, created_at, updated_at
+        ) VALUES
+        (1, 'FE-WH01-001', 'Bình bột chữa cháy ABC 4kg', 'FIRE_EXTINGUISHER_ABC', 1, 'Kho Tổng Logistics M17 - Dãy C', 'Cột B-12 Cửa xuất kho', '2026-06-15', '2026-12-15', 4.0, 'NORMAL', 'READY', 1, ?, ?),
+        (2, 'FE-WH01-002', 'Bình khí CO2 chữa cháy 5kg', 'FIRE_EXTINGUISHER_CO2', 1, 'Kho Tổng Logistics M17 - Dãy C', 'Khu vực Tủ điện chính', '2026-05-10', '2026-11-10', 5.0, 'NORMAL', 'READY', 2, ?, ?),
+        (3, 'FE-WH01-003', 'Bình bột chữa cháy xe đẩy 35kg', 'FIRE_EXTINGUISHER_ABC', 1, 'Kho Tổng Logistics M17 - Dãy C', 'Cụm kho Hóa chất & Dung môi', '2026-02-01', '2026-08-01', 35.0, 'LOW', 'EXPIRED', NULL, ?, ?),
+        (4, 'FE-WH02-001', 'Họng tiếp nước cứu hỏa DN65', 'HYDRANT', 2, 'Kho Chi nhánh Miền Nam', 'Vách ngoài cổng 1', '2026-04-10', '2026-10-10', NULL, 'NORMAL', 'READY', NULL, ?, ?)`,
+        args: [nowTs, nowTs, nowTs, nowTs, nowTs, nowTs, nowTs, nowTs]
+      });
+
+      // 2. Incidents
+      await client.execute({
+        sql: `INSERT INTO ehs_incidents (
+          id, incident_number, title, incident_type, severity, warehouse_id, warehouse_name,
+          location_detail, incident_date, reported_by_name, description, immediate_action,
+          root_cause, status, created_at, updated_at
+        ) VALUES
+        (1, 'EHS-INC-2026-0001', 'Tràn đổ dung môi hữu cơ tại kho hóa chất', 'ENVIRONMENTAL_SPILL', 'HIGH', 1, 'Kho Tổng Logistics M17 - Dãy C', 'Khu vực lưu trữ dung môi phụ gia', '2026-08-28', 'Nguyễn Văn An (EHS Lead)', 'Bục van xả bồn chứa dung môi 200L làm tràn khoảng 15L ra sàn thao tác.', 'Cô lập bán kính 15m, rải cát hấp thụ và thu gom vào thùng chứa rác nguy hại.', 'Zoăng cao su van xả bị lão hóa do nhiệt độ môi trường cao.', 'INVESTIGATING', ?, ?),
+        (2, 'EHS-INC-2026-0002', 'Chập điện cục bộ tại máy mài CNC số 4', 'ELECTRICAL_HAZARD', 'CRITICAL', 1, 'Kho Tổng Logistics M17 - Dãy C', 'Xưởng Cơ khí Chế tạo - Line CNC 1', '2026-08-27', 'Trần Thị Bích (Safety Officer)', 'Chập phóng điện tia lửa tại cụm rơ le nguồn máy CNC.', 'Ngắt cầu dao tổng, dập tắt tia lửa bằng bình CO2 và gắn thẻ LOTO.', 'Dây cáp nguồn bị chuột cắn hở lõi đồng.', 'CLOSED', ?, ?),
+        (3, 'EHS-INC-2026-0003', 'Suýt rơi pallet linh kiện từ xe nâng cao', 'NEAR_MISS', 'MEDIUM', 1, 'Kho Tổng Logistics M17 - Dãy C', 'Dãy kệ cao A4 - Kho phụ tùng', '2026-08-25', 'Lê Hoàng Nam (Warehouse Supervisor)', 'Pallet bị nghiêng 30 độ khi nâng lên tầng 4 do đóng gói lệch tâm.', 'Hạ pallet xuống sàn, tái quấn màng PE cố định và kiểm tra xe nâng.', 'Nhân viên bốc dỡ chưa tuân thủ quy cách xếp hàng so le.', 'OPEN', ?, ?)`,
+        args: [nowTs, nowTs, nowTs, nowTs, nowTs, nowTs]
+      });
+
+      // 3. JSA Risk Assessments
+      await client.execute({
+        sql: `INSERT INTO ehs_risk_assessments (
+          id, assessment_code, job_title, work_area, warehouse_id, warehouse_name,
+          severity_score, probability_score, risk_score, risk_level, hazards_json,
+          control_measures, assessed_by, review_date, status, created_at, updated_at
+        ) VALUES
+        (1, 'JSA-2026-0001', 'Vận hành xe nâng bốc xếp hàng trên cao (>4m)', 'Kho hàng Logistics Tổng', 1, 'Kho Tổng Logistics M17 - Dãy C', 4, 3, 12, 'HIGH', '["Rơi đổ hàng hóa từ trên cao", "Va chạm người đi bộ", "Lật xe nâng do quá tải"]', 'Bắt buộc kiểm tra xe đầu ca, trang bị mũ bảo hộ cấp 2, cấm người đi bộ vào luồng xe nâng đang nâng hàng.', 'Nguyễn Văn An (EHS Lead)', '2026-12-31', 'ACTIVE', ?, ?),
+        (2, 'JSA-2026-0002', 'Hàn cắt kim loại và bảo trì lò nhiệt (Hot Work)', 'Khu vực Xưởng Bảo dưỡng Cơ điện', 1, 'Kho Tổng Logistics M17 - Dãy C', 5, 4, 20, 'EXTREME', '["Bỏng nhiệt", "Hỏa hoạn do xỉ hàn văng", "Ngạt khí độc"]', 'Bắt buộc xin Giấy phép Hot Work EHS, bố trí người canh lửa (Fire Watch) kèm 02 bình CO2, cách ly vật liệu dễ cháy 10m.', 'Phạm Minh Đức (Safety Inspector)', '2026-11-30', 'ACTIVE', ?, ?),
+        (3, 'JSA-2026-0003', 'Chiết rót hóa chất tẩy rửa công nghiệp', 'Trạm pha chế & tẩy rửa', 1, 'Kho Tổng Logistics M17 - Dãy C', 3, 2, 6, 'MEDIUM', '["Bắn hóa chất vào mắt/da", "Hít phải hơi độc hữu cơ"]', 'Trang bị kính chống hóa chất, găng tay cao su nitrile, làm việc dưới chụp hút khí cục bộ.', 'Trần Thị Bích (Safety Officer)', '2026-12-15', 'ACTIVE', ?, ?)`,
+        args: [nowTs, nowTs, nowTs, nowTs, nowTs, nowTs]
+      });
+
+      // 4. CAPAs
+      await client.execute({
+        sql: `INSERT INTO ehs_capas (
+          id, capa_number, source_ref_type, source_ref_id, source_ref_code, title,
+          action_type, root_cause_summary, action_plan, assigned_to_name,
+          warehouse_id, warehouse_name, due_date, status, created_at, updated_at
+        ) VALUES
+        (1, 'EHS-CAPA-2026-0001', 'INCIDENT', 1, 'EHS-INC-2026-0001', 'Thay thế toàn bộ zoăng chịu hóa chất và lắp khay hứng chống tràn', 'CORRECTIVE', 'Zoăng cao su thông thường không chịu được dung môi.', 'Đặt hàng zoăng PTFE chuyên dụng và lắp khay hứng tràn composite 250L.', 'Trần Quốc Bảo (Bảo trì cơ điện)', 1, 'Kho Tổng Logistics M17 - Dãy C', '2026-09-30', 'IN_PROGRESS', ?, ?),
+        (2, 'EHS-CAPA-2026-0002', 'AUDIT', 1, 'EHS-AUD-2026-0001', 'Nạp sạc và dán tem kiểm định lại cụm bình chữa cháy quá hạn', 'CORRECTIVE', 'Cụm bình FE-WH01-003 quá hạn kiểm định từ 01/08/2026.', 'Liên hệ đơn vị PCCC được cấp phép mang bình đi nạp bột và cấp tem mới.', 'Nguyễn Hoàng Nam (Thủ kho)', 1, 'Kho Tổng Logistics M17 - Dãy C', '2026-10-05', 'OPEN', ?, ?)`,
+        args: [nowTs, nowTs, nowTs, nowTs]
+      });
+
+      // 5. Environmental Records
+      await client.execute({
+        sql: `INSERT INTO ehs_environmental_records (
+          id, record_number, record_type, warehouse_id, warehouse_name, parameter_name,
+          measured_value, standard_threshold, unit, compliance_status, recorded_date,
+          notes, recorded_by, created_at
+        ) VALUES
+        (1, 'ENV-2026-0001', 'WASTE_WATER', 1, 'Kho Tổng Logistics M17 - Dãy C', 'COD (Nhu cầu oxy hóa học)', 65.4, 75.0, 'mg/L', 'COMPLIANT', '2026-09-20', 'Đạt quy chuẩn QCVN 40:2011/BTNMT Cột A', 'Ban Môi trường ISO 14001', ?),
+        (2, 'ENV-2026-0002', 'WASTE_WATER', 1, 'Kho Tổng Logistics M17 - Dãy C', 'pH nước thải sau xử lý', 7.2, 8.5, 'pH', 'COMPLIANT', '2026-09-20', 'Trong giới hạn cho phép 6.0 - 9.0', 'Ban Môi trường ISO 14001', ?),
+        (3, 'ENV-2026-0003', 'EXHAUST_GAS', 1, 'Kho Tổng Logistics M17 - Dãy C', 'Bụi tổng TSP ống khói lò', 185.0, 200.0, 'mg/Nm3', 'COMPLIANT', '2026-09-18', 'Đo đạc định kỳ Quý 3/2026', 'Trung tâm Quan trắc Môi trường', ?),
+        (4, 'ENV-2026-0004', 'HAZARDOUS_WASTE', 1, 'Kho Tổng Logistics M17 - Dãy C', 'Chất thải dính dầu mỡ (Mã 19 12 03)', 120.0, 100.0, 'kg', 'EXCEEDED', '2026-09-22', 'Vượt định mức lưu chứa tạm thời quá 100kg, cần chuyển giao cho bên thu gom', 'Ban Môi trường ISO 14001', ?)`,
+        args: [nowTs, nowTs, nowTs, nowTs]
+      });
+
+      // 6. Safety Permits (LOTO & Hot Work)
+      await client.execute({
+        sql: `INSERT INTO ehs_safety_permits (
+          id, permit_number, permit_type, target_asset_id, target_asset_code, target_asset_name,
+          warehouse_id, warehouse_name, area_location, description, valid_from, valid_to,
+          applicant_name, approver_name, loto_tag_number, status, created_at, updated_at
+        ) VALUES
+        (1, 'PMT-2026-0001', 'LOTO_ISOLATION', 1, 'AST-0001', 'Máy phay CNC 5 trục Haas VF-2', 1, 'Kho Tổng Logistics M17 - Dãy C', 'Xưởng Cơ khí Line 1', 'Khóa cách ly điện 3 pha và xả áp suất khí nén để thay trục chính spindle.', '2026-09-24', '2026-09-26', 'Nguyễn Kỹ Thuật (EAM Team)', 'Nguyễn Văn An (EHS Lead)', 'LOTO-TAG-2026-088', 'ACTIVE', ?, ?),
+        (2, 'PMT-2026-0002', 'HOT_WORK', NULL, NULL, NULL, 1, 'Kho Tổng Logistics M17 - Dãy C', 'Mái che ngoài trời kho A', 'Hàn gia cố khung sắt giàn mái kho.', '2026-09-25', '2026-09-25', 'Lê Thợ Hàn (Đội Cơ khí)', 'Trần Thị Bích (Safety Officer)', NULL, 'APPROVED', ?, ?)`,
+        args: [nowTs, nowTs, nowTs, nowTs]
+      });
+
+      // 7. Site Scope
+      await client.execute({
+        sql: `INSERT OR REPLACE INTO ehs_site_scope (
+          id, warehouse_id, warehouse_name, safety_officer_name, audit_frequency_days,
+          emergency_contact, is_active, updated_at
+        ) VALUES
+        (1, 1, 'Kho Tổng Logistics M17 - Dãy C', 'Nguyễn Văn An (EHS Lead)', 30, '0903-114-115 (Đội PCCC Cơ sở)', 1, ?),
+        (2, 2, 'Kho Chi nhánh Miền Nam', 'Trần Thị Bích (Safety Officer)', 30, '0908-999-888', 1, ?)`,
+        args: [nowTs, nowTs]
       });
     }
 

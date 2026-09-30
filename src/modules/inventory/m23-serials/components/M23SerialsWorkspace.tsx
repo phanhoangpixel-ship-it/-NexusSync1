@@ -380,7 +380,7 @@ export const M23SerialsWorkspace: React.FC<M23SerialsWorkspaceProps> = ({
     const found = serials.find(s => s.serialNumber.toUpperCase() === code || s.serialNumber.toUpperCase().includes(code));
     if (found) {
       handleInspectSerial(found);
-      onNotify('success', 'Quét mã vạch thành công', `Đã tìm thấy và mở hồ sơ 360° cho Serial: ${found.serialNumber}`);
+      onNotify('success', 'Quét mã vạch thành công', `Đã tìm thấy và mở Hồ Sơ Truy Vết cho Serial: ${found.serialNumber}`);
       setQuickScanInput('');
     } else {
       onNotify('warning', 'Không tìm thấy Serial', `Không tìm thấy số Serial / IMEI "${code}" trong hệ thống kho.`);
@@ -764,7 +764,7 @@ export const M23SerialsWorkspace: React.FC<M23SerialsWorkspaceProps> = ({
                 M23 • SERIALS & IMEI
               </span>
               <span className="text-[11px] text-slate-500 dark:text-slate-400 dark:text-slate-400 font-mono hidden sm:inline">
-                Data Lineage 360°
+                Hồ Sơ Truy Vết & Data Lineage
               </span>
             </div>
             <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white dark:text-white leading-tight mt-0.5">
@@ -1373,7 +1373,13 @@ export const M23SerialsWorkspace: React.FC<M23SerialsWorkspaceProps> = ({
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-700/50">
                       <span className="text-slate-500 dark:text-slate-400">Đơn hàng xuất:</span>
-                      <span className="font-mono text-slate-900 dark:text-white">{selectedSerial.orderNumber || '—'}</span>
+                      {selectedSerial.orderNumber ? (
+                        <span className="font-mono font-bold text-slate-900 dark:text-white">{selectedSerial.orderNumber}</span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800">
+                          Chưa liên kết SO
+                        </span>
+                      )}
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-700/50">
                       <span className="text-slate-500 dark:text-slate-400">Thời hạn bảo hành:</span>

@@ -56,6 +56,8 @@ export const M10RfqTab: React.FC<M10RfqTabProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [rfqPage, setRfqPage] = useState<number>(1);
+  const [rfqPageSize, setRfqPageSize] = useState<number>(15);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 

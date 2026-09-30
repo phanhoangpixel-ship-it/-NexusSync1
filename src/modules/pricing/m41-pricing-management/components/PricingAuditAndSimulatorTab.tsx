@@ -248,29 +248,51 @@ export const PricingAuditAndSimulatorTab: React.FC<PricingAuditAndSimulatorTabPr
               <div className="space-y-4">
                 <div className="bg-indigo-50/80 dark:bg-indigo-950/60 p-4 rounded-xl border border-indigo-200 dark:border-indigo-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                   <div>
-                    <span className="text-xs text-indigo-700 dark:text-indigo-300 font-semibold uppercase tracking-wide block">Giá Bán Chính Thức Đã Phân Giải:</span>
-                    <div className="text-2xl font-black text-indigo-950 dark:text-indigo-200 font-mono mt-0.5">{formatVND(result.finalUnitPrice)}</div>
-                    <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">Quyết định bởi bậc: <strong>{result.resolutionStep}</strong></span>
+                    <span className="text-xs text-indigo-700 dark:text-indigo-300 font-semibold uppercase tracking-wide block">Đơn Giá Bán Chính Thức (Chưa VAT):</span>
+                    <div className="text-2xl font-black text-indigo-950 dark:text-indigo-200 font-mono mt-0.5">{formatVND(result.finalUnitPriceExclVat || result.resolvedUnitPrice)}</div>
+                    <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">Quyết định bởi: <strong>{result.resolutionStep}</strong></span>
                   </div>
                   <div className="text-right sm:border-l sm:border-indigo-200 dark:sm:border-indigo-800 sm:pl-4">
                     <span className="text-xs text-slate-500 dark:text-slate-400 block">Biên LN Gộp (Margin):</span>
-                    <strong className="text-emerald-700 dark:text-emerald-300 font-mono text-base">{result.actualMarginPercent.toFixed(2)}%</strong>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Giá vốn cơ sở: {formatVND(result.costBasis)}</span>
+                    <strong className={`font-mono text-base ${result.actualMarginPercent < 15 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-300'}`}>
+                      {result.actualMarginPercent.toFixed(2)}%
+                    </strong>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-mono">Giá vốn gốc: {formatVND(result.costBasis)}</span>
+                  </div>
+                </div>
+
+                {/* Financial Details Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-900/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-mono">
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 text-[11px] block">Chiết Khấu Đạt Được:</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">-{result.discountPercent}% ({formatVND(result.discountAmount)})</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 text-[11px] block">VAT ({(result.vatRate * 100).toFixed(0)}%):</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300">{formatVND(result.vatAmount)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 text-[11px] block">Đơn Giá Gồm VAT:</span>
+                    <span className="font-bold text-indigo-700 dark:text-indigo-300">{formatVND(result.finalUnitPriceInclVat)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 text-[11px] block">Tổng Tiền Dòng Hàng ({result.quantity} {result.uom}):</span>
+                    <span className="font-bold text-indigo-900 dark:text-indigo-200 text-sm">{formatVND(result.lineTotalInclVat)}</span>
                   </div>
                 </div>
 
                 {/* Audit Explanation Steps */}
                 <div className="space-y-2">
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">Nhật ký truy vết từng bước (Waterfall Trace Logs):</span>
-                  {result.traceLog.map((log, idx) => (
+                  {(result.traceLogs || []).map((log, idx) => (
                     <div key={idx} className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-lg border border-slate-200 dark:border-slate-700 text-xs flex items-center justify-between font-mono">
                       <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center text-[10px] font-bold">
+                        <span className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center text-[10px] font-bold shrink-0">
                           {idx + 1}
                         </span>
                         <span className="text-slate-800 dark:text-slate-200">{log}</span>
                       </div>
-                      <span className="text-[10px] px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded font-semibold">Đã kiểm tra</span>
+                      <span className="text-[10px] px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded font-semibold shrink-0 ml-2">Đã kiểm tra</span>
                     </div>
                   ))}
                 </div>

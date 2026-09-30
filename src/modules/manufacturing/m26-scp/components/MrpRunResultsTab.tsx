@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Cpu,
   RefreshCw,
@@ -26,6 +26,8 @@ import {
 import { RunMrpModal } from './RunMrpModal';
 import { DmsDossierSealModal } from './DmsDossierSealModal';
 import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
+import { TablePagination } from '../../../../components/common/TablePagination';
+import { ProductionOrderDetailDrawer, ProductionOrderDetails } from './ProductionOrderDetailDrawer';
 import { ConfirmDialogState, SelectedEntityContext } from '../../../../types';
 
 interface MrpRunResultsTabProps {
@@ -42,6 +44,10 @@ export const MrpRunResultsTab: React.FC<MrpRunResultsTabProps> = ({
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [mrpPage, setMrpPage] = useState<number>(1);
+  const [mrpPageSize, setMrpPageSize] = useState<number>(15);
+  const [selectedOrderForDrawer, setSelectedOrderForDrawer] = useState<ProductionOrderDetails | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [levelFilter, setLevelFilter] = useState<'ALL' | '0' | '1' | '2'>('ALL');
   const [actionFilter, setActionFilter] = useState<'ALL' | 'CREATE_PR' | 'CREATE_MO' | 'NONE'>('ALL');
   const [viewMode, setViewMode] = useState<'auto' | 'table' | 'cards'>('auto');
@@ -102,6 +108,20 @@ export const MrpRunResultsTab: React.FC<MrpRunResultsTabProps> = ({
 
   const handleSelectEntity = (r: any) => {
     setSelectedRowId(r.id);
+    setSelectedOrderForDrawer({
+      id: r.id,
+      orderCode: r.suggestedOrderCode || `MO-${r.sku}-2026`,
+      productName: r.productName,
+      sku: r.sku,
+      plannedQty: r.orderQuantity || r.netRequirement || 100,
+      uom: r.uom || 'Cái',
+      startDate: '28/08/2026',
+      dueDate: r.requiredDate || '05/09/2026',
+      priority: 'HIGH',
+      status: r.suggestedAction === 'CREATE_MO' ? 'PLANNED' : 'RELEASED',
+      workCenter: 'WC-CNC-01',
+      bomVersion: 'BOM-REV-2.4',
+    });
     onSelectEntity({
       type: 'SUPPLY_CHAIN_PLAN',
       id: r.id || r.sku,
@@ -213,6 +233,11 @@ export const MrpRunResultsTab: React.FC<MrpRunResultsTabProps> = ({
     const matchAction = actionFilter === 'ALL' || r.suggestedAction === actionFilter;
     return matchSearch && matchLevel && matchAction;
   });
+
+  const paginatedResults = useMemo(() => {
+    const start = (mrpPage - 1) * mrpPageSize;
+    return filteredResults.slice(start, start + mrpPageSize);
+  }, [filteredResults, mrpPage, mrpPageSize]);
 
   return (
     <div className="space-y-4">
@@ -473,7 +498,7 @@ export const MrpRunResultsTab: React.FC<MrpRunResultsTabProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                    {filteredResults.map((r) => {
+                    {paginatedResults.map((r) => {
                       const isSelected = selectedRowId === r.id;
                       return (
                         <tr

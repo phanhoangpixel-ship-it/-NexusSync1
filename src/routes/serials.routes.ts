@@ -190,7 +190,7 @@ serialsRouter.post("/api/serials", async (req, res) => {
   }
 });
 
-// 3. GET SERIAL 360 FULL LIFECYCLE TRACE & TIMELINE
+// 3. GET SERIAL FULL LIFECYCLE TRACE & TIMELINE (HỒ SƠ TRUY VẾT)
 serialsRouter.get("/api/serials/:id/history", async (req, res) => {
   try {
     const serialIdParam = req.params.id;

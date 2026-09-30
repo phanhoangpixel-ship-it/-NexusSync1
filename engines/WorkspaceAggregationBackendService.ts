@@ -1,12 +1,14 @@
 import { db } from "../db/index";
 import * as schema from "../db/schema";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, and, sql, or } from "drizzle-orm";
+import { StockAdjustmentService } from "./stockAdjustmentService";
+import { AuditService } from "./auditService";
 
 export interface WorkItemAction {
   id: string;
   label: string;
   endpoint: string;
-  variant?: 'primary' | 'danger' | 'secondary';
+  variant?: 'primary' | 'danger' | 'secondary' | 'warning' | 'default';
 }
 
 export interface WorkItemData {
@@ -22,14 +24,34 @@ export interface WorkItemData {
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSED' | 'IN_PROGRESS';
   targetRoute: string;
   createdAt: string;
-  dueAt: string;
-  slaHours: number;
+  dueAt?: string | null;
+  slaHours?: number | null;
   isOverdue?: boolean;
   isEscalated?: boolean;
+  slaStatus?: 'NORMAL' | 'WARNING_75' | 'WARNING_90' | 'BREACHED' | 'NO_SLA';
+  slaLabel?: string;
+  ageFormatted?: string;
+  canAction?: boolean;
+  isReadOnly?: boolean;
+  assignedTo?: string;
   delegatedFrom?: string;
   amount?: number;
   currency?: string;
   actions: WorkItemAction[];
+}
+
+function formatAge(dateInput: Date | string | number | null | undefined): string {
+  if (!dateInput) return "Vừa xong";
+  const d = new Date(dateInput);
+  const diffMs = Date.now() - d.getTime();
+  if (diffMs < 0) return "Vừa xong";
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return "Vừa xong";
+  if (diffMins < 60) return `${diffMins} phút trước`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours} giờ trước`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} ngày trước`;
 }
 
 let initialWorkItems: WorkItemData[] = [
@@ -46,8 +68,12 @@ let initialWorkItems: WorkItemData[] = [
     status: "PENDING", 
     targetRoute: "/purchase",
     createdAt: new Date().toISOString(),
-    dueAt: new Date(Date.now() + 4 * 3600000).toISOString(),
-    slaHours: 24,
+    dueAt: null,
+    slaHours: null,
+    slaStatus: "NO_SLA",
+    slaLabel: "Chưa có SLA",
+    ageFormatted: "Vừa xong",
+    canAction: true,
     isOverdue: false,
     amount: 850000000,
     currency: "VND",
@@ -69,9 +95,13 @@ let initialWorkItems: WorkItemData[] = [
     status: "PENDING", 
     targetRoute: "/inventory",
     createdAt: new Date(Date.now() - 25 * 3600000).toISOString(),
-    dueAt: new Date(Date.now() - 1 * 3600000).toISOString(),
-    slaHours: 24,
-    isOverdue: true,
+    dueAt: null,
+    slaHours: null,
+    slaStatus: "NO_SLA",
+    slaLabel: "Chưa có SLA",
+    ageFormatted: "1 ngày trước",
+    canAction: true,
+    isOverdue: false,
     actions: [
       { id: "a3", label: "Xử lý ngay", endpoint: "/api/inventory/adjust/SA-2026-042", variant: "primary" }
     ]
@@ -89,8 +119,12 @@ let initialWorkItems: WorkItemData[] = [
     status: "PENDING", 
     targetRoute: "/dispatch",
     createdAt: new Date(Date.now() - 3 * 3600000).toISOString(),
-    dueAt: new Date(Date.now() + 5 * 3600000).toISOString(),
-    slaHours: 8,
+    dueAt: null,
+    slaHours: null,
+    slaStatus: "NO_SLA",
+    slaLabel: "Chưa có SLA",
+    ageFormatted: "3 giờ trước",
+    canAction: true,
     isOverdue: false,
     amount: 32000000,
     currency: "VND",
@@ -100,61 +134,73 @@ let initialWorkItems: WorkItemData[] = [
   },
   { 
     id: "WI-004", 
-    sourceModule: "M27 Asset Maintenance EAM",
-    type: "ALERT", 
-    entity: "MaintenanceWorkOrder",
-    entityId: "MWO-2026-015",
-    businessReference: "MWO-2026-015",
-    title: "Cảnh báo Bảo trì khẩn cấp Máy dập CNC 03 (M27)", 
-    description: "Cảm biến nhiệt độ trục chính vượt ngưỡng 85°C. Cần kỹ sư bảo trì kiểm tra thay vòng bi và dầu thủy lực.",
-    priority: "URGENT", 
+    sourceModule: "M27 Maintenance EAM",
+    type: "TASK", 
+    entity: "WorkOrder",
+    entityId: "WO-2026-012",
+    businessReference: "WO-2026-012",
+    title: "Bảo trì định kỳ máy dập CNC #02 (M27)", 
+    description: "Kế hoạch bảo dưỡng ngăn ngừa 500 giờ hoạt động máy CNC dập nguội phân xưởng 1. Cần thay nhớt thủy lực và cân chỉnh ray trượt.",
+    priority: "MEDIUM", 
     status: "PENDING", 
-    targetRoute: "/asset-maintenance",
-    createdAt: new Date(Date.now() - 1 * 3600000).toISOString(),
-    dueAt: new Date(Date.now() + 2 * 3600000).toISOString(),
-    slaHours: 4,
+    targetRoute: "/maintenance",
+    createdAt: new Date().toISOString(),
+    dueAt: null,
+    slaHours: null,
+    slaStatus: "NO_SLA",
+    slaLabel: "Chưa có SLA",
+    ageFormatted: "Vừa xong",
+    canAction: true,
     isOverdue: false,
     actions: [
-      { id: "a5", label: "Tiếp nhận sửa chữa", endpoint: "/api/maintenance/take/MWO-2026-015", variant: "primary" }
+      { id: "a5", label: "Tiếp nhận bảo trì", endpoint: "/api/maintenance/take/WO-2026-012", variant: "primary" }
     ]
   },
   { 
     id: "WI-005", 
-    sourceModule: "M18 Manufacturing MES",
+    sourceModule: "M25 Manufacturing MES",
     type: "TASK", 
-    entity: "WorkOrder",
-    entityId: "WO-2026-0045",
-    businessReference: "WO-2026-0045",
-    title: "Xác nhận hoàn thành lệnh sản xuất Lô #45 (M18)", 
-    description: "Công đoạn lắp ráp hoàn tất 100 bộ sản phẩm. Cần xác nhận nhập kho thành phẩm.",
-    priority: "MEDIUM", 
+    entity: "ProductionOrder",
+    entityId: "MO-2026-004",
+    businessReference: "MO-2026-004",
+    title: "Nghiệm thu đóng lệnh sản xuất Lô #402 (M25)", 
+    description: "Hoàn tất gia công 500 bộ phụ kiện nhôm anodized. Đạt tiêu chuẩn QC 100%. Cần đóng lệnh để cập nhật giá thành.",
+    priority: "LOW", 
     status: "PENDING", 
     targetRoute: "/manufacturing",
     createdAt: new Date().toISOString(),
-    dueAt: new Date(Date.now() + 12 * 3600000).toISOString(),
-    slaHours: 24,
+    dueAt: null,
+    slaHours: null,
+    slaStatus: "NO_SLA",
+    slaLabel: "Chưa có SLA",
+    ageFormatted: "Vừa xong",
+    canAction: true,
     isOverdue: false,
     actions: [
-      { id: "a6", label: "Xác nhận nhập kho", endpoint: "/api/manufacturing/complete/WO-2026-0045", variant: "primary" }
+      { id: "a6", label: "Đóng lệnh & Nhập kho", endpoint: "/api/manufacturing/complete/MO-2026-004", variant: "primary" }
     ]
   },
   { 
     id: "WI-006", 
-    sourceModule: "M31 Invoices AR/AP",
+    sourceModule: "M29 e-Invoice & HSM",
     type: "APPROVAL", 
-    entity: "CustomerInvoice",
+    entity: "ElectronicInvoice",
     entityId: "INV-2026-092",
     businessReference: "INV-2026-092",
-    title: "Duyệt xuất hóa đơn điện tử GTGT (M31)", 
-    description: "Hóa đơn VAT cho khách hàng Đại lý Miền Nam trị giá 185.000.000 VND.",
+    title: "Ký số phát hành Hóa đơn điện tử VAT (M29)", 
+    description: "Hóa đơn giá trị gia tăng số 00092 cho Công ty TNHH Cơ Khí An Phát. Đã khớp thanh toán và lệnh xuất kho.",
     priority: "HIGH", 
     status: "PENDING", 
     targetRoute: "/invoices",
     createdAt: new Date().toISOString(),
-    dueAt: new Date(Date.now() + 6 * 3600000).toISOString(),
-    slaHours: 8,
+    dueAt: null,
+    slaHours: null,
+    slaStatus: "NO_SLA",
+    slaLabel: "Chưa có SLA",
+    ageFormatted: "Vừa xong",
+    canAction: true,
     isOverdue: false,
-    amount: 185000000,
+    amount: 145200000,
     currency: "VND",
     actions: [
       { id: "a7", label: "Ký số phát hành", endpoint: "/api/invoices/sign/INV-2026-092", variant: "primary" }
@@ -168,12 +214,18 @@ export class WorkspaceAggregationBackendService {
   static async getSummary(role: string, branchId: string) {
     const allItems = await this.getWorkItems(role, branchId);
     const pendingCount = allItems.filter(i => i.status === 'PENDING').length;
-    const alertCount = allItems.filter(i => i.priority === 'URGENT' && i.status === 'PENDING').length;
+    const alertCount = allItems.filter(i => (i.priority === 'URGENT' || i.type === 'ALERT') && i.status === 'PENDING').length;
+    const approvalCount = allItems.filter(i => i.type === 'APPROVAL' && i.status === 'PENDING').length;
+    const taskCount = allItems.filter(i => i.type === 'TASK' && i.status === 'PENDING').length;
+    const overdueCount = allItems.filter(i => i.isOverdue && i.status === 'PENDING').length;
 
     return {
       activeWorkspaces: 12,
       pendingTasks: pendingCount,
       alerts: alertCount,
+      taskCount,
+      approvalCount,
+      overdueCount,
       recentActivity: [
         { id: 1, text: "Purchase Order PO-2026-001 approved", time: "10 mins ago" },
         { id: 2, text: "Stock adjustment SA-002 requires review", time: "1 hour ago" }
@@ -183,14 +235,15 @@ export class WorkspaceAggregationBackendService {
 
   static async getWorkItems(role: string, branchId: string, filter?: any) {
     const dynamicItems: WorkItemData[] = [];
+    const isSuperAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
 
     try {
-      // Query recent sales orders to generate real dynamic workflow tasks
+      // 1. Query Real Sales Orders (M15 RMA & M16 POS fulfillment)
       const recentOrders = await db.select().from(schema.salesOrders)
         .orderBy(desc(schema.salesOrders.createdAt))
-        .limit(20);
+        .limit(30);
 
-      for (const order of recentOrders) {
+      for (const order of (recentOrders as any[])) {
         let parsedMeta: any = {};
         if (order.notes) {
           try {
@@ -198,9 +251,10 @@ export class WorkspaceAggregationBackendService {
           } catch {}
         }
 
-        // 1. Check for RMA items attached to order
+        // RMA items attached to order
         if (parsedMeta.rmas && Array.isArray(parsedMeta.rmas)) {
           for (const rma of parsedMeta.rmas) {
+            const createdAt = rma.createdAt || new Date().toISOString();
             if (rma.status === 'REQUESTED') {
               dynamicItems.push({
                 id: `WI-RMA-QC-${rma.rmaCode}`,
@@ -214,9 +268,14 @@ export class WorkspaceAggregationBackendService {
                 priority: "HIGH",
                 status: "PENDING",
                 targetRoute: "/pos-retail",
-                createdAt: rma.createdAt || new Date().toISOString(),
-                dueAt: new Date(Date.now() + 6 * 3600000).toISOString(),
-                slaHours: 8,
+                createdAt,
+                dueAt: null,
+                slaHours: null,
+                slaStatus: "NO_SLA",
+                slaLabel: "Chưa có SLA",
+                ageFormatted: formatAge(createdAt),
+                canAction: isSuperAdmin || role === 'MANAGER' || role === 'QUALITY_MANAGER',
+                isReadOnly: !(isSuperAdmin || role === 'MANAGER' || role === 'QUALITY_MANAGER'),
                 isOverdue: false,
                 amount: rma.totalReturnAmount || 0,
                 currency: "VND",
@@ -237,9 +296,14 @@ export class WorkspaceAggregationBackendService {
                 priority: "HIGH",
                 status: "PENDING",
                 targetRoute: "/pos-retail",
-                createdAt: rma.inspectedAt || new Date().toISOString(),
-                dueAt: new Date(Date.now() + 4 * 3600000).toISOString(),
-                slaHours: 4,
+                createdAt: rma.inspectedAt || createdAt,
+                dueAt: null,
+                slaHours: null,
+                slaStatus: "NO_SLA",
+                slaLabel: "Chưa có SLA",
+                ageFormatted: formatAge(rma.inspectedAt || createdAt),
+                canAction: isSuperAdmin || role === 'MANAGER' || role === 'SALES_MANAGER',
+                isReadOnly: !(isSuperAdmin || role === 'MANAGER' || role === 'SALES_MANAGER'),
                 isOverdue: false,
                 amount: rma.totalReturnAmount || 0,
                 currency: "VND",
@@ -248,36 +312,14 @@ export class WorkspaceAggregationBackendService {
                   { id: "rma_rej", label: "Từ chối RMA", endpoint: `/api/rma/reject/${rma.rmaCode}`, variant: "danger" }
                 ]
               });
-            } else if (rma.status === 'APPROVED') {
-              dynamicItems.push({
-                id: `WI-RMA-EXEC-${rma.rmaCode}`,
-                sourceModule: "M15 RMA / M17 Kho / M30 GL",
-                type: "TASK",
-                entity: "RMARequest",
-                entityId: rma.rmaCode,
-                businessReference: rma.rmaCode,
-                title: `👉 [Trợ lý M15/M17/M30] Nhập kho & Hoàn tiền cho RMA ${rma.rmaCode}`,
-                description: `RMA đã được duyệt. Bước 4: Hoàn kho vật lý vào Kho ${order.warehouseId} và hạch toán giảm trừ doanh thu / hoàn nhập giá vốn GL.`,
-                priority: "URGENT",
-                status: "PENDING",
-                targetRoute: "/pos-retail",
-                createdAt: rma.approvedAt || new Date().toISOString(),
-                dueAt: new Date(Date.now() + 2 * 3600000).toISOString(),
-                slaHours: 4,
-                isOverdue: false,
-                amount: rma.totalReturnAmount || 0,
-                currency: "VND",
-                actions: [
-                  { id: "rma_exec", label: "Nhập kho & Hoàn tiền", endpoint: `/api/rma/execute/${rma.rmaCode}`, variant: "primary" }
-                ]
-              });
             }
           }
         }
 
-        // 2. Check for Omnichannel / POS Order Fulfillment lifecycle
+        // Omnichannel / POS Order Fulfillment lifecycle
         const fStatus = parsedMeta.fulfillmentStatus || "PENDING";
         const pStatus = parsedMeta.paymentStatus || (order.paymentStatus || "UNPAID");
+        const orderCreated = order.createdAt ? new Date(order.createdAt).toISOString() : new Date().toISOString();
 
         if (order.status !== 'CANCELLED' && order.status !== 'COMPLETED') {
           if (fStatus === 'PENDING') {
@@ -293,9 +335,14 @@ export class WorkspaceAggregationBackendService {
               priority: "MEDIUM",
               status: "PENDING",
               targetRoute: "/pos-retail",
-              createdAt: order.createdAt ? new Date(order.createdAt).toISOString() : new Date().toISOString(),
-              dueAt: new Date(Date.now() + 4 * 3600000).toISOString(),
-              slaHours: 4,
+              createdAt: orderCreated,
+              dueAt: null,
+              slaHours: null,
+              slaStatus: "NO_SLA",
+              slaLabel: "Chưa có SLA",
+              ageFormatted: formatAge(orderCreated),
+              canAction: isSuperAdmin || role === 'SALES' || role === 'MANAGER',
+              isReadOnly: !(isSuperAdmin || role === 'SALES' || role === 'MANAGER'),
               isOverdue: false,
               amount: order.totalAmount || 0,
               currency: "VND",
@@ -303,145 +350,357 @@ export class WorkspaceAggregationBackendService {
                 { id: "ord_conf", label: "Xác nhận & Giữ chỗ", endpoint: `/api/orders/${order.id}/confirm`, variant: "primary" }
               ]
             });
-          } else if (fStatus === 'CONFIRMED') {
-            dynamicItems.push({
-              id: `WI-ORD-PACK-${order.code}`,
-              sourceModule: "M16 POS / M17 Inventory",
-              type: "TASK",
-              entity: "SalesOrder",
-              entityId: order.code,
-              businessReference: order.code,
-              title: `👉 [Trợ lý M16/M17] Soạn hàng & Đóng gói (Pick & Pack) đơn ${order.code}`,
-              description: `Đơn đã xác nhận giữ chỗ. Bước 2: In phiếu lấy hàng (Pick list) và đóng gói kiện hàng.`,
-              priority: "HIGH",
-              status: "PENDING",
-              targetRoute: "/pos-retail",
-              createdAt: order.createdAt ? new Date(order.createdAt).toISOString() : new Date().toISOString(),
-              dueAt: new Date(Date.now() + 2 * 3600000).toISOString(),
-              slaHours: 2,
-              isOverdue: false,
-              amount: order.totalAmount || 0,
-              currency: "VND",
-              actions: [
-                { id: "ord_pack", label: "Soạn hàng & Đóng gói", endpoint: `/api/orders/${order.id}/pack`, variant: "primary" }
-              ]
-            });
-          } else if (fStatus === 'PACKED') {
-            dynamicItems.push({
-              id: `WI-ORD-SHIP-${order.code}`,
-              sourceModule: "M16 POS / M25 Logistics",
-              type: "TASK",
-              entity: "SalesOrder",
-              entityId: order.code,
-              businessReference: order.code,
-              title: `👉 [Trợ lý M16/M25] Bàn giao giao vận cho đơn ${order.code}`,
-              description: `Kiện hàng đã đóng gói niêm phong. Bước 3: Xuất kho và bàn giao đơn vị chuyển phát (GHN / ViettelPost).`,
-              priority: "HIGH",
-              status: "PENDING",
-              targetRoute: "/pos-retail",
-              createdAt: order.createdAt ? new Date(order.createdAt).toISOString() : new Date().toISOString(),
-              dueAt: new Date(Date.now() + 3 * 3600000).toISOString(),
-              slaHours: 3,
-              isOverdue: false,
-              amount: order.totalAmount || 0,
-              currency: "VND",
-              actions: [
-                { id: "ord_ship", label: "Bàn giao vận chuyển", endpoint: `/api/orders/${order.id}/ship`, variant: "primary" }
-              ]
-            });
-          } else if (fStatus === 'SHIPPED') {
-            dynamicItems.push({
-              id: `WI-ORD-DELIVER-${order.code}`,
-              sourceModule: "M16 POS / Giao nhận",
-              type: "TASK",
-              entity: "SalesOrder",
-              entityId: order.code,
-              businessReference: order.code,
-              title: `👉 [Trợ lý M16] Xác nhận giao hàng thành công đơn ${order.code}`,
-              description: `Đơn hàng đang trên đường giao. Bước 4: Cập nhật trạng thái nhận hàng từ shipper.`,
-              priority: "MEDIUM",
-              status: "PENDING",
-              targetRoute: "/pos-retail",
-              createdAt: order.createdAt ? new Date(order.createdAt).toISOString() : new Date().toISOString(),
-              dueAt: new Date(Date.now() + 6 * 3600000).toISOString(),
-              slaHours: 6,
-              isOverdue: false,
-              amount: order.totalAmount || 0,
-              currency: "VND",
-              actions: [
-                { id: "ord_deliv", label: "Xác nhận đã giao", endpoint: `/api/orders/${order.id}/deliver`, variant: "primary" }
-              ]
-            });
-          } else if (fStatus === 'DELIVERED' && pStatus !== 'PAID') {
-            dynamicItems.push({
-              id: `WI-ORD-PAY-${order.code}`,
-              sourceModule: "M16 POS / M31 Kế toán",
-              type: "TASK",
-              entity: "SalesOrder",
-              entityId: order.code,
-              businessReference: order.code,
-              title: `👉 [Trợ lý M16/M31] Thu tiền COD (${(order.totalAmount || 0).toLocaleString('vi-VN')} đ) đơn ${order.code}`,
-              description: `Khách đã nhận hàng. Bước 5: Thu hồi và đối soát tiền thu hộ COD từ đơn vị vận chuyển.`,
-              priority: "HIGH",
-              status: "PENDING",
-              targetRoute: "/pos-retail",
-              createdAt: order.createdAt ? new Date(order.createdAt).toISOString() : new Date().toISOString(),
-              dueAt: new Date(Date.now() + 12 * 3600000).toISOString(),
-              slaHours: 12,
-              isOverdue: false,
-              amount: order.totalAmount || 0,
-              currency: "VND",
-              actions: [
-                { id: "ord_pay", label: "Thu tiền COD", endpoint: `/api/orders/${order.id}/pay`, variant: "primary" }
-              ]
-            });
-          } else if (fStatus === 'DELIVERED' && pStatus === 'PAID') {
-            dynamicItems.push({
-              id: `WI-ORD-COMPL-${order.code}`,
-              sourceModule: "M16 POS / M30 Sổ cái",
-              type: "TASK",
-              entity: "SalesOrder",
-              entityId: order.code,
-              businessReference: order.code,
-              title: `👉 [Trợ lý M16/M30] Hoàn tất & Hạch toán GL đơn ${order.code}`,
-              description: `Đã giao hàng và thanh toán đủ. Bước 6: Khóa đơn và hoàn tất ghi nhận sổ cái tài chính.`,
-              priority: "LOW",
-              status: "PENDING",
-              targetRoute: "/pos-retail",
-              createdAt: order.createdAt ? new Date(order.createdAt).toISOString() : new Date().toISOString(),
-              dueAt: new Date(Date.now() + 24 * 3600000).toISOString(),
-              slaHours: 24,
-              isOverdue: false,
-              amount: order.totalAmount || 0,
-              currency: "VND",
-              actions: [
-                { id: "ord_compl", label: "Hoàn tất đơn", endpoint: `/api/orders/${order.id}/complete`, variant: "primary" }
-              ]
-            });
           }
         }
       }
+
+      // 2. Query Real Purchase Orders (M08 Procurement)
+      const pendingPOs = await db.select().from(schema.purchaseOrders)
+        .where(eq(schema.purchaseOrders.status, 'DRAFT'))
+        .orderBy(desc(schema.purchaseOrders.createdAt))
+        .limit(15);
+
+      for (const po of (pendingPOs as any[])) {
+        const poCreated = po.createdAt ? new Date(po.createdAt).toISOString() : new Date().toISOString();
+        dynamicItems.push({
+          id: `WI-PO-${po.code}`,
+          sourceModule: "M08 Purchase Orders",
+          type: "APPROVAL",
+          entity: "PurchaseOrder",
+          entityId: po.code,
+          businessReference: po.code,
+          title: `Phê duyệt Đơn mua hàng ${po.code}`,
+          description: `Đơn mua hàng phát hành cần phê duyệt để gửi nhà cung cấp. Tổng giá trị: ${(po.totalAmount || 0).toLocaleString('vi-VN')} ₫.`,
+          priority: (po.totalAmount || 0) > 100000000 ? "URGENT" : (po.totalAmount || 0) > 20000000 ? "HIGH" : "MEDIUM",
+          status: "PENDING",
+          targetRoute: "/purchase",
+          createdAt: poCreated,
+          dueAt: null,
+          slaHours: null,
+          slaStatus: "NO_SLA",
+          slaLabel: "Chưa có SLA",
+          ageFormatted: formatAge(poCreated),
+          canAction: isSuperAdmin || role === 'MANAGER' || role === 'PROCUREMENT_MANAGER',
+          isReadOnly: !(isSuperAdmin || role === 'MANAGER' || role === 'PROCUREMENT_MANAGER'),
+          isOverdue: false,
+          amount: po.totalAmount || 0,
+          currency: "VND",
+          actions: [
+            { id: "po_approve", label: "Phê duyệt PO", endpoint: `/api/po/approve/${po.code}`, variant: "primary" },
+            { id: "po_reject", label: "Từ chối PO", endpoint: `/api/po/reject/${po.code}`, variant: "danger" }
+          ]
+        });
+      }
+
+      // 3. Query Real Stock Adjustments (M20 Adjustment Desk)
+      const allAdjs = await db.select().from(schema.stockAdjustments)
+        .orderBy(desc(schema.stockAdjustments.createdAt))
+        .limit(25);
+
+      const pendingAdjs = (allAdjs as any[]).filter(
+        a => a.status !== 'APPROVED' && a.status !== 'REJECTED' && a.approvalStatus !== 'APPROVED' && a.approvalStatus !== 'REJECTED'
+      );
+
+      for (const adj of (pendingAdjs as any[])) {
+        const adjCreated = adj.createdAt ? new Date(adj.createdAt).toISOString() : new Date().toISOString();
+        dynamicItems.push({
+          id: `WI-ADJ-${adj.code}`,
+          sourceModule: "M20 Stock Adjustment",
+          type: "APPROVAL",
+          entity: "StockAdjustment",
+          entityId: adj.code,
+          businessReference: adj.code,
+          title: `Phê duyệt Phiếu điều chỉnh tồn kho ${adj.code}`,
+          description: `Lý do: ${adj.reason || 'Điều chỉnh kiểm kê'}. Phân loại: ${adj.adjustmentType} (${adj.direction}).`,
+          priority: adj.adjustmentType === 'LOSS' || adj.adjustmentType === 'DAMAGE' ? "HIGH" : "MEDIUM",
+          status: "PENDING",
+          targetRoute: "/inventory/adjustment",
+          createdAt: adjCreated,
+          dueAt: null,
+          slaHours: null,
+          slaStatus: "NO_SLA",
+          slaLabel: "Chưa có SLA",
+          ageFormatted: formatAge(adjCreated),
+          canAction: isSuperAdmin || role === 'MANAGER' || role === 'WAREHOUSE_MANAGER',
+          isReadOnly: !(isSuperAdmin || role === 'MANAGER' || role === 'WAREHOUSE_MANAGER'),
+          isOverdue: false,
+          actions: [
+            { id: "adj_approve", label: "Duyệt điều chỉnh", endpoint: `/api/inventory/adjust/${adj.id || adj.code}`, variant: "primary" },
+            { id: "adj_reject", label: "Từ chối", endpoint: `/api/inventory/adjust/reject/${adj.id || adj.code}`, variant: "danger" }
+          ]
+        });
+      }
+
+      // 4. Query Real ServiceDesk Tickets (M38 Service Desk with F12 Real SLA)
+      const openTickets = await db.select().from(schema.tickets)
+        .where(or(
+          eq(schema.tickets.status, 'OPEN'),
+          eq(schema.tickets.status, 'ASSIGNED'),
+          eq(schema.tickets.status, 'IN_PROGRESS'),
+          eq(schema.tickets.status, 'PENDING')
+        ))
+        .orderBy(desc(schema.tickets.createdAt))
+        .limit(20);
+
+      const nowTime = Date.now();
+      for (const tkt of (openTickets as any[])) {
+        const tktCreated = tkt.createdAt ? new Date(tkt.createdAt).toISOString() : new Date().toISOString();
+        let resolveDueStr: string | null = null;
+        let isBreached = Boolean(tkt.isSlaBreached);
+        let slaStatus: 'NORMAL' | 'WARNING_75' | 'WARNING_90' | 'BREACHED' | 'NO_SLA' = 'NORMAL';
+
+        if (tkt.resolveDueAt) {
+          const dueTime = new Date(tkt.resolveDueAt).getTime();
+          resolveDueStr = new Date(tkt.resolveDueAt).toISOString();
+          if (nowTime > dueTime) {
+            isBreached = true;
+            slaStatus = 'BREACHED';
+          } else {
+            const totalSlaMs = (tkt.slaHours || 24) * 3600000;
+            const remainingMs = dueTime - nowTime;
+            const elapsedRatio = 1 - (remainingMs / totalSlaMs);
+            if (elapsedRatio >= 0.9) slaStatus = 'WARNING_90';
+            else if (elapsedRatio >= 0.75) slaStatus = 'WARNING_75';
+            else slaStatus = 'NORMAL';
+          }
+        }
+
+        const prio = tkt.priority === 'URGENT' ? 'URGENT' : tkt.priority === 'HIGH' ? 'HIGH' : tkt.priority === 'LOW' ? 'LOW' : 'MEDIUM';
+
+        dynamicItems.push({
+          id: `WI-TKT-${tkt.ticketCode}`,
+          sourceModule: "M38 Service Desk",
+          type: "TASK",
+          entity: "Ticket",
+          entityId: tkt.ticketCode,
+          businessReference: tkt.ticketCode,
+          title: `[IT Helpdesk] ${tkt.subject}`,
+          description: tkt.description || `Sự cố từ khách hàng: ${tkt.customerName || tkt.requesterName || 'Nội bộ'}.`,
+          priority: prio,
+          status: "PENDING",
+          targetRoute: "/service-desk",
+          createdAt: tktCreated,
+          dueAt: resolveDueStr,
+          slaHours: tkt.slaHours || 24,
+          slaStatus,
+          slaLabel: isBreached ? "Quá hạn SLA" : resolveDueStr ? `SLA: ${tkt.slaHours || 24}h` : "Chưa có SLA",
+          ageFormatted: formatAge(tktCreated),
+          canAction: isSuperAdmin || role === 'SUPPORT' || role === 'MANAGER',
+          isReadOnly: !(isSuperAdmin || role === 'SUPPORT' || role === 'MANAGER'),
+          assignedTo: tkt.assignedAgentName || undefined,
+          isOverdue: isBreached,
+          actions: [
+            { id: "tkt_take", label: "Tiếp nhận xử lý", endpoint: `/api/service-desk/take/${tkt.ticketCode}`, variant: "primary" }
+          ]
+        });
+      }
     } catch (e) {
-      console.error("Failed to load dynamic sales tasks in WorkspaceAggregationBackendService:", e);
+      console.error("Failed to load real dynamic work items in WorkspaceAggregationBackendService:", e);
     }
 
-    const staticPending = this.workItems.filter(i => i.status === 'PENDING');
-    return [...dynamicItems, ...staticPending];
+    // Merge baseline static items (if not duplicated by dynamic items)
+    const dynamicIds = new Set(dynamicItems.map(d => d.businessReference));
+    const staticPending = this.workItems
+      .filter(i => i.status === 'PENDING' && !dynamicIds.has(i.businessReference))
+      .map(item => ({
+        ...item,
+        ageFormatted: item.ageFormatted || formatAge(item.createdAt),
+        canAction: item.canAction !== undefined ? item.canAction : isSuperAdmin,
+        isReadOnly: item.isReadOnly !== undefined ? item.isReadOnly : !isSuperAdmin,
+        slaStatus: item.slaStatus || (item.isOverdue ? 'BREACHED' : 'NO_SLA'),
+        slaLabel: item.slaLabel || (item.slaHours ? `SLA: ${item.slaHours}h` : 'Chưa có SLA')
+      }));
+
+    let combined = [...dynamicItems, ...staticPending];
+
+    // Filter by moduleCode
+    if (filter?.moduleCode && filter.moduleCode !== 'ALL') {
+      const mc = String(filter.moduleCode).trim().toUpperCase();
+      combined = combined.filter(i => i.sourceModule && i.sourceModule.trim().toUpperCase().includes(mc));
+    }
+
+    // Filter by type / status
+    if (filter?.type && filter.type !== 'ALL') {
+      combined = combined.filter(i => i.type === filter.type);
+    }
+    if (filter?.status && filter.status !== 'ALL') {
+      combined = combined.filter(i => i.status === filter.status);
+    }
+
+    // Filter by priority
+    if (filter?.priority && filter.priority !== 'ALL') {
+      combined = combined.filter(i => i.priority === filter.priority);
+    }
+
+    // Filter by SLA
+    if (filter?.sla && filter.sla !== 'ALL') {
+      if (filter.sla === 'OVERDUE') combined = combined.filter(i => i.isOverdue === true || i.slaStatus === 'BREACHED');
+      else if (filter.sla === 'IN_SLA') combined = combined.filter(i => i.slaStatus === 'NORMAL' || i.slaStatus === 'WARNING_75' || i.slaStatus === 'WARNING_90');
+      else if (filter.sla === 'NO_SLA') combined = combined.filter(i => i.slaStatus === 'NO_SLA' || !i.dueAt);
+    }
+
+    if (filter?.isSlaViolated !== undefined) {
+      const isViolated = filter.isSlaViolated === true || filter.isSlaViolated === 'true';
+      combined = combined.filter(i => isViolated ? (i.isOverdue === true || i.slaStatus === 'BREACHED') : (i.isOverdue !== true && i.slaStatus !== 'BREACHED'));
+    }
+
+    // Filter by Search Query
+    if (filter?.search && String(filter.search).trim()) {
+      const q = String(filter.search).trim().toLowerCase();
+      combined = combined.filter(i =>
+        (i.title || '').toLowerCase().includes(q) ||
+        (i.businessReference || '').toLowerCase().includes(q) ||
+        (i.description || '').toLowerCase().includes(q) ||
+        (i.sourceModule || '').toLowerCase().includes(q)
+      );
+    }
+
+    // Filter by Assigned User (giao-cho-tôi)
+    if (filter?.assignedTo) {
+      const assignQ = String(filter.assignedTo).trim().toLowerCase();
+      combined = combined.filter(i => (i.assignedTo || '').toLowerCase().includes(assignQ));
+    }
+
+    return combined;
   }
 
-  static async executeAction(actionKey: string, params: { entityId?: string; userId?: string; actionType?: string }) {
-    const { entityId, userId, actionType } = params;
-    
-    // Check if it's an RMA action endpoint
-    if (actionKey.includes('/api/rma/')) {
-      const rmaCode = entityId || actionKey.split('/').pop() || '';
-      let action = 'INSPECT';
-      if (actionKey.includes('/inspect')) action = 'INSPECT';
-      else if (actionKey.includes('/approve')) action = 'APPROVE';
-      else if (actionKey.includes('/reject')) action = 'REJECT';
-      else if (actionKey.includes('/execute')) action = 'EXECUTE_RETURN_AND_REFUND';
+  static async executeAction(actionKey: string, params: { entityId?: string; userId?: string; actionType?: string; idempotencyKey?: string }) {
+    const { entityId, userId = 'SYSTEM_ADMIN', actionType, idempotencyKey } = params;
+    const cleanKey = String(actionKey || '').trim();
 
-      // Find sales order containing this RMA
+    // 1. M08 PO Approval Action
+    if (cleanKey.includes('/api/po/') || cleanKey.startsWith('PO-') || cleanKey.startsWith('WI-PO-')) {
+      const poCode = entityId || cleanKey.replace('/api/po/approve/', '').replace('/api/po/reject/', '').replace('WI-PO-', '').trim();
+      const isReject = actionType === 'reject' || cleanKey.includes('/reject');
+      
+      const poRows = await db.select().from(schema.purchaseOrders)
+        .where(eq(schema.purchaseOrders.code, poCode))
+        .limit(1);
+
+      if (poRows.length > 0) {
+        const po = poRows[0];
+        if (po.status === 'PENDING_RECEIPT' && !isReject) {
+          return { success: true, message: `Đơn mua hàng ${poCode} đã được phê duyệt trước đó.`, status: 'ALREADY_PROCESSED' };
+        }
+        if (po.status === 'CANCELLED' && isReject) {
+          return { success: true, message: `Đơn mua hàng ${poCode} đã được từ chối trước đó.`, status: 'ALREADY_PROCESSED' };
+        }
+
+        const newStatus = isReject ? 'CANCELLED' : 'PENDING_RECEIPT';
+        await db.update(schema.purchaseOrders)
+          .set({ status: newStatus } as any)
+          .where(eq(schema.purchaseOrders.code, poCode));
+
+        await AuditService.recordAuditLog({
+          userId: Number(userId) || 1,
+          action: isReject ? 'PO_REJECTED' : 'PO_APPROVED',
+          module: 'M08',
+          entityName: 'purchase_orders',
+          entityId: poCode,
+          oldData: JSON.stringify({ status: po.status }),
+          newData: JSON.stringify({ status: newStatus }),
+          description: `Thực thi qua M01 Workspace Hub: ${isReject ? 'Từ chối' : 'Phê duyệt'} PO ${poCode}`
+        }).catch(() => {});
+
+        return {
+          success: true,
+          message: `${isReject ? 'Từ chối' : 'Phê duyệt'} thành công Đơn mua hàng ${poCode}!`,
+          poCode,
+          status: newStatus
+        };
+      }
+    }
+
+    // 2. M20 Stock Adjustment Action
+    if (cleanKey.includes('/api/inventory/adjust/') || cleanKey.startsWith('ADJ-') || cleanKey.startsWith('WI-ADJ-')) {
+      const isReject = actionType === 'reject' || cleanKey.includes('/reject');
+      const rawParam = cleanKey.replace('/api/inventory/adjust/reject/', '').replace('/api/inventory/adjust/', '').replace('WI-ADJ-', '').trim();
+      const adjCodeOrId = entityId || rawParam;
+      const numId = parseInt(adjCodeOrId, 10);
+
+      const adjRows = isNaN(numId)
+        ? await db.select().from(schema.stockAdjustments).where(eq(schema.stockAdjustments.code, adjCodeOrId)).limit(1)
+        : await db.select().from(schema.stockAdjustments).where(eq(schema.stockAdjustments.id, numId)).limit(1);
+
+      if (adjRows.length > 0) {
+        const adj = adjRows[0];
+        if (adj.approvalStatus === 'APPROVED' && !isReject) {
+          return { success: true, message: `Phiếu điều chỉnh ${adj.code} đã được duyệt trước đó.`, status: 'ALREADY_PROCESSED' };
+        }
+        if (adj.approvalStatus === 'REJECTED' && isReject) {
+          return { success: true, message: `Phiếu điều chỉnh ${adj.code} đã từ chối trước đó.`, status: 'ALREADY_PROCESSED' };
+        }
+
+        if (isReject) {
+          await StockAdjustmentService.reject(adj.id, Number(userId) || 1, 'Từ chối qua M01 Hub');
+        } else {
+          await StockAdjustmentService.approve(adj.id, Number(userId) || 1);
+        }
+
+        await AuditService.recordAuditLog({
+          userId: Number(userId) || 1,
+          action: isReject ? 'STOCK_ADJUSTMENT_REJECTED' : 'STOCK_ADJUSTMENT_APPROVED',
+          module: 'M20',
+          entityName: 'stock_adjustments',
+          entityId: adj.code,
+          description: `Thực thi qua M01 Hub: ${isReject ? 'Từ chối' : 'Duyệt'} phiếu ${adj.code}`
+        }).catch(() => {});
+
+        return {
+          success: true,
+          message: `${isReject ? 'Từ chối' : 'Duyệt'} thành công Phiếu điều chỉnh ${adj.code}!`,
+          adjustmentCode: adj.code
+        };
+      }
+    }
+
+    // 3. M38 ServiceDesk Ticket Take Action
+    if (cleanKey.includes('/api/service-desk/take/') || cleanKey.startsWith('HD-') || cleanKey.startsWith('TKT-') || cleanKey.startsWith('WI-TKT-')) {
+      const ticketCode = entityId || cleanKey.replace('/api/service-desk/take/', '').replace('WI-TKT-', '').trim();
+      const tktRows = await db.select().from(schema.tickets)
+        .where(eq(schema.tickets.ticketCode, ticketCode))
+        .limit(1);
+
+      if (tktRows.length > 0) {
+        const tkt = tktRows[0];
+        if (tkt.status === 'IN_PROGRESS' || tkt.status === 'ASSIGNED') {
+          return { success: true, message: `Sự cố ${ticketCode} đã được tiếp nhận trước đó.`, status: 'ALREADY_PROCESSED' };
+        }
+
+        await db.update(schema.tickets)
+          .set({
+            status: 'IN_PROGRESS',
+            assignedAgentName: String(userId),
+            updatedAt: new Date()
+          } as any)
+          .where(eq(schema.tickets.ticketCode, ticketCode));
+
+        await AuditService.recordAuditLog({
+          userId: Number(userId) || 1,
+          action: 'TICKET_TAKEN',
+          module: 'M38',
+          entityName: 'tickets',
+          entityId: ticketCode,
+          description: `Tiếp nhận xử lý sự cố ${ticketCode} qua M01 Hub`
+        }).catch(() => {});
+
+        return {
+          success: true,
+          message: `Đã tiếp nhận xử lý sự cố ${ticketCode} thành công!`,
+          ticketCode
+        };
+      }
+    }
+
+    // 4. RMA action endpoint
+    if (cleanKey.includes('/api/rma/')) {
+      const rmaCode = entityId || cleanKey.split('/').pop() || '';
+      let action = 'INSPECT';
+      if (cleanKey.includes('/inspect')) action = 'INSPECT';
+      else if (cleanKey.includes('/approve')) action = 'APPROVE';
+      else if (cleanKey.includes('/reject')) action = 'REJECT';
+      else if (cleanKey.includes('/execute')) action = 'EXECUTE_RETURN_AND_REFUND';
+
       const allOrders = await db.select().from(schema.salesOrders).limit(50);
       let targetOrder: any = null;
       let targetRma: any = null;
@@ -485,8 +744,17 @@ export class WorkspaceAggregationBackendService {
 
         parsedMeta.rmas[rmaIndex] = targetRma;
         await db.update(schema.salesOrders)
-          .set({ notes: JSON.stringify(parsedMeta) })
+          .set({ notes: JSON.stringify(parsedMeta) } as any)
           .where(eq(schema.salesOrders.id, targetOrder.id));
+
+        await AuditService.recordAuditLog({
+          userId: Number(userId) || 1,
+          action: `RMA_${action}`,
+          module: 'M15',
+          entityName: 'rma_requests',
+          entityId: rmaCode,
+          description: `Thực thi RMA qua M01 Hub: ${action}`
+        }).catch(() => {});
 
         return {
           success: true,
@@ -496,9 +764,9 @@ export class WorkspaceAggregationBackendService {
       }
     }
 
-    // Check if it's an Order Fulfillment action
-    if (actionKey.includes('/api/orders/')) {
-      const parts = actionKey.split('/');
+    // 5. Order Fulfillment action
+    if (cleanKey.includes('/api/orders/')) {
+      const parts = cleanKey.split('/');
       const orderIdStr = parts[3];
       const actionName = parts[4];
       const orderId = parseInt(orderIdStr, 10);
@@ -528,11 +796,11 @@ export class WorkspaceAggregationBackendService {
           } else if (actionName === 'complete') {
             meta.fulfillmentStatus = 'COMPLETED';
             meta.completedAt = new Date().toISOString();
-            await db.update(schema.salesOrders).set({ status: 'COMPLETED' }).where(eq(schema.salesOrders.id, orderId));
+            await db.update(schema.salesOrders).set({ status: 'COMPLETED' } as any).where(eq(schema.salesOrders.id, orderId));
           }
 
           await db.update(schema.salesOrders)
-            .set({ notes: JSON.stringify(meta) })
+            .set({ notes: JSON.stringify(meta) } as any)
             .where(eq(schema.salesOrders.id, orderId));
 
           return {
@@ -544,16 +812,15 @@ export class WorkspaceAggregationBackendService {
       }
     }
     
-    // Find item matching entityId or endpoint in static list
+    // 6. Find item matching entityId or endpoint in static list
     const itemIndex = this.workItems.findIndex(
-      i => i.entityId === entityId || (actionKey && i.actions.some(a => a.endpoint.includes(actionKey)))
+      i => i.entityId === entityId || (cleanKey && i.actions.some(a => a.endpoint.includes(cleanKey)))
     );
 
     if (itemIndex >= 0) {
       const item = this.workItems[itemIndex];
       const newStatus = actionType === 'reject' ? 'REJECTED' : 'APPROVED';
       this.workItems[itemIndex] = { ...item, status: newStatus };
-      // Remove from pending
       this.workItems = this.workItems.filter(i => i.id !== item.id);
       return {
         success: true,
@@ -564,12 +831,69 @@ export class WorkspaceAggregationBackendService {
 
     return {
       success: true,
-      message: `Thực thi thành công cho ${entityId || actionKey}`
+      message: `Thực thi thành công cho ${entityId || cleanKey}`
     };
   }
 
+  // F14: Batch actions execution with individual idempotencyKeys
+  static async executeBatchActions(
+    actions: Array<{ id: string; actionKey: string; entityId?: string; actionType?: string }>,
+    userId: string
+  ) {
+    const results: Array<{ id: string; success: boolean; message: string }> = [];
+
+    for (const act of actions) {
+      const itemKey = `M01-BATCH-${Date.now()}-${act.id}`;
+      try {
+        const res = await this.executeAction(act.actionKey, {
+          entityId: act.entityId || act.id,
+          userId,
+          actionType: act.actionType,
+          idempotencyKey: itemKey
+        });
+        results.push({
+          id: act.id,
+          success: res.success !== false,
+          message: res.message || 'Thành công'
+        });
+      } catch (err: any) {
+        results.push({
+          id: act.id,
+          success: false,
+          message: err.message || 'Lỗi thực thi'
+        });
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    return {
+      total: actions.length,
+      successCount,
+      failureCount: actions.length - successCount,
+      results
+    };
+  }
+
+  // F08: Entity preview with DMS attachment count
   static async getEntityPreview(entity: string, id: string) {
-    return { id, entity, details: "Preview data for " + entity };
+    let attachmentsCount = 0;
+    try {
+      const docs = await db.select().from(schema.dmsDocuments)
+        .where(or(
+          eq(schema.dmsDocuments.entityType, entity),
+          eq(schema.dmsDocuments.entityId, id)
+        ))
+        .limit(10);
+      attachmentsCount = docs.length;
+    } catch {}
+
+    return {
+      id,
+      entity,
+      details: "Preview data for " + entity,
+      attachmentsCount,
+      verifiedAt: new Date().toISOString()
+    };
   }
 
   static async getProcessChains(role: string) {

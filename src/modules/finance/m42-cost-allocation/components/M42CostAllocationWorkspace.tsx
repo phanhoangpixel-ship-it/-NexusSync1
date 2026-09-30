@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Calculator,
   Layers,
@@ -20,8 +20,13 @@ import {
   Lock,
   Unlock,
   Sliders,
-  Truck
+  Truck,
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
+  Info
 } from 'lucide-react';
+import { useWorkspaceSessionTab } from '../../../../hooks/useWorkspaceSessionTab';
 import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import { ConfirmDialogState, SelectedEntityContext } from '../../../../types';
 import { CostingMethodSettingsView } from '../../../admin/m03-system-settings/components/costing/CostingMethodSettingsView';
@@ -83,14 +88,17 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
   onNotify,
   currentUser,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'allocation' | 'pools' | 'simulation' | 'notifications' | 'costing_method' | 'landed_cost'>('overview');
+  const [activeTab, setActiveTab] = useWorkspaceSessionTab<
+    'overview' | 'allocation' | 'pools' | 'simulation' | 'notifications' | 'costing_method' | 'landed_cost'
+  >('M42', 'overview');
+
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   // Landed Cost state
   const [costLayersList, setCostLayersList] = useState<any[]>([]);
   const [selectedLayerIds, setSelectedLayerIds] = useState<number[]>([]);
   const [landedCostForm, setLandedCostForm] = useState({
-    allocationRunCode: `LCA-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-01`,
+    allocationRunCode: `LCA-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-01`,
     expenseType: 'FREIGHT' as 'FREIGHT' | 'CUSTOMS_DUTY' | 'INSURANCE' | 'HANDLING' | 'OTHER',
     allocationMethod: 'VALUE' as 'VALUE' | 'WEIGHT' | 'VOLUME' | 'QUANTITY',
     totalLandedCost: 15000000,
@@ -325,11 +333,11 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
   // Save Draft Action
   const handleSaveDraft = () => {
     if (periodStatus === 'FINALIZED') {
-      onNotify('error', 'Cảnh báo sai lệch tài chính', `Kỳ ${selectedPeriod} đã bị khóa sổ (Finalized) hoặc nằm trong mốc chốt sổ cũ. Mọi thao tác chỉnh sửa trực tiếp hoặc lưu bản nháp bị từ chối để bảo vệ tính toàn vẹn số liệu tài chính. Vui lòng mở khóa kỳ trước.`);
+      onNotify('error', 'Cảnh báo sai lệch tài chính', `Kỳ ${selectedPeriod} đã bị khóa sổ (Finalized). Mọi thao tác chỉnh sửa trực tiếp bị từ chối để bảo vệ tính toàn vẹn số liệu tài chính. Vui lòng mở khóa kỳ trước.`);
       return;
     }
     updateCurrentPeriodData({ status: 'DRAFT' });
-    onNotify('success', 'Lưu bản nháp thành công', `Đã lưu trạng thái phân bổ và COGS cho kỳ ${selectedPeriod} vào bản nháp hệ thống. Bạn có thể tiếp tục chỉnh sửa bất kỳ lúc nào.`);
+    onNotify('success', 'Lưu bản nháp thành công', `Đã lưu trạng thái phân bổ và COGS cho kỳ ${selectedPeriod} vào bản nháp hệ thống.`);
   };
 
   // Run Allocation Action (with Rule #19 ConfirmDialog)
@@ -350,10 +358,9 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
         setIsAllocationRunning(true);
         setTimeout(() => {
           setIsAllocationRunning(false);
-          // Simulate recalculation updates
           updateCurrentPeriodData({ status: 'DRAFT' });
-          onNotify('success', 'Phân bổ chi phí thành công', `Đã phân bổ thành công các Cost Pools cho ${cogsItems.length} mặt hàng SKU trong kỳ ${selectedPeriod} (Bản nháp đã được cập nhật).`);
-        }, 1000);
+          onNotify('success', 'Phân bổ chi phí thành công', `Đã phân bổ thành công các Cost Pools cho ${cogsItems.length} mặt hàng SKU trong kỳ ${selectedPeriod}.`);
+        }, 800);
       },
     });
   };
@@ -431,43 +438,43 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 min-h-[calc(100vh-64px)] overflow-y-auto">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 min-h-[calc(100vh-64px)] overflow-y-auto">
       {/* Top Banner / Header */}
-      <div className="bg-white border-b border-slate-200 px-6 py-5">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-5">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 text-xs font-semibold bg-indigo-50 text-indigo-700 rounded-lg border border-indigo-200 font-mono">
+              <span className="px-2.5 py-1 text-xs font-bold bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 rounded-lg border border-indigo-200 dark:border-indigo-800 font-mono">
                 M42
               </span>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Financial Controlling & Cost Accounting
               </span>
               {periodStatus === 'FINALIZED' ? (
-                <span className="px-2.5 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-800 rounded-full flex items-center gap-1">
+                <span className="px-2.5 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/90 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 rounded-full flex items-center gap-1">
                   <Lock className="w-3 h-3" /> ĐÃ CHỐT (FINALIZED)
                 </span>
               ) : (
-                <span className="px-2.5 py-0.5 text-xs font-bold bg-amber-100 text-amber-800 rounded-full flex items-center gap-1">
+                <span className="px-2.5 py-0.5 text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/90 dark:text-amber-200 border border-amber-300 dark:border-amber-700 rounded-full flex items-center gap-1">
                   <Save className="w-3 h-3" /> BẢN NHÁP (DRAFT)
                 </span>
               )}
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 mt-1">
-              Phân bổ Chi phí & Giá vốn hàng bán (COGS)
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
+              Phân Bổ Chi Phí & Giá Vốn Hàng Bán (COGS & Landed Cost)
             </h1>
-            <p className="text-sm text-slate-600 mt-0.5">
-              Quản lý trung tâm chi phí (Cost Pools), phân bổ chi phí gián tiếp theo phương pháp ABC và tính toán giá vốn SKU thời gian thực.
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 max-w-3xl">
+              Động cơ quản lý Trung tâm chi phí (Cost Pools), phân bổ chi phí gián tiếp theo phương pháp ABC và phân bổ chi phí Landed Cost (Thuế/Cước) vào lớp chi phí kho (Cost Layers) bảo toàn Single-Writer Authority.
             </p>
           </div>
 
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-sm">
-              <span className="text-slate-500 font-medium px-2">Kỳ:</span>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm">
+              <span className="text-slate-500 dark:text-slate-400 font-medium px-2 text-xs">Kỳ kế toán:</span>
               <select
                 value={selectedPeriod}
                 onChange={(e) => setSelectedPeriod(e.target.value)}
-                className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 font-medium text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1 font-mono font-bold text-slate-800 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="2026-08">Tháng 08/2026</option>
                 <option value="2026-07">Tháng 07/2026</option>
@@ -478,34 +485,34 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
 
             <button
               onClick={handleSaveDraft}
-              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-sm rounded-xl border border-slate-300 shadow-sm transition-all flex items-center gap-2"
+              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium text-xs rounded-xl border border-slate-300 dark:border-slate-700 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
             >
-              <Save className="w-4 h-4 text-slate-600" />
+              <Save className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               <span>Lưu bản nháp</span>
             </button>
 
             <button
               onClick={handleRecalculateCogs}
               disabled={periodStatus === 'FINALIZED'}
-              className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 font-medium text-sm rounded-xl border border-slate-300 shadow-sm transition-all flex items-center gap-2 disabled:opacity-50"
+              className="px-3.5 py-2 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium text-xs rounded-xl border border-slate-300 dark:border-slate-700 shadow-2xs transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
             >
-              <RefreshCw className="w-4 h-4 text-slate-500" />
+              <RefreshCw className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               <span>Tính lại COGS</span>
             </button>
 
             <button
               onClick={handleRunAllocation}
               disabled={isAllocationRunning || periodStatus === 'FINALIZED'}
-              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-xl shadow-sm transition-all flex items-center gap-2 disabled:opacity-50"
+              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
             >
               <Calculator className={`w-4 h-4 ${isAllocationRunning ? 'animate-spin' : ''}`} />
-              <span>{isAllocationRunning ? 'Đang xử lý...' : 'Chạy phân bổ'}</span>
+              <span>{isAllocationRunning ? 'Đang xử lý...' : 'Chạy phân bổ ABC'}</span>
             </button>
 
             {periodStatus === 'FINALIZED' ? (
               <button
                 onClick={handleUnlockPeriod}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-medium text-sm rounded-xl shadow-sm transition-all flex items-center gap-2"
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <Unlock className="w-4 h-4" />
                 <span>Mở khóa kỳ</span>
@@ -513,39 +520,39 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
             ) : (
               <button
                 onClick={handleFinalizePeriod}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm rounded-xl shadow-sm transition-all flex items-center gap-2"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <Lock className="w-4 h-4" />
-                <span>Chốt số liệu (Finalize)</span>
+                <span>Chốt số liệu & Ghi GL</span>
               </button>
             )}
           </div>
         </div>
 
         {periodStatus === 'FINALIZED' && (
-          <div className="mt-4 p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between text-amber-900 text-sm">
+          <div className="mt-4 p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 rounded-xl flex items-center justify-between text-amber-900 dark:text-amber-200 text-xs">
             <div className="flex items-center gap-2.5">
-              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+              <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
               <span>
                 <strong>Cảnh báo khóa sổ tài chính:</strong> Kỳ {selectedPeriod} đã được chốt số liệu (Finalized) và phát hành bút toán vào Sổ cái GL (M30). Mọi thao tác chỉnh sửa trực tiếp bị khóa để tránh sai lệch số liệu tài chính.
               </span>
             </div>
             <button
               onClick={handleUnlockPeriod}
-              className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs rounded-lg transition-all shrink-0 ml-4"
+              className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg transition-all shrink-0 ml-4 cursor-pointer"
             >
               Mở khóa ngay
             </button>
           </div>
         )}
 
-        {/* Navigation Sub-Tabs (M41 Master Spec & TabButton List Pattern) */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs p-2 mt-6">
+        {/* Navigation Sub-Tabs */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs p-2 mt-4">
           <div className="flex items-center justify-between gap-2">
             <nav className="flex items-center gap-1.5 overflow-x-auto py-1 scroll-smooth scrollbar-none flex-1">
               {[
                 { id: 'overview', label: 'Tổng quan COGS & Biên LN', icon: TrendingUp, badge: null },
-                { id: 'allocation', label: 'Phân Bổ Chi Phí Gián Tiếp', icon: Layers, badge: null },
+                { id: 'allocation', label: 'Phân Bổ Chi Phí Gián Tiếp (ABC)', icon: Layers, badge: null },
                 { id: 'pools', label: 'Trung Tâm Chi Phí (Cost Pools)', icon: PieChart, badge: costPools.length },
                 { id: 'simulation', label: 'Mô Phỏng Biên Lợi Nhuận', icon: Calculator, badge: null },
                 { id: 'notifications', label: 'Thông Báo Quản Lý', icon: FileText, badge: currentPeriodData.managerNotifications?.length || 0, badgeColor: 'bg-amber-500 text-white' },
@@ -561,7 +568,7 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
                     onClick={() => setActiveTab(tab.id as any)}
                     className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
                       isActive
-                        ? 'bg-slate-950 text-white dark:bg-slate-950 dark:text-white shadow-xs'
+                        ? 'bg-blue-600 text-white shadow-xs'
                         : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700/60'
                     }`}
                   >
@@ -570,7 +577,7 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
                     {tab.badge !== null && tab.badge !== undefined && (
                       <span
                         className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                          tab.badgeColor || (isActive ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200')
+                          tab.badgeColor || (isActive ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200')
                         }`}
                       >
                         {tab.badge}
@@ -581,7 +588,7 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
               })}
             </nav>
 
-            <div className="hidden 2xl:flex items-center gap-3 px-3 py-1 text-xs text-slate-500 dark:text-slate-400 shrink-0 border-l border-slate-200 dark:border-slate-700 pl-3">
+            <div className="hidden xl:flex items-center gap-3 px-3 py-1 text-xs text-slate-500 dark:text-slate-400 shrink-0 border-l border-slate-200 dark:border-slate-700 pl-3">
               <span className="flex items-center gap-1.5 font-medium">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                 Costing Authority
@@ -600,75 +607,75 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* KPI Cards Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-500 uppercase">Tổng COGS trong kỳ</span>
-                  <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tổng COGS Trong Kỳ</span>
+                  <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 flex items-center justify-center">
                     <DollarSign className="w-4 h-4" />
                   </div>
                 </div>
-                <div className="text-xl font-bold text-slate-900 mt-2 font-mono">
+                <div className="text-2xl font-bold text-slate-900 dark:text-white mt-2 font-mono tabular-nums">
                   {formatCurrency(1245000000)}
                 </div>
-                <div className="flex items-center gap-1.5 text-xs text-emerald-600 mt-2 font-medium">
+                <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 mt-2 font-medium">
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   <span>Khớp hoàn toàn với Sổ cái GL (M30)</span>
                 </div>
               </div>
 
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+              <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-500 uppercase">Chi phí gián tiếp phân bổ</span>
-                  <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Chi Phí Gián Tiếp Phân Bổ</span>
+                  <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
                     <Layers className="w-4 h-4" />
                   </div>
                 </div>
-                <div className="text-xl font-bold text-slate-900 mt-2 font-mono">
+                <div className="text-2xl font-bold text-slate-900 dark:text-white mt-2 font-mono tabular-nums">
                   {formatCurrency(1245000000)}
                 </div>
-                <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-2 font-medium">
-                  <span>Từ 4 Cost Pools chính</span>
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-2 font-medium">
+                  <span>Từ {costPools.length} Cost Pools chính</span>
                 </div>
               </div>
 
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+              <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-500 uppercase">Biên Lợi Nhuận Gộp TB</span>
-                  <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Biên Lợi Nhuận Gộp TB</span>
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                     <TrendingUp className="w-4 h-4" />
                   </div>
                 </div>
-                <div className="text-xl font-bold text-emerald-600 mt-2 font-mono">
+                <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-2 font-mono tabular-nums">
                   29.45%
                 </div>
-                <div className="flex items-center gap-1.5 text-xs text-emerald-600 mt-2 font-medium">
+                <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 mt-2 font-medium">
                   <span>+1.2% so với kỳ trước</span>
                 </div>
               </div>
 
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+              <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-500 uppercase">SKU Đã Tính Giá Vốn</span>
-                  <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">SKU Đã Tính Giá Vốn</span>
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 flex items-center justify-center">
                     <Briefcase className="w-4 h-4" />
                   </div>
                 </div>
-                <div className="text-xl font-bold text-slate-900 mt-2 font-mono">
+                <div className="text-2xl font-bold text-slate-900 dark:text-white mt-2 font-mono tabular-nums">
                   {cogsItems.length} SKU hoạt động
                 </div>
-                <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-2 font-medium">
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-2 font-medium">
                   <span>Trạng thái: {periodStatus === 'FINALIZED' ? 'Đã chốt sổ' : 'Bản nháp'}</span>
                 </div>
               </div>
             </div>
 
             {/* COGS Detailed Table */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-              <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs overflow-hidden">
+              <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                  <h3 className="text-base font-semibold text-slate-900">Chi tiết Giá Vốn Hàng Bán (COGS) theo SKU ({selectedPeriod})</h3>
-                  <p className="text-sm text-slate-500">Bao gồm Nguyên vật liệu trực tiếp, Nhân công, Chi phí chung phân bổ và Chi phí vận chuyển vào.</p>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Chi tiết Giá Vốn Hàng Bán (COGS) theo SKU ({selectedPeriod})</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Bao gồm Nguyên vật liệu trực tiếp, Nhân công, Chi phí chung phân bổ và Chi phí vận chuyển vào.</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="relative">
@@ -678,14 +685,14 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
                       placeholder="Tìm kiếm SKU hoặc sản phẩm..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64"
+                      className="pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64"
                     />
                   </div>
                   <button
                     onClick={() => onNotify('info', 'Xuất báo cáo', 'Đang kết xuất tệp Excel báo cáo COGS chi tiết...')}
-                    className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 font-medium text-sm rounded-xl border border-slate-300 shadow-sm transition-all flex items-center gap-2"
+                    className="px-3.5 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium text-xs rounded-xl border border-slate-300 dark:border-slate-700 shadow-2xs transition-all flex items-center gap-2 cursor-pointer"
                   >
-                    <Download className="w-4 h-4 text-slate-500" />
+                    <Download className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                     <span>Xuất Excel</span>
                   </button>
                 </div>
@@ -694,46 +701,46 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase">
+                    <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
                       <th className="py-3.5 px-6">Mã SKU & Tên Sản Phẩm</th>
                       <th className="py-3.5 px-4 text-right">SL Sản Xuất</th>
                       <th className="py-3.5 px-4 text-right">NVL Trực Tiếp</th>
                       <th className="py-3.5 px-4 text-right">Nhân Công</th>
                       <th className="py-3.5 px-4 text-right">CPS Phân Bổ</th>
-                      <th className="py-3.5 px-4 text-right">Tổng COGS/Đơn vị</th>
+                      <th className="py-3.5 px-4 text-right">Tổng COGS/Đơn Vị</th>
                       <th className="py-3.5 px-4 text-right">Giá Tiêu Chuẩn</th>
                       <th className="py-3.5 px-6 text-right">Biên Lợi Nhuận</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 text-sm">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
                     {cogsItems
                       .filter(i => i.productName.toLowerCase().includes(searchTerm.toLowerCase()) || i.sku.toLowerCase().includes(searchTerm.toLowerCase()))
                       .map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                        <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/60 transition-colors">
                           <td className="py-4 px-6">
-                            <div className="font-semibold text-slate-900">{item.productName}</div>
-                            <div className="text-xs text-slate-500 font-mono mt-0.5">{item.sku} • {item.category}</div>
+                            <div className="font-bold text-slate-900 dark:text-white">{item.productName}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5 font-semibold">{item.sku} • {item.category}</div>
                           </td>
-                          <td className="py-4 px-4 text-right font-mono font-medium text-slate-800">
+                          <td className="py-4 px-4 text-right font-mono tabular-nums font-bold text-slate-800 dark:text-slate-200">
                             {item.unitsProduced.toLocaleString()}
                           </td>
-                          <td className="py-4 px-4 text-right font-mono text-slate-600">
+                          <td className="py-4 px-4 text-right font-mono tabular-nums text-slate-600 dark:text-slate-300">
                             {formatCurrency(item.directMaterials)}
                           </td>
-                          <td className="py-4 px-4 text-right font-mono text-slate-600">
+                          <td className="py-4 px-4 text-right font-mono tabular-nums text-slate-600 dark:text-slate-300">
                             {formatCurrency(item.directLabor)}
                           </td>
-                          <td className="py-4 px-4 text-right font-mono text-indigo-600 font-medium">
+                          <td className="py-4 px-4 text-right font-mono tabular-nums text-indigo-600 dark:text-indigo-400 font-semibold">
                             {formatCurrency(item.overheadAllocated)}
                           </td>
-                          <td className="py-4 px-4 text-right font-mono font-bold text-slate-900">
+                          <td className="py-4 px-4 text-right font-mono tabular-nums font-bold text-slate-900 dark:text-white">
                             {formatCurrency(item.unitCost)}
                           </td>
-                          <td className="py-4 px-4 text-right font-mono text-slate-600">
+                          <td className="py-4 px-4 text-right font-mono tabular-nums text-slate-600 dark:text-slate-300">
                             {formatCurrency(item.standardPrice)}
                           </td>
-                          <td className="py-4 px-6 text-right font-mono">
-                            <span className="px-2.5 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-200">
+                          <td className="py-4 px-6 text-right font-mono tabular-nums">
+                            <span className="px-2.5 py-1 text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 rounded-lg border border-emerald-200 dark:border-emerald-800">
                               {item.grossMarginPercent}%
                             </span>
                           </td>
@@ -748,16 +755,16 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
 
         {activeTab === 'allocation' && (
           <div className="space-y-6">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-base font-semibold text-slate-900">Ma trận Phân bổ Chi phí Gián tiếp (Activity-Based Costing)</h3>
-                  <p className="text-sm text-slate-500">Quy tắc phân bổ từ các Cost Pools trung tâm xuống các trung tâm chi phí sản xuất trực tiếp và thành phẩm cuối cùng.</p>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Ma trận Phân bổ Chi phí Gián tiếp (Activity-Based Costing)</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Quy tắc phân bổ từ các Cost Pools trung tâm xuống các trung tâm chi phí sản xuất trực tiếp và thành phẩm cuối cùng.</p>
                 </div>
                 {periodStatus !== 'FINALIZED' && (
                   <button
                     onClick={() => onNotify('info', 'Thêm quy tắc', 'Mở cấu hình quy tắc phân bổ chi phí mới.')}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-xl shadow-sm transition-all flex items-center gap-2"
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Thêm quy tắc mới</span>
@@ -766,29 +773,29 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-3">
+                <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-500 uppercase">Cost Pool: POOL_ADMIN</span>
-                    <span className="px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 rounded-md">Hoạt động</span>
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase font-mono">Cost Pool: POOL_ADMIN</span>
+                    <span className="px-2 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 rounded-md border border-emerald-200 dark:border-emerald-800">Hoạt động</span>
                   </div>
-                  <h4 className="text-base font-semibold text-slate-900">Chi phí Quản lý chung & Văn phòng</h4>
-                  <p className="text-sm text-slate-600">Driver phân bổ: <strong className="text-slate-900">Headcount (Số lượng nhân sự)</strong></p>
-                  <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-sm">
-                    <span className="text-slate-500">Tổng giá trị phân bổ:</span>
-                    <span className="font-mono font-bold text-slate-900">{formatCurrency(450000000)}</span>
+                  <h4 className="text-base font-bold text-slate-900 dark:text-white">Chi phí Quản lý chung & Văn phòng</h4>
+                  <p className="text-xs text-slate-600 dark:text-slate-300">Driver phân bổ: <strong className="text-slate-900 dark:text-white font-mono">Headcount (Số lượng nhân sự)</strong></p>
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
+                    <span className="text-slate-500 dark:text-slate-400">Tổng giá trị phân bổ:</span>
+                    <span className="font-mono tabular-nums font-bold text-slate-900 dark:text-white">{formatCurrency(450000000)}</span>
                   </div>
                 </div>
 
-                <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-3">
+                <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-500 uppercase">Cost Pool: POOL_MAINT</span>
-                    <span className="px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 rounded-md">Hoạt động</span>
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase font-mono">Cost Pool: POOL_MAINT</span>
+                    <span className="px-2 py-0.5 text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 rounded-md border border-emerald-200 dark:border-emerald-800">Hoạt động</span>
                   </div>
-                  <h4 className="text-base font-semibold text-slate-900">Chi phí Bảo trì & Sửa chữa Máy móc</h4>
-                  <p className="text-sm text-slate-600">Driver phân bổ: <strong className="text-slate-900">Machine Hours (Số giờ máy chạy)</strong></p>
-                  <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-sm">
-                    <span className="text-slate-500">Tổng giá trị phân bổ:</span>
-                    <span className="font-mono font-bold text-slate-900">{formatCurrency(320000000)}</span>
+                  <h4 className="text-base font-bold text-slate-900 dark:text-white">Chi phí Bảo trì & Sửa chữa Máy móc</h4>
+                  <p className="text-xs text-slate-600 dark:text-slate-300">Driver phân bổ: <strong className="text-slate-900 dark:text-white font-mono">Machine Hours (Số giờ máy chạy)</strong></p>
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
+                    <span className="text-slate-500 dark:text-slate-400">Tổng giá trị phân bổ:</span>
+                    <span className="font-mono tabular-nums font-bold text-slate-900 dark:text-white">{formatCurrency(320000000)}</span>
                   </div>
                 </div>
               </div>
@@ -798,16 +805,16 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
 
         {activeTab === 'pools' && (
           <div className="space-y-6">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-              <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs overflow-hidden">
+              <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <div>
-                  <h3 className="text-base font-semibold text-slate-900">Danh mục Trung tâm Chi phí (Cost Pools)</h3>
-                  <p className="text-sm text-slate-500">Tập hợp chi phí trước khi phân bổ vào giá thành sản phẩm.</p>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Danh mục Trung tâm Chi phí (Cost Pools)</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Tập hợp chi phí trước khi phân bổ vào giá thành sản phẩm.</p>
                 </div>
                 {periodStatus !== 'FINALIZED' && (
                   <button
                     onClick={() => onNotify('success', 'Tạo Cost Pool', 'Đã mở form tạo mới Cost Pool.')}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-xl shadow-sm transition-all flex items-center gap-2"
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Tạo Cost Pool</span>
@@ -818,7 +825,7 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase">
+                    <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
                       <th className="py-3.5 px-6">Mã & Tên Cost Pool</th>
                       <th className="py-3.5 px-4">Bộ Phận Phụ Trách</th>
                       <th className="py-3.5 px-4">Tiêu Chuẩn Phân Bổ (Driver)</th>
@@ -826,24 +833,24 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
                       <th className="py-3.5 px-6 text-center">Trạng Thái</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 text-sm">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
                     {costPools.map((pool) => (
-                      <tr key={pool.id} className="hover:bg-slate-50/80 transition-colors">
+                      <tr key={pool.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/60 transition-colors">
                         <td className="py-4 px-6">
-                          <div className="font-semibold text-slate-900">{pool.name}</div>
-                          <div className="text-xs text-slate-500 font-mono mt-0.5">{pool.code}</div>
+                          <div className="font-bold text-slate-900 dark:text-white">{pool.name}</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5 font-semibold">{pool.code}</div>
                         </td>
-                        <td className="py-4 px-4 text-slate-700 font-medium">{pool.department}</td>
+                        <td className="py-4 px-4 text-slate-700 dark:text-slate-300 font-medium text-xs">{pool.department}</td>
                         <td className="py-4 px-4">
-                          <span className="px-2.5 py-1 text-xs font-medium bg-slate-100 text-slate-700 rounded-lg border border-slate-200 font-mono">
+                          <span className="px-2.5 py-1 text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-700 font-mono">
                             {pool.allocationDriver}
                           </span>
                         </td>
-                        <td className="py-4 px-4 text-right font-mono font-bold text-slate-900">
+                        <td className="py-4 px-4 text-right font-mono tabular-nums font-bold text-slate-900 dark:text-white">
                           {formatCurrency(pool.totalAmount)}
                         </td>
                         <td className="py-4 px-6 text-center">
-                          <span className="px-2.5 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-200">
+                          <span className="px-2.5 py-1 text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 rounded-lg border border-emerald-200 dark:border-emerald-800">
                             {pool.status}
                           </span>
                         </td>
@@ -858,29 +865,29 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
 
         {activeTab === 'simulation' && (
           <div className="space-y-6">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-6">
               <div>
-                <h3 className="text-base font-semibold text-slate-900">Mô phỏng tác động thay đổi chi phí phân bổ lên biên lợi nhuận</h3>
-                <p className="text-sm text-slate-500">Kiểm tra tác động khi chi phí năng lượng hoặc nhân công biến động +/- 10%.</p>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Mô phỏng tác động thay đổi chi phí phân bổ lên biên lợi nhuận</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Kiểm tra tác động khi chi phí năng lượng hoặc nhân công biến động +/- 10%.</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-3">
-                  <span className="text-xs font-semibold text-slate-500 uppercase">Kịch bản cơ sở (Baseline)</span>
-                  <div className="text-2xl font-bold text-slate-900 font-mono">29.45%</div>
-                  <p className="text-xs text-slate-600">Biên lợi nhuận trung bình toàn hệ thống hiện tại.</p>
+                <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-3">
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Kịch bản cơ sở (Baseline)</span>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono tabular-nums">29.45%</div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">Biên lợi nhuận trung bình toàn hệ thống hiện tại.</p>
                 </div>
 
-                <div className="p-5 rounded-2xl border border-indigo-200 bg-indigo-50/30 space-y-3">
-                  <span className="text-xs font-semibold text-indigo-600 uppercase">Kịch bản Chi phí Năng lượng +10%</span>
-                  <div className="text-2xl font-bold text-indigo-900 font-mono">28.12%</div>
-                  <p className="text-xs text-slate-600">Biên lợi nhuận giảm 1.33% nếu giá điện xưởng tăng.</p>
+                <div className="p-5 rounded-2xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-950/30 space-y-3">
+                  <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Kịch bản Chi phí Năng lượng +10%</span>
+                  <div className="text-2xl font-bold text-indigo-900 dark:text-indigo-200 font-mono tabular-nums">28.12%</div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">Biên lợi nhuận giảm 1.33% nếu giá điện xưởng tăng.</p>
                 </div>
 
-                <div className="p-5 rounded-2xl border border-emerald-200 bg-emerald-50/30 space-y-3">
-                  <span className="text-xs font-semibold text-emerald-600 uppercase">Tối ưu hóa Hiệu suất Máy móc +15%</span>
-                  <div className="text-2xl font-bold text-emerald-900 font-mono">31.80%</div>
-                  <p className="text-xs text-slate-600">Biên lợi nhuận tăng nhờ giảm chi phí bảo trì phân bổ.</p>
+                <div className="p-5 rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-950/30 space-y-3">
+                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Tối ưu hóa Hiệu suất Máy móc +15%</span>
+                  <div className="text-2xl font-bold text-emerald-900 dark:text-emerald-200 font-mono tabular-nums">31.80%</div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">Biên lợi nhuận tăng nhờ giảm chi phí bảo trì phân bổ.</p>
                 </div>
               </div>
             </div>
@@ -889,18 +896,18 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
 
         {activeTab === 'notifications' && (
           <div className="space-y-6">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-base font-semibold text-slate-900">Nhật ký Thông báo Quản lý Trung tâm Chi phí (Cost Center Manager Alerts)</h3>
-                  <p className="text-sm text-slate-500">Các thông báo tự động được gửi tới quản lý các phòng ban khi kỳ kế toán được chốt (Finalized) và số liệu đẩy sang Sổ cái chung (GL).</p>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Nhật ký Thông báo Quản lý Trung tâm Chi phí (Cost Center Manager Alerts)</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Các thông báo tự động được gửi tới quản lý các phòng ban khi kỳ kế toán được chốt (Finalized) và số liệu đẩy sang Sổ cái chung (GL).</p>
                 </div>
                 {periodStatus === 'FINALIZED' && (
                   <button
                     onClick={() => {
                       onNotify('success', 'Đã gửi lại thông báo', 'Hệ thống đã gửi lại email & thông báo hệ thống tới toàn bộ Quản lý Cost Center.');
                     }}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-xl shadow-sm transition-all flex items-center gap-2"
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer"
                   >
                     <RefreshCw className="w-4 h-4" />
                     <span>Gửi lại tất cả thông báo</span>
@@ -909,16 +916,16 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
               </div>
 
               {periodStatus !== 'FINALIZED' ? (
-                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300">
-                  <ShieldCheck className="w-10 h-10 text-slate-400 mx-auto mb-3" />
-                  <h4 className="text-base font-semibold text-slate-800">Kỳ {selectedPeriod} chưa được chốt số liệu (Finalized)</h4>
-                  <p className="text-sm text-slate-500 mt-1">Hệ thống sẽ tự động phát hành thông báo tới các Quản lý Trung tâm chi phí ngay sau khi bạn bấm <strong>"Chốt số liệu (Finalize)"</strong>.</p>
+                <div className="p-8 text-center bg-slate-50 dark:bg-slate-950 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
+                  <ShieldCheck className="w-10 h-10 text-slate-400 dark:text-slate-500 mx-auto mb-3" />
+                  <h4 className="text-base font-bold text-slate-800 dark:text-slate-200">Kỳ {selectedPeriod} chưa được chốt số liệu (Finalized)</h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Hệ thống sẽ tự động phát hành thông báo tới các Quản lý Trung tâm chi phí ngay sau khi bạn bấm <strong>"Chốt số liệu & Ghi GL"</strong>.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase">
+                      <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
                         <th className="py-3.5 px-6">Quản Lý & Phòng Ban</th>
                         <th className="py-3.5 px-4">Cost Pool Liên Quan</th>
                         <th className="py-3.5 px-4 text-right">Tổng Chi Phí Phân Bổ</th>
@@ -926,25 +933,25 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
                         <th className="py-3.5 px-6 text-center">Trạng Thái</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 text-sm">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
                       {(currentPeriodData.managerNotifications || []).map((notif) => (
-                        <tr key={notif.id} className="hover:bg-slate-50/80 transition-colors">
+                        <tr key={notif.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/60 transition-colors">
                           <td className="py-4 px-6">
-                            <div className="font-semibold text-slate-900">{notif.managerName}</div>
-                            <div className="text-xs text-slate-500 font-mono mt-0.5">{notif.department} • {notif.email}</div>
+                            <div className="font-bold text-slate-900 dark:text-white">{notif.managerName}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5 font-semibold">{notif.department} • {notif.email}</div>
                           </td>
                           <td className="py-4 px-4">
-                            <div className="font-medium text-slate-800">{notif.poolName}</div>
-                            <div className="text-xs text-slate-500 font-mono">{notif.poolCode}</div>
+                            <div className="font-medium text-slate-800 dark:text-slate-200 text-xs">{notif.poolName}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">{notif.poolCode}</div>
                           </td>
-                          <td className="py-4 px-4 text-right font-mono font-bold text-indigo-600">
+                          <td className="py-4 px-4 text-right font-mono tabular-nums font-bold text-indigo-600 dark:text-indigo-400">
                             {formatCurrency(notif.allocatedAmount)}
                           </td>
-                          <td className="py-4 px-4 text-xs font-mono text-slate-600">
+                          <td className="py-4 px-4 text-xs font-mono text-slate-600 dark:text-slate-300">
                             {notif.sentAt}
                           </td>
                           <td className="py-4 px-6 text-center">
-                            <span className="px-2.5 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-200 flex items-center justify-center gap-1 w-fit mx-auto">
+                            <span className="px-2.5 py-1 text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 rounded-lg border border-emerald-200 dark:border-emerald-800 flex items-center justify-center gap-1 w-fit mx-auto">
                               <CheckCircle2 className="w-3.5 h-3.5" /> Đã gửi (Delivered)
                             </span>
                           </td>
@@ -969,13 +976,13 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
 
         {activeTab === 'landed_cost' && (
           <div className="space-y-6">
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-6">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
                 <div>
                   <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <Truck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> Động cơ Phân bổ Landed Cost (Thuế, Cước, Bảo hiểm vào Giá trị Nhập kho)
                   </h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     Phân bổ chi phí mua hàng phát sinh sau thông quan (Freight, Customs Duty, Insurance, Handling) vào các lớp chi phí (Cost Layers) để tính giá vốn đích thực FIFO / Bình quân theo Single-Writer Authority.
                   </p>
                 </div>
@@ -994,24 +1001,23 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
                     type="text"
                     value={landedCostForm.allocationRunCode}
                     onChange={(e) => setLandedCostForm({ ...landedCostForm, allocationRunCode: e.target.value })}
-                    className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1 flex items-center justify-between">
                     <span>Loại Chi Phí (Expense Type)</span>
-                    <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-normal lowercase" title="Chi phí mua hàng phát sinh sau thông quan cần vốn hóa vào giá trị hàng tồn kho">ℹ️ giải thích</span>
                   </label>
                   <select
                     value={landedCostForm.expenseType}
                     onChange={(e) => setLandedCostForm({ ...landedCostForm, expenseType: e.target.value as any })}
-                    className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    <option value="FREIGHT">Cước vận chuyển (Freight In) — Phí vận tải quốc tế/nội địa đưa hàng về kho</option>
-                    <option value="CUSTOMS_DUTY">Thuế nhập khẩu (Customs Duty) — Thuế và lệ phí hải quan phải nộp</option>
-                    <option value="INSURANCE">Bảo hiểm hàng hóa (Insurance) — Phí bảo hiểm vận chuyển lô hàng</option>
-                    <option value="HANDLING">Phí bốc xếp / kho bãi (Handling) — Phí xếp dỡ, nâng hạ, lưu kho cảng</option>
-                    <option value="OTHER">Chi phí khác (Other) — Các khoản chi phí phát sinh hợp lệ khác</option>
+                    <option value="FREIGHT">Cước vận chuyển (Freight In) — Phí vận tải</option>
+                    <option value="CUSTOMS_DUTY">Thuế nhập khẩu (Customs Duty) — Thuế và lệ phí</option>
+                    <option value="INSURANCE">Bảo hiểm hàng hóa (Insurance) — Phí bảo hiểm lô hàng</option>
+                    <option value="HANDLING">Phí bốc xếp / kho bãi (Handling) — Phí nâng hạ, lưu kho</option>
+                    <option value="OTHER">Chi phí khác (Other) — Khoản phát sinh hợp lệ</option>
                   </select>
                 </div>
                 <div>
@@ -1019,7 +1025,7 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
                   <select
                     value={landedCostForm.allocationMethod}
                     onChange={(e) => setLandedCostForm({ ...landedCostForm, allocationMethod: e.target.value as any })}
-                    className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
                     <option value="VALUE">Theo Giá trị (Value / Customs Value)</option>
                     <option value="WEIGHT">Theo Trọng lượng (Weight - kg)</option>
@@ -1030,13 +1036,12 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase mb-1 flex items-center justify-between">
                     <span>Tổng Chi Phí Landed (VND)</span>
-                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">font-mono</span>
                   </label>
                   <input
                     type="number"
                     value={landedCostForm.totalLandedCost}
                     onChange={(e) => setLandedCostForm({ ...landedCostForm, totalLandedCost: Number(e.target.value) })}
-                    className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-mono font-bold text-indigo-700 dark:text-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 tabular-nums"
+                    className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-indigo-700 dark:text-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 tabular-nums"
                   />
                 </div>
               </div>
@@ -1044,14 +1049,14 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
               {/* Cost Layers Selection */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">Chọn các Lớp Chi Phí Nhập Kho (Active Cost Layers) để phân bổ:</h4>
-                  <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">Đã chọn: {selectedLayerIds.length} / {costLayersList.length} lớp</span>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">Chọn các Lớp Chi Phí Nhập Kho (Active Cost Layers) để phân bổ:</h4>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">Đã chọn: <b>{selectedLayerIds.length}</b> / {costLayersList.length} lớp</span>
                 </div>
 
                 <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase">
+                      <tr className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
                         <th className="py-3 px-4 text-center w-12">Chọn</th>
                         <th className="py-3 px-4">Layer ID &amp; SKU / Sản phẩm</th>
                         <th className="py-3 px-4">Kho (Warehouse)</th>
@@ -1079,20 +1084,20 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
                                 className="w-4 h-4 text-indigo-600 rounded border-slate-300 dark:border-slate-700 focus:ring-indigo-500 cursor-pointer"
                               />
                             </td>
-                            <td className="py-3 px-4 font-mono font-semibold text-slate-800 dark:text-slate-200">
+                            <td className="py-3 px-4 font-mono font-semibold text-slate-800 dark:text-slate-200 text-xs">
                               Layer #{layer.id} • SP #{layer.productId}
-                              <div className="text-xs text-slate-500 dark:text-slate-400 font-sans font-normal">{layer.sourceReferenceNo || layer.sourceDocumentType}</div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 font-sans font-normal">{layer.sourceReferenceNo || layer.sourceDocumentType}</div>
                             </td>
-                            <td className="py-3 px-4 text-slate-600 dark:text-slate-400">Kho #{layer.warehouseId}</td>
-                            <td className="py-3 px-4 text-right font-mono text-slate-800 dark:text-slate-200">{layer.quantityRemaining}</td>
-                            <td className="py-3 px-4 text-right font-mono text-slate-800 dark:text-slate-200">{formatCurrency(layer.unitCost)}</td>
-                            <td className="py-3 px-4 text-right font-mono font-bold text-slate-900 dark:text-white">{formatCurrency(layer.totalCost)}</td>
+                            <td className="py-3 px-4 text-slate-600 dark:text-slate-400 text-xs">Kho #{layer.warehouseId}</td>
+                            <td className="py-3 px-4 text-right font-mono tabular-nums text-slate-800 dark:text-slate-200 text-xs">{layer.quantityRemaining}</td>
+                            <td className="py-3 px-4 text-right font-mono tabular-nums text-slate-800 dark:text-slate-200 text-xs">{formatCurrency(layer.unitCost)}</td>
+                            <td className="py-3 px-4 text-right font-mono tabular-nums font-bold text-slate-900 dark:text-white text-xs">{formatCurrency(layer.totalCost)}</td>
                           </tr>
                         );
                       })}
                       {costLayersList.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="py-8 text-center text-slate-500 dark:text-slate-400">
+                          <td colSpan={6} className="py-8 text-center text-slate-500 dark:text-slate-400 text-xs">
                             Chưa có lớp chi phí (Cost Layers) nào trong hệ thống. Hãy thực hiện Nhập kho (Goods Receipt) để phát sinh cost layers.
                           </td>
                         </tr>
@@ -1105,7 +1110,7 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
                   <button
                     onClick={handleExecuteLandedCostAllocation}
                     disabled={isAllocatingLanded || selectedLayerIds.length === 0}
-                    className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                    className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                   >
                     {isAllocatingLanded ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
                     <span>{isAllocatingLanded ? 'Đang phân bổ Landed Cost...' : 'Thực hiện phân bổ Landed Cost & Ghi GL'}</span>
@@ -1117,19 +1122,19 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
               {allocationResult && (
                 <div className="mt-6 p-5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl space-y-3">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-bold">
+                    <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-bold text-xs">
                       <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" /> Phân bổ Landed Cost Thành công (Mã đợt: {allocationResult.allocationRunCode})
                     </div>
                     <span className="px-2.5 py-1 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 text-xs font-mono font-bold rounded-lg">
                       GL Journal Posted: {allocationResult.glJournalPosted ? 'YES (M30)' : 'NO'}
                     </span>
                   </div>
-                  <p className="text-sm text-emerald-700 dark:text-emerald-400">
-                    Đã phân bổ tổng chi phí <strong className="font-mono">{formatCurrency(allocationResult.totalAllocated)}</strong> vào <strong className="font-mono">{allocationResult.adjustedLayersCount}</strong> lớp chi phí kho. Đơn giá vốn SKU đã tự động cập nhật theo phương pháp Bình quân di động.
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                    Đã phân bổ tổng chi phí <strong className="font-mono tabular-nums">{formatCurrency(allocationResult.totalAllocated)}</strong> vào <strong className="font-mono tabular-nums">{allocationResult.adjustedLayersCount}</strong> lớp chi phí kho. Đơn giá vốn SKU đã tự động cập nhật theo phương pháp Bình quân di động.
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
                     {(allocationResult.adjustedLayers || []).map((adj: any) => (
-                      <div key={adj.layerId} className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-emerald-200 dark:border-emerald-900/50 shadow-2xs font-mono text-xs space-y-1">
+                      <div key={adj.layerId} className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-emerald-200 dark:border-emerald-900/50 shadow-2xs font-mono tabular-nums text-xs space-y-1">
                         <div className="font-bold text-slate-900 dark:text-white">Layer #{adj.layerId} (SP #{adj.productId})</div>
                         <div className="text-slate-600 dark:text-slate-400">Đơn giá cũ: {formatCurrency(adj.oldUnitCost)}</div>
                         <div className="text-emerald-700 dark:text-emerald-400 font-bold">Đơn giá mới: {formatCurrency(adj.newUnitCost)}</div>
@@ -1149,3 +1154,5 @@ export const M42CostAllocationWorkspace: React.FC<M42CostAllocationWorkspaceProp
     </div>
   );
 };
+
+export default M42CostAllocationWorkspace;

@@ -98,7 +98,7 @@ export const DisplayScaleSelector: React.FC<DisplayScaleSelectorProps> = ({ vari
   // DRAWER VARIANT (Rendered inside SystemPreferencesDrawer)
   if (variant === 'drawer') {
     return (
-      <div className="space-y-3 bg-slate-50 dark:bg-slate-850/80 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+      <div className="space-y-3 bg-slate-50 dark:bg-slate-800/80 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700">
         <div className="flex items-center justify-between">
           <label className="block text-[11px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
             <SlidersHorizontal className="w-3.5 h-3.5 text-blue-500" />

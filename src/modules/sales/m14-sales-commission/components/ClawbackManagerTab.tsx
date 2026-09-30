@@ -1,3 +1,4 @@
+import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import React, { useState, useMemo } from 'react';
 import { ClawbackItem } from './types';
 import { ConfirmDialogState } from '../../../../types';
@@ -34,6 +35,8 @@ export const ClawbackManagerTab: React.FC<ClawbackManagerTabProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [clawPage, setClawPage] = useState<number>(1);
+  const [clawPageSize, setClawPageSize] = useState<number>(15);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [rmaId, setRmaId] = useState<string>('');
   const [rmaCode, setRmaCode] = useState<string>('RMA-2026-');

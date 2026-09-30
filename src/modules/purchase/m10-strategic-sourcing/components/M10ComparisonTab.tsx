@@ -6,6 +6,7 @@ import {
   AlertTriangle, ShieldAlert, FileText, Check, X, ExternalLink, Info
 } from 'lucide-react';
 import { PaginationControl } from '../../../../components/common/PaginationControl';
+import { M10MultiVendorMatrixModal } from './M10MultiVendorMatrixModal';
 
 interface M10ComparisonTabProps {
   comparisonData: ComparisonItem[];
@@ -36,6 +37,7 @@ export const M10ComparisonTab: React.FC<M10ComparisonTabProps> = ({
   const [isSealingDms, setIsSealingDms] = useState(false);
   const [activeBpaItem, setActiveBpaItem] = useState<ComparisonItem | null>(null);
   const [awardConfirmItem, setAwardConfirmItem] = useState<ComparisonItem | null>(null);
+  const [isMatrixModalOpen, setIsMatrixModalOpen] = useState<boolean>(false);
 
   const filteredData = useMemo(() => {
     return comparisonData.filter(c => {
@@ -230,6 +232,15 @@ export const M10ComparisonTab: React.FC<M10ComparisonTabProps> = ({
           </button>
 
           {/* DMS Vault Archival Button (Phase 11 - M29) */}
+          <button
+            type="button"
+            onClick={() => setIsMatrixModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
+          >
+            <Scale className="w-3.5 h-3.5 text-indigo-200" />
+            <span>Ma Trận Đa Báo Giá</span>
+          </button>
+
           {onSealComparisonDms && (
             <button
               type="button"
@@ -891,6 +902,34 @@ export const M10ComparisonTab: React.FC<M10ComparisonTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* Multi-Vendor Matrix Comparison Modal (Phase 2) */}
+      <M10MultiVendorMatrixModal
+        isOpen={isMatrixModalOpen}
+        rfqId={selectedRfqId || 'RFQ-2026-001'}
+        onClose={() => setIsMatrixModalOpen(false)}
+        onAwardVendor={(vendor) => {
+          if (onSelectForAward) {
+            onSelectForAward({
+              bidId: vendor.id,
+              supplierName: vendor.vendorName,
+              supplierCode: vendor.vendorCode,
+              unitPrice: vendor.unitPrice,
+              totalValue: vendor.totalAmount,
+              leadTimeDays: vendor.leadTimeDays,
+              paymentTerms: vendor.paymentTerms,
+              totalScore: vendor.totalWeightedScore,
+              ranking: 1,
+              bpaBenchmark: {
+                hasAgreement: true,
+                isExceedingLimit: false,
+                variancePercent: vendor.priceVarianceVsTarget
+              }
+            } as any);
+          }
+        }}
+        onNotify={onNotify}
+      />
     </div>
   );
 };

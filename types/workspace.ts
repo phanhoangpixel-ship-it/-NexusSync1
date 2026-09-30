@@ -29,6 +29,12 @@ export interface WorkspaceWorkItem {
   slaHours?: number;
   isOverdue?: boolean;
   isEscalated?: boolean;
+  slaStatus?: 'NORMAL' | 'WARNING_75' | 'WARNING_90' | 'BREACHED' | 'NO_SLA';
+  slaLabel?: string;
+  ageFormatted?: string;
+  canAction?: boolean;
+  isReadOnly?: boolean;
+  assignedTo?: string;
   delegatedFrom?: string;
   isBlocked?: boolean;
   blockedReason?: string;

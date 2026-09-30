@@ -170,6 +170,17 @@ export const ContextRail: React.FC<ContextRailProps> = ({
   // Derive active code & lineage
   const currentCode = selectedEntity?.code || searchDocTerm || (currentModule ? `MOD-${currentModule.moduleId}` : 'PO-2026-00125');
 
+  // Auto-collapse ContextRail when a Modal is open (Phương án 1)
+  useEffect(() => {
+    const handleModalState = (e: any) => {
+      if (e.detail?.isOpen && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('nexus:modal-state-change', handleModalState);
+    return () => window.removeEventListener('nexus:modal-state-change', handleModalState);
+  }, [isOpen, onClose]);
+
   // Live query from Backend Lineage API
   useEffect(() => {
     if (!isOpen || !currentCode) return;
@@ -321,7 +332,7 @@ export const ContextRail: React.FC<ContextRailProps> = ({
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100 truncate">
-                Hồ Sơ & Truy Vết 360°
+                Hồ Sơ & Truy Vết
               </h3>
               <span className="text-[10px] font-mono tabular-nums font-bold px-1.5 py-0.2 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300">
                 Audited
@@ -464,10 +475,10 @@ export const ContextRail: React.FC<ContextRailProps> = ({
               ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 font-bold'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
           }`}
-          title="Kiểm toán SHA-256 & Sổ cái GL"
+          title="Nhật ký kiểm toán SHA-256 (M02) & Bút toán GL"
         >
           <BookOpen className="w-3.5 h-3.5" />
-          <span className="truncate">Sổ cái & Audit</span>
+          <span className="truncate">Audit & M02</span>
         </button>
       </div>
 
@@ -480,7 +491,7 @@ export const ContextRail: React.FC<ContextRailProps> = ({
             {currentModule && onTogglePin && (
               <div
                 id="rail-quick-toolbar-card"
-                className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-50/90 via-white to-amber-50/40 dark:from-slate-800 dark:via-slate-850 dark:to-slate-800 border border-amber-200/90 dark:border-slate-700 space-y-3 shadow-2xs"
+                className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-50/90 via-white to-amber-50/40 dark:from-slate-800 dark:via-slate-800/90 dark:to-slate-800 border border-amber-200/90 dark:border-slate-700 space-y-3 shadow-2xs"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">

@@ -6,6 +6,7 @@ import { eq, desc, and, sql } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
 import { InventoryService } from "../../engines/inventoryService";
 import { AuditService } from "../../engines/auditService";
+import { DmsService } from "../../engines/dmsService";
 import { requireAuth, requirePermission } from "../middleware/auth.middleware";
 import { masterDataCache } from "../services/masterDataCache";
 
@@ -1653,30 +1654,26 @@ router.post("/api/rd/projects/:id/handover-signoff", requireAuth, requirePermiss
 
     const updated = await db.select().from(schema.rdProjects).where(eq(schema.rdProjects.id, projectId)).get();
 
-    // M29 DMS Integration: Archive official Handover Sign-off Dossier
-    const dmsDocCount = (await db.select().from(schema.dmsDocuments).all()).length;
-    const dmsCode = `DMS-RD-${project.projectCode}-${String(dmsDocCount + 1).padStart(3, "0")}`;
+    // M29 DMS Integration: Archive official Handover Sign-off Dossier via Single-Writer DmsService
     const hashPayload = `${project.projectCode}:${finalApprover}:${now}:${signoffNotes || "HANDOVER"}`;
-    const sha256 = crypto.createHash("sha256").update(hashPayload).digest("hex");
+    const rawContent = Buffer.from(hashPayload, "utf-8");
 
-    await db.insert(schema.dmsDocuments).values({
-      docCode: dmsCode,
+    await DmsService.vaultDocument({
       title: `Hồ Sơ Nghiệm Thu & Bàn Giao Kỹ Thuật Đề Tài R&D [${project.projectCode}] - ${project.title}`,
       category: "RD_HANDOVER_DOSSIER",
       categoryName: "Hồ sơ Nghiệm thu & Bàn giao Sản phẩm R&D",
-      version: "v1.0-OFFICIAL",
-      fileSize: "2.4 MB",
-      format: "PDF/A-3",
-      status: "SIGNED",
-      securityLevel: project.isConfidential ? "STRICTLY_CONFIDENTIAL" : "INTERNAL",
-      sha256Hash: sha256,
-      signedBy: `${finalApprover} (Hội đồng Khoa học & Công nghệ R&D)`,
-      signedAt: now,
-      linkedModule: "M06_INNOVATION_RD",
+      content: rawContent,
+      fileName: `Dossier-${project.projectCode}.pdf`,
+      mimeType: "application/pdf",
+      entityType: "M06_PROJECT",
+      entityId: project.projectCode,
+      classification: project.isConfidential ? ("STRICTLY_CONFIDENTIAL" as any) : ("INTERNAL" as any),
+      userId: (req as any).user?.id || 1,
+      username: `${finalApprover} (Hội đồng Khoa học & Công nghệ R&D)`,
+      linkedModule: "M06",
       refDocNo: project.projectCode,
-      storageTier: "SECURE_COLD_ARCHIVE",
       retentionYears: 10,
-    } as any);
+    });
 
     await AuditService.recordAuditLog({
       module: "M06",
@@ -2157,43 +2154,34 @@ router.post("/api/rd/projects/:id/dms-vault", requireAuth, requirePermission("rd
       .digest("hex");
 
     const signer = sealedBy || (req as any).user?.name || "TS. Nguyễn An Hòa (Giám đốc R&D)";
+    const payloadBuffer = Buffer.from(
+      JSON.stringify({ title, refDocNo: project.projectCode, metadata, contentDigest, timestamp: Date.now() }),
+      "utf-8"
+    );
 
-    const newDoc = {
-      docCode,
+    const vaultResult = await DmsService.vaultDocument({
       title: title || `Hồ Sơ Kỹ Thuật & Thử Nghiệm R&D [${project.projectCode}]`,
       category: category || "RD_DOSSIER",
       categoryName: "Hồ sơ Thử nghiệm & Chứng nhận R&D",
-      version: "v1.0-FINAL",
-      fileSize: fileSize || "1.8 MB",
-      format: format || "PDF-A/XML",
-      status: "SIGNED",
-      securityLevel: "CONFIDENTIAL",
-      sha256Hash,
-      signedBy: signer,
-      signedAt: nowTs,
+      content: payloadBuffer,
+      fileName: `RD-${project.projectCode}.pdf`,
+      mimeType: "application/pdf",
+      entityType: "M06_PROJECT",
+      entityId: project.projectCode,
+      classification: "CONFIDENTIAL" as any,
+      userId: (req as any).user?.id || 1,
+      username: signer,
       linkedModule: "M06",
       refDocNo: project.projectCode,
-      storageTier: "ACTIVE_VAULT",
       retentionYears: 10,
-    };
-
-    const inserted = await db.insert(schema.dmsDocuments).values(newDoc as any).returning();
-
-    await AuditService.recordAuditLog({
-      module: "M06",
-      action: "VAULT_DMS_DOCUMENT",
-      entityType: "DMS_DOCUMENT",
-      entityId: docCode,
-      userName: signer,
-      afterData: newDoc,
-      result: "SUCCESS",
-      metadata: { projectId, projectCode: project.projectCode, docCode, sha256Hash },
     });
+
+    const savedDoc = vaultResult.document;
 
     res.status(201).json({
       success: true,
-      document: inserted[0] || newDoc,
-      message: `Niêm phong hồ sơ số học [${docCode}] vào kho lưu trữ bảo mật M29 DMS Vault thành công.`,
+      document: savedDoc,
+      message: `Niêm phong hồ sơ số học [${savedDoc.docCode}] vào kho lưu trữ bảo mật M29 DMS Vault thành công.`,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message || "Lỗi niêm phong tài liệu vào M29 DMS Vault" });

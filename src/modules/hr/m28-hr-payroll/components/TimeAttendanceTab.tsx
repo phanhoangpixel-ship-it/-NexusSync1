@@ -12,6 +12,7 @@ import {
   Zap,
   Calendar,
 } from 'lucide-react';
+import { TimeAttendanceWebhookSyncModal } from './TimeAttendanceWebhookSyncModal';
 
 interface TimeAttendanceTabProps {
   attendanceList: any[];
@@ -29,6 +30,7 @@ export const TimeAttendanceTab: React.FC<TimeAttendanceTabProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [isCheckingIn, setIsCheckingIn] = useState(false);
+  const [isWebhookModalOpen, setIsWebhookModalOpen] = useState(false);
 
   const handleSimulateGPSCheckIn = async () => {
     setIsCheckingIn(true);
@@ -159,6 +161,14 @@ export const TimeAttendanceTab: React.FC<TimeAttendanceTabProps> = ({
 
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setIsWebhookModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs sm:text-sm font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <Zap className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            <span>Webhook Máy Chấm Công</span>
+          </button>
+
+          <button
             onClick={onRefresh}
             className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 transition-colors"
             title="Tải lại"
@@ -176,6 +186,14 @@ export const TimeAttendanceTab: React.FC<TimeAttendanceTabProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Webhook Sync Modal */}
+      <TimeAttendanceWebhookSyncModal
+        isOpen={isWebhookModalOpen}
+        onClose={() => setIsWebhookModalOpen(false)}
+        onSyncComplete={onRefresh}
+        onNotify={onNotify}
+      />
 
       {/* Attendance Table */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs overflow-hidden">

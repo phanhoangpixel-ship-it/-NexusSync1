@@ -1,6 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { SelectedEntityContext } from '../../../../types';
 import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
+import { TablePagination } from '../../../../components/common/TablePagination';
+import { StatusBadge } from '../../../../components/common/StatusBadge';
+import { MoneyCell } from '../../../../components/common/MoneyCell';
+import { QtyCell } from '../../../../components/common/QtyCell';
+import { BulkActionBar } from '../../../../components/common/BulkActionBar';
 import { useWorkspaceSessionTab } from '../../../../hooks/useWorkspaceSessionTab';
 import { useWorkspaceAction } from '../../../../components/shell/DomainWorkspaceShell';
 import {
@@ -53,6 +58,9 @@ export const ManufacturingWorkspace: React.FC<ManufacturingWorkspaceProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'auto' | 'table' | 'cards'>('auto');
+  const [moPage, setMoPage] = useState<number>(1);
+  const [moPageSize, setMoPageSize] = useState<number>(15);
+  const [selectedMoIds, setSelectedMoIds] = useState<number[]>([]);
   const [selectedMo, setSelectedMo] = useState<any | null>(null);
   const [inspectingMoId, setInspectingMoId] = useState<number | string | null>(null);
 
@@ -497,6 +505,11 @@ export const ManufacturingWorkspace: React.FC<ManufacturingWorkspaceProps> = ({
     return matchStatus && matchSearch;
   });
 
+  const paginatedOrders = useMemo(() => {
+    const start = (moPage - 1) * moPageSize;
+    return filteredOrders.slice(start, start + moPageSize);
+  }, [filteredOrders, moPage, moPageSize]);
+
   // Calculate high-level KPIs
   const totalMoCount = orders.length;
   const inProgressCount = orders.filter((o) => o.status === 'IN_PROGRESS').length;
@@ -777,7 +790,7 @@ export const ManufacturingWorkspace: React.FC<ManufacturingWorkspaceProps> = ({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                          {filteredOrders.map((mo) => {
+                          {paginatedOrders.map((mo) => {
                             const isSelected = selectedMo?.id === mo.id;
                             const planned = mo.plannedQuantity ?? 1;
                             const safePlanned = planned === 0 ? 1 : planned;
@@ -1302,6 +1315,15 @@ export const ManufacturingWorkspace: React.FC<ManufacturingWorkspaceProps> = ({
                   </tbody>
                 </table>
               </div>
+
+              <TablePagination
+                currentPage={moPage}
+                pageSize={moPageSize}
+                totalItems={filteredOrders.length}
+                onPageChange={setMoPage}
+                onPageSizeChange={setMoPageSize}
+                pageSizeOptions={[10, 15, 25, 50, 100]}
+              />
             </div>
           </div>
         )}

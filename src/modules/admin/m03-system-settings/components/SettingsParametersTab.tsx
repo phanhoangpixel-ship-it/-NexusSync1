@@ -18,6 +18,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { EnterpriseTable, ColumnDef } from '../../../../components/common/EnterpriseTable';
+import { TablePagination } from '../../../../components/common/TablePagination';
 import {
   SystemSettingsConfig,
   ModulePermissionRule,
@@ -71,17 +72,26 @@ export const SettingsParametersTab: React.FC<SettingsParametersTabProps> = ({
 }) => {
   const [matrixSearch, setMatrixSearch] = useState<string>('');
   const [matrixCategoryFilter, setMatrixCategoryFilter] = useState<string>('ALL');
+  const [matrixPage, setMatrixPage] = useState<number>(1);
+  const [matrixPageSize, setMatrixPageSize] = useState<number>(15);
   const [sessionSearch, setSessionSearch] = useState<string>('');
   const [sessionStatusFilter, setSessionStatusFilter] = useState<string>('ALL');
 
-  const filteredMatrix = permissionMatrix.filter((item) => {
-    const matchesSearch =
-      item.moduleName.toLowerCase().includes(matrixSearch.toLowerCase()) ||
-      item.moduleId.toLowerCase().includes(matrixSearch.toLowerCase());
-    const matchesCategory =
-      matrixCategoryFilter === 'ALL' || item.category === matrixCategoryFilter;
-    return matchesSearch && matchesCategory;
-  });
+  const filteredMatrix = useMemo(() => {
+    return permissionMatrix.filter((item) => {
+      const matchesSearch =
+        item.moduleName.toLowerCase().includes(matrixSearch.toLowerCase()) ||
+        item.moduleId.toLowerCase().includes(matrixSearch.toLowerCase());
+      const matchesCategory =
+        matrixCategoryFilter === 'ALL' || item.category === matrixCategoryFilter;
+      return matchesSearch && matchesCategory;
+    });
+  }, [permissionMatrix, matrixSearch, matrixCategoryFilter]);
+
+  const paginatedMatrix = useMemo(() => {
+    const start = (matrixPage - 1) * matrixPageSize;
+    return filteredMatrix.slice(start, start + matrixPageSize);
+  }, [filteredMatrix, matrixPage, matrixPageSize]);
 
   const filteredSessions = activeSessions.filter((s) => {
     const matchesSearch =
@@ -552,7 +562,7 @@ export const SettingsParametersTab: React.FC<SettingsParametersTabProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                  {filteredMatrix.map((item) => (
+                  {paginatedMatrix.map((item) => (
                     <tr key={item.moduleId} className="hover:bg-slate-100/80 dark:hover:bg-slate-700/60 transition-colors duration-150">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
@@ -621,6 +631,15 @@ export const SettingsParametersTab: React.FC<SettingsParametersTabProps> = ({
                 </tbody>
               </table>
             </div>
+
+            <TablePagination
+              currentPage={matrixPage}
+              pageSize={matrixPageSize}
+              totalItems={filteredMatrix.length}
+              onPageChange={setMatrixPage}
+              onPageSizeChange={setMatrixPageSize}
+              pageSizeOptions={[10, 15, 25, 50, 100]}
+            />
 
             <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-2 flex-wrap gap-2">
               <div className="flex items-center gap-3">

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Layers, Package, Truck, Boxes, CheckCircle2, AlertTriangle, ShieldAlert, 
   Clock, ArrowRight, Play, Check, X, FileText, QrCode, Tag, BarChart3, RefreshCw,
-  ShieldCheck, Plus
+  ShieldCheck, Plus, Route, Zap
 } from 'lucide-react';
 import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import { ConfirmDialogState } from '../../../../types';
@@ -17,6 +17,7 @@ import {
   DOCK_STATUS_TRANSITIONS 
 } from '../types';
 import { M24EndpointCoverageTracker } from './M24EndpointCoverageTracker';
+import { M24WaveZonePickingOptimizationModal } from './M24WaveZonePickingOptimizationModal';
 
 const defaultProductsCatalog = ENTERPRISE_MASTER_PRODUCTS.map((p, idx) => ({
   sku: p.sku,
@@ -55,6 +56,9 @@ export const M24WMSExtendedWorkspace: React.FC<M24WMSExtendedWorkspaceProps> = (
 
   // 6. Carrier Freight State
   const [freights, setFreights] = useState<any[]>([]);
+
+  // Wave & Zone Picking Optimization Modal
+  const [isOptimizationModalOpen, setIsOptimizationModalOpen] = useState<boolean>(false);
 
   // Real-time operational test tracker trigger
   const [trackerRefreshTrigger, setTrackerRefreshTrigger] = useState<number>(0);
@@ -562,6 +566,15 @@ export const M24WMSExtendedWorkspace: React.FC<M24WMSExtendedWorkspaceProps> = (
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
             <span>Rule #19 Confirmed</span>
           </div>
+          <button
+            type="button"
+            onClick={() => setIsOptimizationModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer"
+          >
+            <Route className="w-3.5 h-3.5 text-amber-200" />
+            Tối Ưu Lộ Trình Wave &amp; Zone
+          </button>
+
           <button 
             onClick={() => {
               fetchWmsData();
@@ -1101,6 +1114,17 @@ export const M24WMSExtendedWorkspace: React.FC<M24WMSExtendedWorkspaceProps> = (
           </div>
         )}
       </div>
+
+      {/* Wave & Zone Picking Optimization Modal (Phase 2) */}
+      <M24WaveZonePickingOptimizationModal
+        isOpen={isOptimizationModalOpen}
+        onClose={() => setIsOptimizationModalOpen(false)}
+        onExecuteWave={(wave) => {
+          onNotify('success', 'Đã Khởi Động Đợt Wave', `Đã phát lệnh soạn hàng ${wave.waveId} cho khu vực ${wave.zone}.`);
+          setIsOptimizationModalOpen(false);
+        }}
+        onNotify={onNotify}
+      />
 
       {/* ConfirmDialog Rule #19 */}
       <ConfirmDialog

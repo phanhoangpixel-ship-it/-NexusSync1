@@ -21,80 +21,71 @@ export const M11WorkspaceHeader: React.FC<M11WorkspaceHeaderProps> = ({
   onNavigateToM09,
 }) => {
   return (
-    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white shadow-md border border-slate-700/60 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
-            M11 • SRM SUPPLIER PERFORMANCE &amp; SCORECARDS
-          </span>
-          <span className="text-[11px] text-slate-300 font-mono">
-            P2P &amp; Sourcing Suite • Single Writer &amp; Outbox Auditing
-          </span>
-        </div>
-        <h2 className="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-2">
-          <Award className="w-5 h-5 text-indigo-400" />
-          <span>Quản Trị Thẻ Điểm &amp; Đánh Giá Hiệu Suất Nhà Cung Cấp</span>
-        </h2>
-        <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-          Đo lường chỉ số OTIF, chất lượng kiểm định GR, kiểm toán xưởng &amp; ESG định kỳ, tự động phân loại đối tác chiến lược (Tier A, B, C) tích hợp kho dữ liệu tập trung M09.
-        </p>
+    <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+          M11 • SRM SCORECARDS
+        </span>
+        <span className="text-xs text-slate-500 dark:text-slate-400 hidden lg:inline">
+          Quản Trị Thẻ Điểm & Hiệu Suất Nhà Cung Cấp
+        </span>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
         <button
           type="button"
           onClick={onNavigateToM09}
-          className="flex items-center gap-1.5 px-3 py-2 bg-amber-600/90 hover:bg-amber-600 text-white rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/60 rounded-lg text-xs font-semibold transition-all border border-amber-200 dark:border-amber-800 cursor-pointer"
         >
-          <Truck className="w-3.5 h-3.5" />
-          <span>M09 Master Suppliers</span>
+          <Truck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+          <span>M09 Suppliers</span>
         </button>
 
         <button
           type="button"
           onClick={onOpenScoringConfig}
-          className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold transition-all border border-slate-200 dark:border-slate-700 cursor-pointer"
           title="Cấu hình trọng số chấm điểm SRM"
         >
-          <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400" />
-          <span>Cấu Hình Trọng Số</span>
+          <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
+          <span>Trọng Số</span>
         </button>
 
         <button
           type="button"
           onClick={onOpenNewAudit}
-          className="flex items-center gap-1.5 px-3 py-2 bg-purple-600/90 hover:bg-purple-600 text-white rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 rounded-lg text-xs font-semibold transition-all border border-purple-200 dark:border-purple-800 cursor-pointer"
         >
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>+ Đợt Kiểm Toán Xưởng</span>
+          <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+          <span>+ Kiểm Toán Xưởng</span>
         </button>
 
         <button
           type="button"
           onClick={onOpenNewScorecard}
-          className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span>+ Chấm Điểm Thẻ Điểm</span>
+          <span>+ Chấm Điểm</span>
         </button>
 
         <button
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className="p-2 bg-white/10 hover:bg-white/15 text-white rounded-xl text-xs transition-all border border-white/10 cursor-pointer disabled:opacity-50"
+          className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs transition-all border border-slate-200 dark:border-slate-700 cursor-pointer disabled:opacity-50"
           title="Làm mới dữ liệu M11"
         >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : 'text-slate-500 dark:text-slate-400'}`} />
         </button>
 
         <button
           type="button"
           onClick={onExportCSV}
-          className="p-2 bg-white/10 hover:bg-white/15 text-white rounded-xl text-xs transition-all border border-white/10 cursor-pointer"
+          className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs transition-all border border-slate-200 dark:border-slate-700 cursor-pointer"
           title="Xuất Báo cáo CSV"
         >
-          <Download className="w-4 h-4" />
+          <Download className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
         </button>
       </div>
     </div>

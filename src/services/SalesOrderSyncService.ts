@@ -221,8 +221,8 @@ export class SalesOrderSyncService {
     // 1. Identify matched Customer from M07
     const matchedCustomer = this.matchCustomer(
       {
-        id: order.customerCode,
-        code: order.customerCode,
+        id: order.customerCode as any,
+        code: order.customerCode as any,
         taxCode: order.taxCode,
         name: order.name,
         email: order.email

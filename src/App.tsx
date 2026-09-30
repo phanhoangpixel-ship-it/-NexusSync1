@@ -49,6 +49,7 @@ import {
   ModuleGuidedDrawer,
 } from './components/knowledge';
 
+import { initDocumentTargetingListener, applyTargetDocumentHighlight } from './utils/documentTargeting';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 
 // Lazy-loaded Workspaces with resilient retry mechanism
@@ -94,6 +95,7 @@ const M36LogisticsWorkspace = lazyWithRetry(() => import('./modules/logistics/m3
 const AuditComplianceWorkspace = lazyWithRetry(() => import('./modules/governance/m02-audit/components/AuditComplianceWorkspace'), 'AuditComplianceWorkspace');
 const ServiceDeskWorkspace = lazyWithRetry(() => import('./modules/governance/m38-service-desk/components/ServiceDeskWorkspace'), 'ServiceDeskWorkspace');
 const EHSWorkspace = lazyWithRetry(() => import('./modules/governance/m40-ehs/components/EHSWorkspace'), 'EHSWorkspace');
+const IndustryProfileWorkspace = lazyWithRetry(() => import('./modules/master-data/industry-profiles/components/IndustryProfileWorkspace'), 'IndustryProfileWorkspace');
 const GenericModuleWorkspace = lazyWithRetry(() => import('./modules/admin/m01-workspace-hub/components/GenericModuleWorkspace'), 'GenericModuleWorkspace');
 
 const DEDICATED_WORKSPACE_MODULE_IDS = new Set([
@@ -101,7 +103,7 @@ const DEDICATED_WORKSPACE_MODULE_IDS = new Set([
   'M11', 'M12', 'M13', 'M14', 'M15', 'M16', 'M17', 'M18', 'M19', 'M20',
   'M21', 'M22', 'M23', 'M24', 'M25', 'M26', 'M27', 'M28', 'M29', 'M30',
   'M31', 'M32', 'M33', 'M34', 'M35', 'M36', 'M37', 'M38', 'M39', 'M40',
-  'M41', 'M42',
+  'M41', 'M42', 'M43',
 ]);
 
 /**
@@ -143,6 +145,10 @@ const ROUTE_ALIAS_RULES: RouteAliasRule[] = [
   {
     moduleId: 'M41',
     keywords: ['pricing-management', 'pricing', 'bảng-giá', 'commercial-pricing'],
+  },
+  {
+    moduleId: 'M43',
+    keywords: ['industry-profiles', 'industry', 'hồ-sơ-ngành', 'hồ-sơ-ngành-hàng', 'ngành-hàng', 'tiêu-chuẩn-ngành', 'vertical-standards'],
   },
 
   // Procurement & Sourcing
@@ -238,7 +244,7 @@ const ROUTE_ALIAS_RULES: RouteAliasRule[] = [
   },
   {
     moduleId: 'M29',
-    keywords: ['dms', 'tài-liệu'],
+    keywords: ['dms', 'tài-liệu', 'digital-dms'],
   },
   {
     moduleId: 'M35',
@@ -978,6 +984,41 @@ addToast('success', 'Seeding thành công', 'Đã nạp thành công 4 lịch s�
     systemPrefersDark,
     currentMinuteTime,
   ]);
+
+  // Synchronize theme classes on document.documentElement
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    root.classList.remove('light-theme', 'cool-dark', 'warm-sepia', 'dark');
+    if (effectiveTheme === 'cool-dark') {
+      root.classList.add('cool-dark', 'dark');
+    } else if (effectiveTheme === 'warm-sepia') {
+      root.classList.add('warm-sepia');
+    } else {
+      root.classList.add('light-theme');
+    }
+  }, [effectiveTheme]);
+
+  // Simple Theme Toggle between 'light' and 'cool-dark' modes using systemPreferences state
+  const handleToggleTheme = useCallback(() => {
+    setSystemPreferences((prev) => {
+      const nextTheme: AppTheme =
+        prev.theme === 'cool-dark' || effectiveTheme === 'cool-dark' ? 'light' : 'cool-dark';
+      return {
+        ...prev,
+        theme: nextTheme,
+        autoThemeMode: 'manual', // Manual toggle overrides system or schedule mode
+      };
+    });
+    addToast(
+      'info',
+      'Chuyển đổi giao diện',
+      effectiveTheme === 'cool-dark' || systemPreferences.theme === 'cool-dark'
+        ? 'Đã chuyển sang Giao diện Sáng (Light Mode).'
+        : 'Đã chuyển sang Giao diện Tối (Cool-Dark Mode).'
+    );
+  }, [effectiveTheme, systemPreferences.theme, addToast]);
+
   // Load WorkQueue count on mount or role change
   useEffect(() => {
     const loadWorkItems = async () => {
@@ -1003,20 +1044,37 @@ addToast('success', 'Seeding thành công', 'Đã nạp thành công 4 lịch s�
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Global listener for 'nexus-target-document' events to apply 'highlight-active-row' with pulse effect
+  useEffect(() => {
+    const cleanup = initDocumentTargetingListener();
+    return cleanup;
+  }, []);
+
   const handleNavigateByRoute = useCallback((route: string, item?: WorkspaceWorkItem) => {
     if (!route && !item) return;
 
     if (item) {
+      const docCode = String(item.businessReference || item.entityId || '').trim();
       setGuidedTaskContext({ item, timestamp: Date.now() });
       setSelectedEntity({
         type: item.entity || 'TASK',
         id: item.entityId || item.businessReference || item.id,
         name: item.title,
-        code: String(item.businessReference || item.entityId || ''),
+        code: docCode,
         module: item.sourceModule,
         data: item,
       });
-      addToast('info', 'Trợ lý Hướng Dẫn', `Đang mở tác vụ: ${item.title}`);
+
+      if (docCode) {
+        try {
+          sessionStorage.setItem('nexus_target_doc', JSON.stringify({ code: docCode, timestamp: Date.now(), item }));
+        } catch {}
+        window.dispatchEvent(new CustomEvent('nexus-target-document', { detail: { code: docCode, item, route } }));
+        // Apply targeted highlight and pulse immediately
+        applyTargetDocumentHighlight(docCode);
+      }
+
+      addToast('info', 'Chỉ trỏ Chứng Từ', `Đang mở và định vị chính xác vị trí chứng từ: ${docCode || item.title}`);
     }
 
     let targetModule: ModuleDefinition | undefined;
@@ -1241,6 +1299,8 @@ addToast('success', 'Seeding thành công', 'Đã nạp thành công 4 lịch s�
     onGoBack={handleGoBack}
     pinnedModules={favorites}
     currentModuleId={currentModule.moduleId}
+    currentTheme={effectiveTheme}
+    onToggleTheme={handleToggleTheme}
     onSelectPinnedModule={(modId) => {
       const found = MODULE_REGISTRY.find((m) => m.moduleId === modId);
       if (found) {
@@ -1356,7 +1416,7 @@ activeWorkspaceName={
 : currentModule.moduleId === 'M41'
 ? 'Cơ Cấu Giá & Chính Sách Thương Mại'
 : currentModule.moduleId === 'M01'
-? 'Tổng quan Doanh nghiệp'
+? 'Workspace Hub'
 : currentModule.moduleName
         }
         onRefresh={() => addToast('info', 'Làm mới dữ liệu', 'Đã cập nhật dữ liệu từ Authoritative Core.')}
@@ -1415,9 +1475,11 @@ density={systemPreferences.density}
 
         {currentModule.moduleId === 'M20' && (
           <StockAdjustmentWorkspace
-  onSelectEntity={setSelectedEntity}
-  onNotify={handleNotify}
-/>
+            onSelectEntity={setSelectedEntity}
+            onNotify={handleNotify}
+            selectedEntity={selectedEntity}
+            guidedTask={guidedTaskContext}
+          />
         )}
 
   {currentModule.moduleId === 'M21' && (
@@ -1698,6 +1760,10 @@ density={systemPreferences.density}
   onNotify={addToast}
   currentUser={currentUser}
 />
+        )}
+
+  {currentModule.moduleId === 'M43' && (
+<IndustryProfileWorkspace />
         )}
 
   {!DEDICATED_WORKSPACE_MODULE_IDS.has(currentModule.moduleId) && (

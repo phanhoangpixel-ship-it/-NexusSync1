@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { BRANCHES, ENVIRONMENT_PROFILES, ModuleDefinition } from '../../config/moduleRegistry';
 import { UserSession } from '../../types';
 import { FavoriteItem } from '../../types/recentFavorites';
+import { AppTheme } from '../../types/systemPreferences';
 import { RoleSwitcher } from './RoleSwitcher';
 import { DisplayScaleSelector } from '../common/DisplayScaleSelector';
 import { OfflineSyncStatusWidget } from '../offline/OfflineSyncStatusWidget';
@@ -31,6 +32,8 @@ import {
   ArrowLeft,
   Pin,
   MoreVertical,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
 interface GlobalHeaderProps {
@@ -63,6 +66,8 @@ interface GlobalHeaderProps {
   pinnedModules?: FavoriteItem[];
   currentModuleId?: string;
   onSelectPinnedModule?: (moduleId: string) => void;
+  currentTheme?: AppTheme;
+  onToggleTheme?: () => void;
 }
 
 export const GlobalHeader: React.FC<GlobalHeaderProps> = ({
@@ -95,6 +100,8 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({
   pinnedModules = [],
   currentModuleId,
   onSelectPinnedModule,
+  currentTheme = 'light',
+  onToggleTheme,
 }) => {
   const activeBranchObj = BRANCHES.find((b) => b.id === currentBranch) || BRANCHES[0];
   const [overflowOpen, setOverflowOpen] = useState(false);
@@ -299,6 +306,27 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({
               <span className="hidden xl:inline">Trợ Giúp</span>
             </button>
           )}
+
+          {/* Chuyển đổi giao diện (Theme Toggle: Light / Cool-Dark) */}
+          {onToggleTheme && (
+            <button
+              type="button"
+              onClick={onToggleTheme}
+              className="h-9 w-9 flex items-center justify-center text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition-all shrink-0 cursor-pointer shadow-2xs group"
+              title={
+                currentTheme === 'cool-dark'
+                  ? 'Chuyển sang Giao diện Sáng (Light Mode)'
+                  : 'Chuyển sang Giao diện Tối (Cool-Dark Mode)'
+              }
+              aria-label="Chuyển đổi giao diện Sáng / Tối"
+            >
+              {currentTheme === 'cool-dark' ? (
+                <Sun className="w-4 h-4 text-amber-400 group-hover:rotate-45 transition-transform" />
+              ) : (
+                <Moon className="w-4 h-4 text-indigo-300 group-hover:-rotate-12 transition-transform" />
+              )}
+            </button>
+          )}
         </div>
 
         {/* ================= CLUSTER 4: User Profile & Overflow Secondary Menu (...) ================= */}
@@ -328,6 +356,29 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({
                 </div>
 
                 <div className="p-1.5">
+                  {onToggleTheme && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onToggleTheme();
+                        setOverflowOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2 flex items-center justify-between text-xs font-semibold text-slate-200 hover:bg-slate-800 rounded-xl transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        {currentTheme === 'cool-dark' ? (
+                          <Sun className="w-4 h-4 text-amber-400" />
+                        ) : (
+                          <Moon className="w-4 h-4 text-indigo-300" />
+                        )}
+                        <span>Chế độ giao diện</span>
+                      </div>
+                      <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                        {currentTheme === 'cool-dark' ? 'Cool-Dark' : 'Light'}
+                      </span>
+                    </button>
+                  )}
+
                   {onToggleFullscreen && (
                     <button
                       type="button"

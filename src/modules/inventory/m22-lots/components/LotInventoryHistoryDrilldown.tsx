@@ -97,6 +97,14 @@ export const LotInventoryHistoryDrilldown: React.FC<LotInventoryHistoryDrilldown
     onConfirm: () => {}
   });
 
+  // Auto-collapse ContextRail on modal open (Phương án 1)
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('nexus:modal-state-change', { detail: { isOpen: true } }));
+    return () => {
+      window.dispatchEvent(new CustomEvent('nexus:modal-state-change', { detail: { isOpen: false } }));
+    };
+  }, []);
+
   // 1. Fetch Fresh Lot Details from API
   const fetchLotDetails = useCallback(async () => {
     setIsLoadingLotDetails(true);
@@ -551,7 +559,7 @@ export const LotInventoryHistoryDrilldown: React.FC<LotInventoryHistoryDrilldown
             }`}
           >
             <FileText className="w-4 h-4" />
-            Sổ Cái Lịch Sử Biến Động Kho ({lotLedgerMovements.length})
+            Sổ Thẻ Kho Lô Hàng (M17 Tồn Kho) ({lotLedgerMovements.length})
             {isLoadingLedger && <RefreshCw className="w-3 h-3 animate-spin text-indigo-500" />}
           </button>
           

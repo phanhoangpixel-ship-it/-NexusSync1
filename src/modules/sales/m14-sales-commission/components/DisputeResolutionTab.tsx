@@ -1,3 +1,4 @@
+import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import React, { useState, useMemo } from 'react';
 import { CommissionDisputeRecord, CommissionCalculationRecord } from './types';
 import { ConfirmDialogState } from '../../../../types';
@@ -41,6 +42,8 @@ export const DisputeResolutionTab: React.FC<DisputeResolutionTabProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [dispPage, setDispPage] = useState<number>(1);
+  const [dispPageSize, setDispPageSize] = useState<number>(15);
 
   // New Dispute modal
   const [showSubmitModal, setShowSubmitModal] = useState(!!activeDisputeModalCalc);

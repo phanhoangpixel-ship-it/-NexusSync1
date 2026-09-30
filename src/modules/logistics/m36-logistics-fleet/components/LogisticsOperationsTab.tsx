@@ -1,3 +1,5 @@
+import { BulkActionBar } from '../../../../components/common/BulkActionBar';
+import { TablePagination } from '../../../../components/common/TablePagination';
 import React, { useState } from 'react';
 import {
   Package,
@@ -7,6 +9,8 @@ import {
   MapPin,
   FileCheck,
   Printer,
+  FileSpreadsheet,
+  Send,
   Smartphone,
   Navigation,
 } from 'lucide-react';
@@ -36,6 +40,9 @@ export const LogisticsOperationsTab: React.FC<LogisticsOperationsTabProps> = ({
   onOpenDriverAppSimulator,
 }) => {
   const [doStatusFilter, setDoStatusFilter] = useState<'ALL' | 'READY_TO_DISPATCH' | 'IN_TRANSIT' | 'POD_CONFIRMED'>('ALL');
+  const [opsPage, setOpsPage] = useState<number>(1);
+  const [opsPageSize, setOpsPageSize] = useState<number>(15);
+  const [selectedShipmentIds, setSelectedShipmentIds] = useState<number[]>([]);
 
   const readyCount = deliveryOrders.filter((d) => d.status === 'READY_TO_DISPATCH').length;
   const inTransitCount = deliveryOrders.filter((d) => d.status === 'IN_TRANSIT').length;
@@ -265,6 +272,13 @@ export const LogisticsOperationsTab: React.FC<LogisticsOperationsTabProps> = ({
             </tbody>
           </table>
         </div>
+        <TablePagination
+          currentPage={opsPage}
+          pageSize={opsPageSize}
+          totalItems={filteredDO.length}
+          onPageChange={setOpsPage}
+          onPageSizeChange={setOpsPageSize}
+        />
       </div>
 
       {/* REGISTERED POD TABLE */}
@@ -331,6 +345,34 @@ export const LogisticsOperationsTab: React.FC<LogisticsOperationsTabProps> = ({
           </table>
         </div>
       </div>
+
+      {/* BULK ACTION BAR (Wave 2 Logistics) */}
+      <BulkActionBar
+        selectedCount={selectedShipmentIds.length}
+        totalCount={filteredDO.length}
+        itemName="chuyến vận tải TMS"
+        onClearSelection={() => setSelectedShipmentIds([])}
+        actions={[
+          {
+            id: 'export_routes',
+            label: 'Xuất Lộ Trình Excel',
+            icon: <FileSpreadsheet className="w-3.5 h-3.5" />,
+            onClick: () => {
+              setSelectedShipmentIds([]);
+            },
+            variant: 'primary',
+          },
+          {
+            id: 'dispatch_batch',
+            label: 'Điều Phối Lệnh Xuất Bến',
+            icon: <Send className="w-3.5 h-3.5" />,
+            onClick: () => {
+              setSelectedShipmentIds([]);
+            },
+            variant: 'secondary',
+          },
+        ]}
+      />
     </div>
   );
 };

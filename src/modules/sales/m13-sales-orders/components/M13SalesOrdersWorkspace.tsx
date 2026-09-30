@@ -26,6 +26,8 @@ import { M13CreateOrderModal } from './M13CreateOrderModal';
 import { M13QuotationImportModal } from './M13QuotationImportModal';
 import { M13PaymentModal } from './M13PaymentModal';
 import { M13VatIssueModal } from './M13VatIssueModal';
+import { M13CustomerSelfServicePortalModal } from './M13CustomerSelfServicePortalModal';
+import { M13LastMileDeliveryCodModal } from './M13LastMileDeliveryCodModal';
 
 interface M13SalesOrdersWorkspaceProps {
   onSelectEntity: (entity: SelectedEntityContext) => void;
@@ -458,6 +460,8 @@ export const M13SalesOrdersWorkspace: React.FC<M13SalesOrdersWorkspaceProps> = (
   const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState<boolean>(false);
   const [isQuotationImportModalOpen, setIsQuotationImportModalOpen] = useState<boolean>(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
+  const [isCustomerPortalOpen, setIsCustomerPortalOpen] = useState<boolean>(false);
+  const [isDeliveryCodOpen, setIsDeliveryCodOpen] = useState<boolean>(false);
   const [orderForPayment, setOrderForPayment] = useState<any | null>(null);
   const [initialQuotationForCreate, setInitialQuotationForCreate] = useState<any | null>(null);
 
@@ -1144,6 +1148,8 @@ export const M13SalesOrdersWorkspace: React.FC<M13SalesOrdersWorkspaceProps> = (
         }}
         onOpenCreateOrder={() => setIsCreateOrderModalOpen(true)}
         onOpenQuotationImport={() => setIsQuotationImportModalOpen(true)}
+        onOpenCustomerPortal={() => setIsCustomerPortalOpen(true)}
+        onOpenDeliveryCod={() => setIsDeliveryCodOpen(true)}
         onExportCSV={handleExportCSV}
       />
 
@@ -1365,6 +1371,20 @@ export const M13SalesOrdersWorkspace: React.FC<M13SalesOrdersWorkspaceProps> = (
             )
           );
         }}
+        onNotify={onNotify}
+      />
+
+      {/* B2B Customer Self-Service Portal Modal (Phase 3) */}
+      <M13CustomerSelfServicePortalModal
+        isOpen={isCustomerPortalOpen}
+        onClose={() => setIsCustomerPortalOpen(false)}
+        onNotify={onNotify}
+      />
+
+      {/* Real-time Last-Mile Delivery & COD Reconciliation Modal (Phase 3) */}
+      <M13LastMileDeliveryCodModal
+        isOpen={isDeliveryCodOpen}
+        onClose={() => setIsDeliveryCodOpen(false)}
         onNotify={onNotify}
       />
 

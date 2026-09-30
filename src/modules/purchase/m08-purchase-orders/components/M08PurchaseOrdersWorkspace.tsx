@@ -4,7 +4,11 @@ import { SelectedEntityContext } from '../../../../types';
 import { formatCurrency } from '../../../../utils/currencyFormatter';
 import { PdfPrintModal } from '../../../../components/modals/PdfPrintModal';
 import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
-import { PaginationControl } from '../../../../components/common/PaginationControl';
+import { TablePagination } from '../../../../components/common/TablePagination';
+import { StatusBadge } from '../../../../components/common/StatusBadge';
+import { MoneyCell } from '../../../../components/common/MoneyCell';
+import { QtyCell } from '../../../../components/common/QtyCell';
+import { BulkActionBar } from '../../../../components/common/BulkActionBar';
 import { useWorkspaceSessionTab } from '../../../../hooks/useWorkspaceSessionTab';
 import { useWorkspaceContextSync } from '../../../../hooks/useWorkspaceContextSync';
 import {
@@ -59,6 +63,7 @@ import {
   Cell
 } from 'recharts';
 import { M08PurchaseOrdersWorkspaceProps } from './types';
+import { M08EInvoiceXmlImportModal } from './M08EInvoiceXmlImportModal';
 
 export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProps> = ({
   onSelectEntity,
@@ -71,6 +76,7 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
   const [loading, setLoading] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useWorkspaceSessionTab<'pos' | 'matching' | 'contracts' | 'analytics'>('M08', 'pos');
   const [isPdfModalOpen, setIsPdfModalOpen] = useState<boolean>(false);
+  const [isXmlImportModalOpen, setIsXmlImportModalOpen] = useState<boolean>(false);
 
   // Search & Filter state for PO Tab
   const [poSearchTerm, setPoSearchTerm] = useState<string>('');
@@ -81,7 +87,8 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
 
   // Pagination for PO Table
   const [poPage, setPoPage] = useState<number>(1);
-  const [poPageSize, setPoPageSize] = useState<number>(10);
+  const [poPageSize, setPoPageSize] = useState<number>(15);
+  const [selectedPoIds, setSelectedPoIds] = useState<string[]>([]);
 
   // Pagination for Matching Table
   const [matchingPage, setMatchingPage] = useState<number>(1);
@@ -1130,6 +1137,14 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
                 <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
                   <button
                     type="button"
+                    onClick={() => setIsXmlImportModalOpen(true)}
+                    className="px-2.5 py-1 text-xs font-bold rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shadow-2xs"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    <span>Bóc Tách HĐĐT XML</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setIsGrModalOpen(true)}
                     className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap"
                   >
@@ -1274,18 +1289,14 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
               </div>
 
               {/* L4 Pagination Control */}
-              <div className="p-3 border-t border-slate-200 dark:border-slate-700">
-                <PaginationControl
-                  currentPage={poPage}
-                  totalPages={Math.ceil(filteredPurchaseOrders.length / poPageSize) || 1}
-                  pageSize={poPageSize}
-                  totalItems={filteredPurchaseOrders.length}
-                  startIndex={(poPage - 1) * poPageSize + 1}
-                  endIndex={Math.min(poPage * poPageSize, filteredPurchaseOrders.length)}
-                  onPageChange={(p) => setPoPage(p)}
-                  onPageSizeChange={(s) => { setPoPageSize(s); setPoPage(1); }}
-                />
-              </div>
+              <TablePagination
+                currentPage={poPage}
+                pageSize={poPageSize}
+                totalItems={filteredPurchaseOrders.length}
+                onPageChange={(p) => setPoPage(p)}
+                onPageSizeChange={(s) => { setPoPageSize(s); setPoPage(1); }}
+                pageSizeOptions={[10, 15, 25, 50, 100]}
+              />
             </div>
           </div>
 
@@ -1499,18 +1510,14 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
             </div>
 
             {/* Pagination */}
-            <div className="p-3 border-t border-slate-200 dark:border-slate-700">
-              <PaginationControl
-                currentPage={matchingPage}
-                totalPages={Math.ceil(filteredMatchingCases.length / matchingPageSize) || 1}
-                pageSize={matchingPageSize}
-                totalItems={filteredMatchingCases.length}
-                startIndex={(matchingPage - 1) * matchingPageSize + 1}
-                endIndex={Math.min(matchingPage * matchingPageSize, filteredMatchingCases.length)}
-                onPageChange={(p) => setMatchingPage(p)}
-                onPageSizeChange={(s) => { setMatchingPageSize(s); setMatchingPage(1); }}
-              />
-            </div>
+            <TablePagination
+              currentPage={matchingPage}
+              pageSize={matchingPageSize}
+              totalItems={filteredMatchingCases.length}
+              onPageChange={(p) => setMatchingPage(p)}
+              onPageSizeChange={(s) => { setMatchingPageSize(s); setMatchingPage(1); }}
+              pageSizeOptions={[10, 15, 25, 50, 100]}
+            />
           </div>
         </div>
       )}
@@ -2258,6 +2265,16 @@ export const M08PurchaseOrdersWorkspace: React.FC<M08PurchaseOrdersWorkspaceProp
         onClose={() => setIsPdfModalOpen(false)}
         module={reportModuleMeta}
         currentUser={currentUser}
+        onNotify={onNotify}
+      />
+
+      {/* 6. Embedded M08EInvoiceXmlImportModal */}
+      <M08EInvoiceXmlImportModal
+        isOpen={isXmlImportModalOpen}
+        onClose={() => setIsXmlImportModalOpen(false)}
+        onImportSuccess={(parsedInvoice) => {
+          onNotify('success', 'Đã Nạp HĐĐT Thành Công', `Đã nạp hóa đơn ${parsedInvoice.invoiceNo} (${parsedInvoice.sellerName}) vào hàng đợi đối soát.`);
+        }}
         onNotify={onNotify}
       />
 

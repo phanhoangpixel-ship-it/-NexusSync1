@@ -1,3 +1,4 @@
+import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import React, { useState, useMemo } from 'react';
 import { RbacRole, StandardRbacAction } from './types';
 import { MODULES_42_CATALOG } from './mockData';

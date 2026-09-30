@@ -18,7 +18,10 @@ export const CreateMaintenancePlanModal: React.FC<CreateMaintenancePlanModalProp
 }) => {
   const [assetId, setAssetId] = useState<number>(assets[0]?.id || 1);
   const [title, setTitle] = useState('Bảo dưỡng định kỳ 30 ngày');
+  const [triggerType, setTriggerType] = useState<'CALENDAR' | 'METER' | 'CONDITION'>('CALENDAR');
   const [intervalDays, setIntervalDays] = useState<number>(30);
+  const [intervalHours, setIntervalHours] = useState<number>(500);
+  const [conditionMetric, setConditionMetric] = useState('Độ rung vòng bi > 3.2 mm/s hoặc Nhiệt độ trục > 65°C');
   const [maintenanceType, setMaintenanceType] = useState('PREVENTIVE');
   const [description, setDescription] = useState('Kiểm tra dầu bôi trơn, siết ốc và hiệu chuẩn cảm biến');
   const [loading, setLoading] = useState(false);
@@ -34,15 +37,25 @@ export const CreateMaintenancePlanModal: React.FC<CreateMaintenancePlanModalProp
 
     setLoading(true);
     try {
+      const fullDesc =
+        triggerType === 'METER'
+          ? `[KÍCH HOẠT THEO ĐỒNG HỒ ĐO: ${intervalHours} GIỜ VẬN HÀNH] ${description.trim()}`
+          : triggerType === 'CONDITION'
+          ? `[KÍCH HOẠT THEO TÌNH TRẠNG CẢM BIẾN: ${conditionMetric}] ${description.trim()}`
+          : description.trim();
+
       const res = await fetch('/api/eam/maintenance-plans', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           assetId,
           title: title.trim(),
+          triggerType,
+          frequencyType: triggerType === 'CALENDAR' ? 'DAYS' : triggerType === 'METER' ? 'HOURS' : 'CONDITION',
           intervalDays: Number(intervalDays),
-          maintenanceType,
-          description: description.trim(),
+          intervalHours: Number(intervalHours),
+          maintenanceType: triggerType === 'CONDITION' ? 'CONDITION_BASED' : maintenanceType,
+          description: fullDesc,
         }),
       });
 
@@ -51,7 +64,7 @@ export const CreateMaintenancePlanModal: React.FC<CreateMaintenancePlanModalProp
         throw new Error(err.error || 'Lỗi khi tạo kế hoạch PM');
       }
 
-      onNotify('success', 'Tạo kế hoạch PM thành công', `Đã lập kế hoạch "${title}" với chu kỳ ${intervalDays} ngày.`);
+      onNotify('success', 'Tạo kế hoạch PM thành công', `Đã lập kế hoạch PM "${title}" theo cơ chế ${triggerType}.`);
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -114,33 +127,117 @@ export const CreateMaintenancePlanModal: React.FC<CreateMaintenancePlanModalProp
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Chu Kỳ Bảo Dưỡng (Ngày) <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="number"
-                min="1"
-                required
-                value={intervalDays}
-                onChange={(e) => setIntervalDays(Number(e.target.value))}
-                className="w-full text-xs px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-slate-900 dark:text-white font-bold"
-              />
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              Cơ Chế Kích Hoạt Bảo Dưỡng (PM Trigger Type) <span className="text-rose-500">*</span>
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setTriggerType('CALENDAR');
+                  setMaintenanceType('PREVENTIVE');
+                }}
+                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                  triggerType === 'CALENDAR'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 ring-2 ring-blue-400'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <div className="text-xs font-bold text-blue-600 dark:text-blue-400 mb-0.5">Theo Lịch (Calendar)</div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">Định kỳ ngày / tuần / tháng</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTriggerType('METER');
+                  setMaintenanceType('PREVENTIVE');
+                }}
+                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                  triggerType === 'METER'
+                    ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 ring-2 ring-amber-400'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <div className="text-xs font-bold text-amber-600 dark:text-amber-400 mb-0.5">Đồng Hồ Đo (Meter)</div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">Giờ máy chạy / chu kỳ dao</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTriggerType('CONDITION');
+                  setMaintenanceType('CONDITION_BASED');
+                }}
+                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                  triggerType === 'CONDITION'
+                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 ring-2 ring-purple-400'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <div className="text-xs font-bold text-purple-600 dark:text-purple-400 mb-0.5">Tình Trạng (IoT)</div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">Rung lắc / Nhiệt độ vượt ngưỡng</div>
+              </button>
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {triggerType === 'CALENDAR' ? (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Chu Kỳ Bảo Dưỡng (Ngày) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  value={intervalDays}
+                  onChange={(e) => setIntervalDays(Number(e.target.value))}
+                  className="w-full text-xs px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-slate-900 dark:text-white font-bold"
+                />
+              </div>
+            ) : triggerType === 'METER' ? (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Ngưỡng Giờ Máy Chạy (Hours) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="10"
+                  required
+                  value={intervalHours}
+                  onChange={(e) => setIntervalHours(Number(e.target.value))}
+                  className="w-full text-xs px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono text-slate-900 dark:text-white font-bold"
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Ngưỡng Cảm Biến Cảnh Báo <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={conditionMetric}
+                  onChange={(e) => setConditionMetric(e.target.value)}
+                  className="w-full text-xs px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-900 dark:text-white"
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Phương Thức
+                Phương Thức Quản Lý
               </label>
               <select
                 value={maintenanceType}
                 onChange={(e) => setMaintenanceType(e.target.value)}
                 className="w-full text-xs px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
               >
-                <option value="PREVENTIVE">Định kỳ theo lịch (Preventive)</option>
-                <option value="CONDITION_BASED">Theo tình trạng (Condition-based)</option>
-                <option value="PREDICTIVE">Dự đoán AI / IoT (Predictive)</option>
+                <option value="PREVENTIVE">Định kỳ ngăn ngừa (Preventive)</option>
+                <option value="CONDITION_BASED">Theo dõi tình trạng (CBM)</option>
+                <option value="PREDICTIVE">Dự đoán IoT / Học máy (Predictive)</option>
               </select>
             </div>
           </div>

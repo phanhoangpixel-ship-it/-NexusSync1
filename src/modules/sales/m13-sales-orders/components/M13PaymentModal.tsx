@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { CreditCard, DollarSign, X, Check, ShieldCheck, Building2 } from 'lucide-react';
+import { CreditCard, DollarSign, X, Check, ShieldCheck, Building2, QrCode } from 'lucide-react';
 import { CurrencyInput } from '../../../../components/common/CurrencyInput';
+import { M13VietQrPaymentModal } from './M13VietQrPaymentModal';
 
 interface M13PaymentModalProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export const M13PaymentModal: React.FC<M13PaymentModalProps> = ({
   const [referenceNo, setReferenceNo] = useState<string>(`PAY-${order.id}-${Date.now().toString().slice(-4)}`);
   const [notes, setNotes] = useState<string>(`Thu tiền đơn hàng ${order.id}`);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isVietQrOpen, setIsVietQrOpen] = useState<boolean>(false);
 
   const handleProcessPayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -209,33 +211,56 @@ export const M13PaymentModal: React.FC<M13PaymentModalProps> = ({
           </div>
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
             <button
               type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition-all"
+              onClick={() => setIsVietQrOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 rounded-xl font-bold transition-all text-xs cursor-pointer shadow-xs"
             >
-              Hủy
+              <QrCode className="w-4 h-4 text-emerald-600" />
+              <span>Mở VietQR Động</span>
             </button>
-            <button
-              type="submit"
-              disabled={isProcessing}
-              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all shadow-md flex items-center gap-2"
-            >
-              {isProcessing ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                  <span>Đang Quyết Toán & Ghi Sổ Cái...</span>
-                </>
-              ) : (
-                <>
-                  <Check className="w-4 h-4" />
-                  <span>Xác Nhận Quyết Toán Tiền</span>
-                </>
-              )}
-            </button>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition-all"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                disabled={isProcessing}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all shadow-md flex items-center gap-2"
+              >
+                {isProcessing ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <span>Đang Quyết Toán & Ghi Sổ Cái...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Xác Nhận Quyết Toán Tiền</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
+
+        <M13VietQrPaymentModal
+          isOpen={isVietQrOpen}
+          order={order}
+          onClose={() => setIsVietQrOpen(false)}
+          onPaymentSuccess={(orderId, result) => {
+            setIsVietQrOpen(false);
+            onPaymentSuccess(orderId, result);
+            onClose();
+          }}
+          onNotify={onNotify}
+        />
       </div>
     </div>
   );

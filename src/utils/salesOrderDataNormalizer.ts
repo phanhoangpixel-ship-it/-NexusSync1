@@ -10,6 +10,7 @@ import {
   M13SalesOrderItem,
   M07CustomerMasterProfile,
   M16PosOrderPayload,
+  M16PosVatInvoiceDetails,
   M07CustomerCreditCheckResult,
 } from '../types/salesOrderIntegration';
 import { parseNumber } from './numberFormat';

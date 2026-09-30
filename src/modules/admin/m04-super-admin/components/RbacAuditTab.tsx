@@ -1,3 +1,4 @@
+import { TablePagination } from '../../../../components/common/TablePagination';
 import React, { useState, useMemo } from 'react';
 import { AuditLogRecord } from './types';
 import { INITIAL_AUDIT_LOGS } from './mockData';
@@ -135,7 +136,7 @@ export const RbacAuditTab: React.FC<RbacAuditTabProps> = ({ onNotify }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-              {filteredLogs.map((log) => (
+              {paginatedAuditLogs.map((log) => (
                 <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
                   <td className="py-3.5 px-4 font-mono font-bold text-indigo-600 dark:text-indigo-400">
                     {log.id}
@@ -204,6 +205,15 @@ export const RbacAuditTab: React.FC<RbacAuditTabProps> = ({ onNotify }) => {
             </tbody>
           </table>
         </div>
+
+        <TablePagination
+          currentPage={auditPage}
+          pageSize={auditPageSize}
+          totalItems={filteredLogs.length}
+          onPageChange={setAuditPage}
+          onPageSizeChange={setAuditPageSize}
+          pageSizeOptions={[10, 15, 25, 50, 100]}
+        />
       </div>
     </div>
   );

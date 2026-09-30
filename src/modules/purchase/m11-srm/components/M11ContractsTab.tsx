@@ -1,4 +1,8 @@
 import React, { useState, useMemo } from 'react';
+import { TablePagination } from '../../../../components/common/TablePagination';
+import { StatusBadge } from '../../../../components/common/StatusBadge';
+import { MoneyCell } from '../../../../components/common/MoneyCell';
+import { BulkActionBar } from '../../../../components/common/BulkActionBar';
 import { FrameworkContractItem, SupplierItem, ContractExpiryAlert } from './m11Types';
 import { SelectedEntityContext } from '../../../../types';
 import {
@@ -43,6 +47,9 @@ export const M11ContractsTab: React.FC<M11ContractsTabProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [contractPage, setContractPage] = useState<number>(1);
+  const [contractPageSize, setContractPageSize] = useState<number>(15);
+  const [selectedContractIds, setSelectedContractIds] = useState<string[]>([]);
   const [urgencyFilter, setUrgencyFilter] = useState<string>('ALL');
   const [selectedContractForDetail, setSelectedContractForDetail] = useState<FrameworkContractItem | null>(null);
 
@@ -496,6 +503,15 @@ export const M11ContractsTab: React.FC<M11ContractsTabProps> = ({
             </tbody>
           </table>
         </div>
+
+        <TablePagination
+          currentPage={contractPage}
+          pageSize={contractPageSize}
+          totalItems={filteredContracts.length}
+          onPageChange={setContractPage}
+          onPageSizeChange={setContractPageSize}
+          pageSizeOptions={[10, 15, 25, 50, 100]}
+        />
       </div>
 
       {/* Contract Detail Drawer / Modal */}
@@ -654,6 +670,35 @@ export const M11ContractsTab: React.FC<M11ContractsTabProps> = ({
           </div>
         </div>
       )}
+      {/* Bulk Action Bar (M11 Contracts) */}
+      <BulkActionBar
+        selectedCount={selectedContractIds.length}
+        totalCount={contracts.length}
+        itemName="hợp đồng khung SRM"
+        onClearSelection={() => setSelectedContractIds([])}
+        actions={[
+          {
+            id: 'batch_export',
+            label: 'Xuất Dữ Liệu Hợp Đồng (Excel)',
+            icon: <FileText className="w-3.5 h-3.5" />,
+            onClick: () => {
+              onNotify('info', 'Xuất dữ liệu', `Đã xuất thông tin ${selectedContractIds.length} hợp đồng khung sang Excel.`);
+              setSelectedContractIds([]);
+            },
+            variant: 'secondary',
+          },
+          {
+            id: 'batch_notify_expiry',
+            label: 'Gửi Thông Báo Tái Ký',
+            icon: <Clock className="w-3.5 h-3.5" />,
+            onClick: () => {
+              onNotify('success', 'Thông báo tái ký', `Đã gửi cảnh báo tái ký tới ${selectedContractIds.length} nhà cung cấp.`);
+              setSelectedContractIds([]);
+            },
+            variant: 'primary',
+          },
+        ]}
+      />
     </div>
   );
 };

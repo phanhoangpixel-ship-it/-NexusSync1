@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { LotItem } from './LotInventoryHistoryDrilldown';
 
-export type TraceNodeType = 'SUPPLIER' | 'LOT' | 'WORK_ORDER' | 'FINISHED_GOOD' | 'SALES_ORDER';
+export type TraceNodeType = 'SUPPLIER' | 'LOT' | 'SUB_ASSEMBLY' | 'WORK_ORDER' | 'FINISHED_GOOD' | 'SALES_ORDER';
 
 export interface TraceGraphNode extends d3.SimulationNodeDatum {
   id: string;
@@ -23,8 +23,14 @@ export interface TraceGraphNode extends d3.SimulationNodeDatum {
   workcenter?: string;
   qualityScore?: string;
   notes?: string;
-  level: number; // 0: Supplier, 1: Raw Lot, 2: WO, 3: FG, 4: SO/Customer
+  level: number; // 0: Supplier, 1: Raw Lot/Parent, 2: SubAssembly/WO, 3: FG/Child, 4: SO/Customer
   color?: string;
+  // Multi-level Genealogy & Scrap/Loss Rate
+  parentLotNumber?: string;
+  childLotNumber?: string;
+  scrapRate?: string | number; // e.g. '1.5%'
+  isMissingLink?: boolean;
+  missingReason?: string;
 }
 
 export interface TraceGraphLink extends d3.SimulationLinkDatum<TraceGraphNode> {
@@ -35,6 +41,8 @@ export interface TraceGraphLink extends d3.SimulationLinkDatum<TraceGraphNode> {
   quantity?: number;
   uom?: string;
   date?: string;
+  scrapRate?: string | number; // e.g. '1.2%'
+  isMissingLink?: boolean;
 }
 
 interface LotDependencyGraphD3Props {
@@ -121,6 +129,9 @@ export function generateTraceDataForLot(lot: LotItem): { nodes: TraceGraphNode[]
       qualityScore: '100% PASS',
       notes: 'Đã xuất kho 180 động cơ servo vào lệnh sản xuất WO-2026-101.',
       level: 2,
+      parentLotNumber: lot.batchNumber,
+      childLotNumber: 'LOT-FG-ROBOT-6AXIS',
+      scrapRate: '1.2%',
     });
 
     nodes.push({
@@ -137,6 +148,8 @@ export function generateTraceDataForLot(lot: LotItem): { nodes: TraceGraphNode[]
       qualityScore: 'ISO-9001:2026',
       notes: 'Lô thành phẩm đạt tiêu chuẩn an toàn công nghiệp CE/UL.',
       level: 3,
+      parentLotNumber: lot.batchNumber,
+      scrapRate: '0.8%',
     });
 
     nodes.push({
@@ -162,6 +175,7 @@ export function generateTraceDataForLot(lot: LotItem): { nodes: TraceGraphNode[]
       quantity: 180,
       uom: lot.uom,
       date: '2026-02-10',
+      scrapRate: '1.2%',
     });
 
     links.push({
@@ -172,6 +186,7 @@ export function generateTraceDataForLot(lot: LotItem): { nodes: TraceGraphNode[]
       quantity: 15,
       uom: 'Bộ',
       date: '2026-02-15',
+      scrapRate: '0.8%',
     });
 
     links.push({
@@ -1194,10 +1209,44 @@ export const LotDependencyGraphD3: React.FC<LotDependencyGraphD3Props> = ({ lot,
 
               {/* Attributes Grid */}
               <div className="space-y-2.5 text-xs">
-                {selectedNode.subtitle && (
-                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700/60">
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-bold block">Thông tin chi tiết:</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">{selectedNode.subtitle}</span>
+                {/* Missing Link Warning Indicator */}
+                {selectedNode.isMissingLink && (
+                  <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 flex items-start gap-2">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-200 dark:bg-amber-900 border border-amber-300 dark:border-amber-700 uppercase font-mono">
+                      Thiếu liên kết
+                    </span>
+                    <span className="text-[11px] font-medium leading-tight">
+                      {selectedNode.missingReason || 'Chưa ghi nhận chứng từ liên kết mắt xích đối ứng trong hệ thống ERP.'}
+                    </span>
+                  </div>
+                )}
+
+                {/* Multi-Level Genealogy & Scrap Rate */}
+                {(selectedNode.parentLotNumber || selectedNode.childLotNumber || selectedNode.scrapRate) && (
+                  <div className="p-3 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 space-y-1.5">
+                    <span className="text-[10px] text-indigo-700 dark:text-indigo-300 uppercase font-bold tracking-wider block">
+                      Phả Hệ Lô & Định Mức Hao Hụt NVL
+                    </span>
+                    {selectedNode.parentLotNumber && (
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-slate-500 dark:text-slate-400">Lô Cha (NVL gốc):</span>
+                        <span className="font-mono font-bold text-indigo-700 dark:text-indigo-300">{selectedNode.parentLotNumber}</span>
+                      </div>
+                    )}
+                    {selectedNode.childLotNumber && (
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-slate-500 dark:text-slate-400">Lô Con (Thành phẩm):</span>
+                        <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300">{selectedNode.childLotNumber}</span>
+                      </div>
+                    )}
+                    {selectedNode.scrapRate && (
+                      <div className="flex items-center justify-between text-[11px] pt-1 border-t border-indigo-100 dark:border-indigo-800/40">
+                        <span className="text-slate-600 dark:text-slate-300 font-semibold">Tỷ lệ hao hụt NVL:</span>
+                        <span className="font-mono font-bold text-rose-600 dark:text-rose-400 bg-white dark:bg-slate-900 px-1.5 py-0.2 rounded border border-rose-200 dark:border-rose-800">
+                          {selectedNode.scrapRate}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
 

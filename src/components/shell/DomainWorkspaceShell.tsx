@@ -48,9 +48,11 @@ interface DomainWorkspaceShellProps {
 
 export interface WorkspaceActionContextType {
   setPrimaryAction: (action: (() => void) | undefined, label?: string) => void;
+  setHeaderActions: (actions: React.ReactNode) => void;
 }
 export const WorkspaceActionContext = React.createContext<WorkspaceActionContextType>({
   setPrimaryAction: () => {},
+  setHeaderActions: () => {},
 });
 export const useWorkspaceAction = () => React.useContext(WorkspaceActionContext);
 
@@ -74,6 +76,7 @@ export const DomainWorkspaceShell: React.FC<DomainWorkspaceShellProps> = ({
 }) => {
   const [childPrimaryAction, setChildPrimaryAction] = useState<(() => void) | undefined>(undefined);
   const [childPrimaryActionLabel, setChildPrimaryActionLabel] = useState<string | undefined>(undefined);
+  const [childHeaderActions, setChildHeaderActions] = useState<React.ReactNode>(null);
 
   const effectivePrimaryAction = childPrimaryAction || onPrimaryAction;
   const effectivePrimaryActionLabel = childPrimaryActionLabel || primaryActionLabel;
@@ -149,24 +152,29 @@ export const DomainWorkspaceShell: React.FC<DomainWorkspaceShellProps> = ({
     setChildPrimaryActionLabel(l);
   }, []);
 
+  const setHeaderActions = React.useCallback((actions: React.ReactNode) => {
+    setChildHeaderActions(actions);
+  }, []);
+
   const actionContextValue = React.useMemo(() => ({
     setPrimaryAction,
-  }), [setPrimaryAction]);
+    setHeaderActions,
+  }), [setPrimaryAction, setHeaderActions]);
 
   const { effectiveScalePercentage } = useGlobalTheme();
 
   return (
     <WorkspaceActionContext.Provider value={actionContextValue}>
       <div id="nexus-l2-workspace" className="flex-1 flex flex-col min-h-0 min-h-full min-w-0 bg-slate-100/70 dark:bg-slate-950 overflow-hidden">
-      {/* L3 Domain Header */}
+      {/* L3 Domain Header (Ultra-Compact Single Row) */}
       <div
         id="nexus-l3-domain-header"
-        className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-3 shrink-0 flex flex-col gap-3 z-10 shadow-2xs"
+        className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-5 py-2 shrink-0 flex flex-col gap-2 z-10 shadow-2xs"
       >
-        {/* Breadcrumb & Domain Badge & Action Buttons */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-col gap-1 min-w-0">
-            {/* Breadcrumb Navigation */}
+        {/* Single Row Breadcrumb, Title & Quick Action Toolbar */}
+        <div className="flex items-center justify-between gap-3 min-h-[32px]">
+          {/* Left: Compact Inline Breadcrumb & Title */}
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
               <button
                 type="button"
@@ -175,7 +183,7 @@ export const DomainWorkspaceShell: React.FC<DomainWorkspaceShellProps> = ({
                 title="Quay lại Trang chủ / Tổng quan ERP (M01 Hub)"
               >
                 <Home className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-                <span>Trang chủ</span>
+                <span className="hidden sm:inline">Trang chủ</span>
               </button>
               <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-600" />
               <button
@@ -187,35 +195,40 @@ export const DomainWorkspaceShell: React.FC<DomainWorkspaceShellProps> = ({
                 {module.domain}
               </button>
               <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-600" />
-              <span className="text-slate-700 dark:text-slate-300 font-medium truncate">{module.moduleName}</span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-600" />
-              <span className="font-bold text-slate-900 dark:text-white truncate" title={activeWorkspaceName}>
-                {activeWorkspaceName}
-              </span>
             </nav>
 
-            {/* Title & Description */}
-            <div className="flex items-center gap-2.5 mt-0.5">
-              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200">
+            {/* Inline Module Identifier & Title */}
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800">
                 {module.code}
               </span>
-              <h1 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight leading-none flex items-center gap-2">
-                <span>{module.moduleName}</span>
+              <h1 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight truncate flex items-center gap-1.5">
+                <span>{activeWorkspaceName && activeWorkspaceName.trim().toLowerCase() !== module.moduleName.trim().toLowerCase() ? `${module.moduleName} / ${activeWorkspaceName}` : module.moduleName}</span>
                 {onToggleFavorite && (
                   <button
                     onClick={onToggleFavorite}
-                    className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-300 dark:text-slate-600 hover:text-amber-500 transition-all cursor-pointer"
+                    className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-300 dark:text-slate-600 hover:text-amber-500 transition-all cursor-pointer"
                     title={isFavorite ? "Bỏ ghim khỏi lối tắt yêu thích" : "Ghim vào lối tắt yêu thích"}
                   >
-                    <Star className={`w-4 h-4 ${isFavorite ? "text-amber-500 fill-amber-500" : "text-slate-300 dark:text-slate-600"}`} />
+                    <Star className={`w-3.5 h-3.5 ${isFavorite ? "text-amber-500 fill-amber-500" : "text-slate-300 dark:text-slate-600"}`} />
                   </button>
                 )}
               </h1>
             </div>
           </div>
 
-          {/* Action Toolbar */}
+          {/* Right: Quick Action Toolbar */}
           <div className="flex items-center gap-2 shrink-0">
+            {childHeaderActions}
+            {effectivePrimaryAction && (
+              <button
+                type="button"
+                onClick={effectivePrimaryAction}
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <span>{effectivePrimaryActionLabel || 'Thao tác chính'}</span>
+              </button>
+            )}
           </div>
         </div>
 

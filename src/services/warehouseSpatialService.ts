@@ -375,7 +375,7 @@ export class WarehouseSpatialService {
       .set({
         currentWeight: newWeight,
         currentVolume: newVol
-      })
+      } as any)
       .where(eq(schema.warehouseLocations.id, locationId));
 
     // Also update parent rack and zone weights if parentId exists
@@ -386,7 +386,7 @@ export class WarehouseSpatialService {
           .set({
             currentWeight: Number(((parentLoc.currentWeight || 0) + addedWeight).toFixed(2)),
             currentVolume: Number(((parentLoc.currentVolume || 0) + addedVol).toFixed(3))
-          })
+          } as any)
           .where(eq(schema.warehouseLocations.id, loc.parentId));
       }
     }
@@ -440,7 +440,7 @@ export class WarehouseSpatialService {
           isReceiving: Boolean(data.isReceiving),
           isQuarantine: Boolean(data.isQuarantine),
           isActive: data.isActive !== undefined ? Boolean(data.isActive) : true,
-        })
+        } as any)
         .where(eq(schema.warehouseLocations.id, data.id));
 
       const updated = await this.getLocations(data.warehouseId);
@@ -467,7 +467,7 @@ export class WarehouseSpatialService {
           isReceiving: Boolean(data.isReceiving),
           isQuarantine: Boolean(data.isQuarantine),
           isActive: true,
-        })
+        } as any)
         .returning();
 
       const created = await this.getLocations(data.warehouseId);

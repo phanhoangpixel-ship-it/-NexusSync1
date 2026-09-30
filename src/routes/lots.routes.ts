@@ -468,6 +468,8 @@ lotsRouter.post("/api/inventory/lots/fefo-simulate", async (req, res) => {
 // 6. GET BIDIRECTIONAL TRACEABILITY GRAPH DATA FOR LOT
 lotsRouter.get("/api/inventory/lots/:id/trace", async (req, res) => {
   try {
+    const maxDepthParam = parseInt(req.query.maxDepth as string, 10) || 5;
+    const maxNodesParam = parseInt(req.query.maxNodes as string, 10) || 500;
     const lot = memoryLotsStore.find(l => l.id === req.params.id || l.batchNumber === req.params.id) || memoryLotsStore[0];
 
     const nodes: any[] = [

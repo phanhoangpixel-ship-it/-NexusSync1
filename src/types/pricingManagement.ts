@@ -225,4 +225,5 @@ export interface PriceResolutionResult {
   actualMarginPercent: number;
   marginStatus: 'PASS' | 'WARNING' | 'CRITICAL_BELOW_MIN';
   governanceNote: string;
+  traceLogs?: string[];
 }

@@ -38,6 +38,8 @@ class OfflineSyncService {
   private queueStore = 'sync_queue';
   private auditStore = 'sync_audit_log';
   private db: IDBDatabase | null = null;
+  private memoryQueue: QueuedOfflineRequest[] = [];
+  private memoryAudit: SyncAuditItem[] = [];
   private listeners: Set<SyncStateListener> = new Set();
   private isSyncing = false;
   private lastSyncedAt: Date | null = null;
@@ -46,41 +48,61 @@ class OfflineSyncService {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      this.initDB();
+      try {
+        this.initDB().catch(err => {
+          console.warn('[OfflineSyncService] IndexedDB unavailable or restricted in this environment (falling back to memory mode):', err);
+        });
+      } catch (err) {
+        console.warn('[OfflineSyncService] IndexedDB init sync error caught:', err);
+      }
       this.initBroadcastChannel();
       this.initNetworkListeners();
     }
   }
 
-  private async initDB(): Promise<IDBDatabase> {
+  private async initDB(): Promise<IDBDatabase | null> {
     if (this.db) return this.db;
 
-    return new Promise((resolve, reject) => {
-      const req = indexedDB.open(this.dbName, this.dbVersion);
+    if (typeof indexedDB === 'undefined') {
+      console.warn('[OfflineSyncService] indexedDB is undefined in this environment.');
+      return null;
+    }
 
-      req.onupgradeneeded = (event: any) => {
-        const db = event.target.result;
-        if (!db.objectStoreNames.contains(this.queueStore)) {
-          const qStore = db.createObjectStore(this.queueStore, { keyPath: 'id' });
-          qStore.createIndex('status', 'status', { unique: false });
-          qStore.createIndex('timestamp', 'timestamp', { unique: false });
-        }
-        if (!db.objectStoreNames.contains(this.auditStore)) {
-          const aStore = db.createObjectStore(this.auditStore, { keyPath: 'id' });
-          aStore.createIndex('replayedAt', 'replayedAt', { unique: false });
-        }
-      };
+    return new Promise((resolve) => {
+      try {
+        const req = indexedDB.open(this.dbName, this.dbVersion);
 
-      req.onsuccess = () => {
-        this.db = req.result;
-        this.notifyState();
-        resolve(req.result);
-      };
+        req.onupgradeneeded = (event: any) => {
+          try {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(this.queueStore)) {
+              const qStore = db.createObjectStore(this.queueStore, { keyPath: 'id' });
+              qStore.createIndex('status', 'status', { unique: false });
+              qStore.createIndex('timestamp', 'timestamp', { unique: false });
+            }
+            if (!db.objectStoreNames.contains(this.auditStore)) {
+              const aStore = db.createObjectStore(this.auditStore, { keyPath: 'id' });
+              aStore.createIndex('replayedAt', 'replayedAt', { unique: false });
+            }
+          } catch (upgradeErr) {
+            console.warn('[OfflineSyncService] Upgrade store error:', upgradeErr);
+          }
+        };
 
-      req.onerror = () => {
-        console.error('[OfflineSyncService] IndexedDB init error:', req.error);
-        reject(req.error);
-      };
+        req.onsuccess = () => {
+          this.db = req.result;
+          this.notifyState();
+          resolve(req.result);
+        };
+
+        req.onerror = () => {
+          console.warn('[OfflineSyncService] IndexedDB init error:', req.error);
+          resolve(null);
+        };
+      } catch (openErr) {
+        console.warn('[OfflineSyncService] IndexedDB open exception caught:', openErr);
+        resolve(null);
+      }
     });
   }
 
@@ -186,13 +208,23 @@ class OfflineSyncService {
       origin: 'CLIENT_INTERCEPTOR'
     };
 
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(this.queueStore, 'readwrite');
-      const store = tx.objectStore(this.queueStore);
-      const req = store.put(queueItem);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
-    });
+    if (!db) {
+      this.memoryQueue.push(queueItem);
+      this.notifyState();
+      return queueItem;
+    }
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(this.queueStore, 'readwrite');
+        const store = tx.objectStore(this.queueStore);
+        const req = store.put(queueItem);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) {
+      this.memoryQueue.push(queueItem);
+    }
 
     // Notify Service Worker
     if (navigator.serviceWorker?.controller) {
@@ -219,20 +251,30 @@ class OfflineSyncService {
   public async getPendingRequests(): Promise<QueuedOfflineRequest[]> {
     try {
       const db = await this.initDB();
+      if (!db) {
+        return this.memoryQueue.filter((it) => it.status === 'pending' || it.status === 'failed')
+          .sort((a, b) => a.timestamp - b.timestamp);
+      }
       return new Promise((resolve, reject) => {
         const tx = db.transaction(this.queueStore, 'readonly');
         const store = tx.objectStore(this.queueStore);
         const req = store.getAll();
         req.onsuccess = () => {
           const list: QueuedOfflineRequest[] = req.result || [];
-          const filtered = list.filter((it) => it.status === 'pending' || it.status === 'failed');
+          const combined = [...list, ...this.memoryQueue];
+          // deduplicate by id
+          const uniqueMap = new Map();
+          combined.forEach(item => uniqueMap.set(item.id, item));
+          const uniqueList = Array.from(uniqueMap.values());
+          const filtered = uniqueList.filter((it) => it.status === 'pending' || it.status === 'failed');
           filtered.sort((a, b) => a.timestamp - b.timestamp);
           resolve(filtered);
         };
         req.onerror = () => reject(req.error);
       });
     } catch (e) {
-      return [];
+      return this.memoryQueue.filter((it) => it.status === 'pending' || it.status === 'failed')
+        .sort((a, b) => a.timestamp - b.timestamp);
     }
   }
 

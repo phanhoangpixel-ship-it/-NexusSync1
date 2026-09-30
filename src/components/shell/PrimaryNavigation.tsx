@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MODULE_REGISTRY, ModuleDefinition } from '../../config/moduleRegistry';
 import * as Icons from 'lucide-react';
 import { FavoriteItem, RecentVisitItem } from '../../types/recentFavorites';
@@ -47,6 +47,25 @@ export const PrimaryNavigation: React.FC<PrimaryNavigationProps> = ({
   onGoBack,
 }) => {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [m01Tab, setM01Tab] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem('nexus_workspace_tab_M01') || 'overview';
+    } catch {
+      return 'overview';
+    }
+  });
+
+  useEffect(() => {
+    const handleTabChange = (e: any) => {
+      if (e.detail) setM01Tab(e.detail);
+    };
+    window.addEventListener('nexus:m01_active_tab_changed', handleTabChange);
+    window.addEventListener('nexus:m01_switch_tab', handleTabChange);
+    return () => {
+      window.removeEventListener('nexus:m01_active_tab_changed', handleTabChange);
+      window.removeEventListener('nexus:m01_switch_tab', handleTabChange);
+    };
+  }, []);
 
   const toggleGroup = (group: string) => {
     setCollapsedGroups((prev) => ({ ...prev, [group]: !prev[group] }));
@@ -127,13 +146,118 @@ export const PrimaryNavigation: React.FC<PrimaryNavigationProps> = ({
               const m01 = getModule('M01');
               if (m01) onSelectModule(m01);
             }}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
               currentModuleId === 'M01' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
             }`}
           >
-            <Icons.Home className="w-4 h-4" />
-            <span>Home</span>
+            <div className="flex items-center gap-2.5">
+              <Icons.LayoutDashboard className="w-4 h-4" />
+              <span>Workspace Hub</span>
+            </div>
+            {currentModuleId === 'M01' && (
+              <span className="text-[9px] font-mono bg-blue-700/80 px-1.5 py-0.5 rounded text-cyan-200">
+                M01
+              </span>
+            )}
           </button>
+
+          {/* Integrated Workspace Hub Sub-navigation (Single Sidebar Architecture) */}
+          {currentModuleId === 'M01' && (
+            <div className="pl-3 pr-1 py-1 space-y-1 border-l-2 border-blue-500/40 ml-4 my-1">
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('nexus:m01_switch_tab', { detail: 'overview' }));
+                  setM01Tab('overview');
+                }}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                  m01Tab === 'overview'
+                    ? 'bg-blue-500/25 text-cyan-300 font-bold border border-blue-500/30'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icons.Home className="w-3.5 h-3.5" />
+                  <span>Tổng quan</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('nexus:m01_switch_tab', { detail: 'control_tower' }));
+                  setM01Tab('control_tower');
+                }}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                  m01Tab === 'control_tower'
+                    ? 'bg-blue-500/25 text-cyan-300 font-bold border border-blue-500/30'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icons.GitFork className="w-3.5 h-3.5" />
+                  <span>Bản đồ API & Dữ liệu</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('nexus:m01_switch_tab', { detail: 'ops_console' }));
+                  setM01Tab('ops_console');
+                }}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                  m01Tab === 'ops_console'
+                    ? 'bg-blue-500/25 text-cyan-300 font-bold border border-blue-500/30'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icons.ShieldAlert className="w-3.5 h-3.5" />
+                  <span>Bàn điều hành sự cố</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (onOpenWorkQueue) onOpenWorkQueue();
+                  else if (onOpenNotifications) onOpenNotifications();
+                }}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <Icons.CheckSquare className="w-3.5 h-3.5" />
+                  <span>Công việc của tôi</span>
+                </div>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-rose-500 text-white font-mono">
+                  12
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('nexus:m01_switch_tab', { detail: 'observability' }));
+                  setM01Tab('observability');
+                }}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                  m01Tab === 'observability'
+                    ? 'bg-blue-500/25 text-cyan-300 font-bold border border-blue-500/30'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icons.Clock className="w-3.5 h-3.5" />
+                  <span>Theo dõi SLA</span>
+                </div>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-emerald-500 text-white font-mono">
+                  98%
+                </span>
+              </button>
+            </div>
+          )}
+
           <button
             className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800/80 hover:text-white transition-all cursor-pointer"
             onClick={onOpenNotifications}

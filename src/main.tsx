@@ -1,23 +1,109 @@
 import React from 'react';
-import ReactDOM from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
 import { SystemClockProvider } from './components/common/SystemClockProvider';
 import { registerServiceWorker } from './serviceWorkerRegistration';
 import { offlineSyncService } from './services/offlineSyncService';
 
-// Register Service Worker for PWA and offline sync capabilities
-registerServiceWorker();
+// Safe error/rejection filtering for sandbox & preview environment
+const isBenignNotice = (msgOrReason: any): boolean => {
+  if (!msgOrReason) return true;
+  const str = typeof msgOrReason === 'string' 
+    ? msgOrReason 
+    : (msgOrReason?.message || msgOrReason?.stack || JSON.stringify(msgOrReason) || '');
+  return (
+    str.includes('WebSocket') ||
+    str.includes('ws://') ||
+    str.includes('wss://') ||
+    str.includes('vite:ws') ||
+    str.includes('Failed to fetch') ||
+    str.includes('AbortError') ||
+    str.includes('aborted') ||
+    str.includes('ResizeObserver') ||
+    str.includes('canceled') ||
+    str.includes('cancelled')
+  );
+};
 
-// Suppress benign Vite HMR WebSocket connection messages in sandbox preview (HMR disabled by container platform)
 if (typeof window !== 'undefined') {
-  window.addEventListener('unhandledrejection', (event) => {
-    const reasonStr = event.reason?.message || event.reason?.toString() || '';
-    if (reasonStr.includes('WebSocket') || reasonStr.includes('ws://') || reasonStr.includes('wss://')) {
-      event.preventDefault();
-      event.stopPropagation();
+  window.onerror = function(msg, url, lineNo, columnNo, error) {
+    if (isBenignNotice(msg) || isBenignNotice(error)) {
+      return true;
     }
-  });
+    console.warn('[NexusSync Client]', msg);
+    return false;
+  };
+
+  window.onunhandledrejection = function(event) {
+    if (isBenignNotice(event?.reason)) {
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      return;
+    }
+    console.warn('[NexusSync Async Notice]', event?.reason?.message || event?.reason);
+    event.preventDefault?.();
+  };
+}
+
+console.log('[NexusSync] Initializing entry point...');
+
+// Initialize Service Worker
+try {
+  registerServiceWorker();
+} catch (swErr) {
+  console.error('[NexusSync] SW Registration failed:', swErr);
+}
+
+// React Mount Logic
+const mountApp = () => {
+  console.log('[NexusSync] Attempting to mount React app...');
+  const rootElement = document.getElementById('root');
+  
+  if (!rootElement) {
+    console.error('[NexusSync] FATAL: #root element not found in DOM.');
+    return;
+  }
+
+  try {
+    const root = createRoot(rootElement);
+    console.log('[NexusSync] ReactDOM.createRoot successful');
+    
+    root.render(
+      <React.StrictMode>
+        <SystemClockProvider>
+          <App />
+        </SystemClockProvider>
+      </React.StrictMode>
+    );
+    
+    console.info('[NexusSync] React root.render called.');
+    
+    // Dismiss bootstrap loader smoothly
+    if (typeof (window as any).__dismissNexusBootstrapLoader === 'function') {
+      (window as any).__dismissNexusBootstrapLoader();
+    } else {
+      const loader = document.getElementById('app-bootstrap-loader');
+      if (loader) loader.remove();
+    }
+
+  } catch (mountErr) {
+    console.error('[NexusSync] Fatal error during React mount:', mountErr);
+    
+    // Dismiss bootstrap loader so error or error boundary is visible
+    if (typeof (window as any).__dismissNexusBootstrapLoader === 'function') {
+      (window as any).__dismissNexusBootstrapLoader();
+    }
+  }
+};
+
+// Immediate mount since #root is already in DOM, with event listener fallback
+if (document.getElementById('root')) {
+  mountApp();
+} else if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', mountApp);
+} else {
+  mountApp();
 }
 
 // Global override to make default toLocaleString use vi-VN (dot for thousands, comma for decimals e.g., 1.000.000,50)
@@ -262,18 +348,3 @@ window.addEventListener('vite:preloadError', (event) => {
     // ignore sessionStorage security restrictions
   }
 });
-
-const rootElement = document.getElementById('root');
-if (rootElement) {
-  try {
-    ReactDOM.createRoot(rootElement).render(
-      <React.StrictMode>
-        <SystemClockProvider>
-          <App />
-        </SystemClockProvider>
-      </React.StrictMode>
-    );
-  } catch (mountErr) {
-    console.error('[NexusSync] Fatal error mounting React application root:', mountErr);
-  }
-}

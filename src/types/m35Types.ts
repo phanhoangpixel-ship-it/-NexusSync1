@@ -22,6 +22,8 @@ export interface ProjectMaster {
   budgetVND: number; // BAC
   committedCostVND: number;
   actualCostVND: number;
+  billedAmountVND?: number;
+  billingStatus?: string;
   progressPct: number;
   
   // Job Costing Breakdown

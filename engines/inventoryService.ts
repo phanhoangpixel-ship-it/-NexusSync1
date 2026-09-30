@@ -58,7 +58,9 @@ export type InventoryTransactionType =
   | 'SALES_RETURN'
   | 'PURCHASE_RETURN'
   | 'GOODS_RECEIPT'
-  | 'GOODS_ISSUE';
+  | 'GOODS_ISSUE'
+  | 'SALE_ISSUE'
+  | 'SALE_RETURN';
 
 export interface PostTransactionParams {
   productId: number;

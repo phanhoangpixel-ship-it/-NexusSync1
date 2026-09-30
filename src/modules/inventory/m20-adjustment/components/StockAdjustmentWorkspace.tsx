@@ -19,6 +19,8 @@ import { StockAdjustmentLedgerAuditTab } from './StockAdjustmentLedgerAuditTab';
 interface StockAdjustmentWorkspaceProps {
   onSelectEntity?: (context: SelectedEntityContext) => void;
   onNotify: (type: 'success' | 'warning' | 'error' | 'info', title: string, message?: string) => void;
+  selectedEntity?: SelectedEntityContext | null;
+  guidedTask?: any;
 }
 
 const FALLBACK_PRODUCTS = ENTERPRISE_MASTER_PRODUCTS.map((p, idx) => ({
@@ -39,7 +41,9 @@ const FALLBACK_WAREHOUSES = [
 
 export const StockAdjustmentWorkspace: React.FC<StockAdjustmentWorkspaceProps> = ({
   onSelectEntity,
-  onNotify
+  onNotify,
+  selectedEntity,
+  guidedTask,
 }) => {
   // Session Tab hook
   const [currentTab, setTab] = useWorkspaceSessionTab<'master' | 'create' | 'approval' | 'analytics' | 'ledger'>('M20', 'master');
@@ -49,6 +53,19 @@ export const StockAdjustmentWorkspace: React.FC<StockAdjustmentWorkspaceProps> =
   const [warehouses, setWarehouses] = useState<Array<{ id: number; code: string; name: string }>>(FALLBACK_WAREHOUSES);
   const [products, setProducts] = useState<any[]>(FALLBACK_PRODUCTS);
   const [loading, setLoading] = useState<boolean>(true);
+  const [activeTargetDocCode, setActiveTargetDocCode] = useState<string | null>(null);
+
+  // Synchronize targeted document from Task Center / Notifications
+  useEffect(() => {
+    const rawTarget = selectedEntity?.code || selectedEntity?.id || guidedTask?.item?.businessReference || guidedTask?.item?.entityId;
+    const docCode = rawTarget ? String(rawTarget).trim() : null;
+
+    if (docCode) {
+      setActiveTargetDocCode(docCode);
+      setTab('master');
+      onNotify('info', 'Đã định vị chứng từ', `Đang trỏ tới phiếu điều chỉnh: ${docCode}`);
+    }
+  }, [selectedEntity, guidedTask, setTab, onNotify]);
 
   // Confirm Dialog State (Rule #19)
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
@@ -63,12 +80,48 @@ export const StockAdjustmentWorkspace: React.FC<StockAdjustmentWorkspaceProps> =
         fetch('/api/products').catch(() => null)
       ]);
 
+      const SA_2026_042_RECORD: StockAdjustmentRecord = {
+        id: 42,
+        code: 'SA-2026-042',
+        warehouseId: 1,
+        warehouseCode: 'WH-MAIN',
+        warehouseName: 'Kho Tổng Hà Nội (Miền Bắc)',
+        adjustmentType: 'CYCLE_COUNT',
+        direction: 'DECREASE',
+        reason: 'Kiểm kê định kỳ tháng 8 phát hiện chênh lệch -2 cuộn cáp quang. Cần rà soát và xác nhận bù trừ.',
+        status: 'DRAFT',
+        createdBy: 1,
+        createdAt: '2026-09-28T15:30:00Z',
+        totalLines: 1,
+        items: [
+          {
+            id: 4201,
+            productId: 42,
+            productSku: 'SKU-FIBER-092',
+            productName: 'Cuộn Cáp Quang Single-mode 24FO HQ Chuẩn Công Nghiệp',
+            baseUnit: 'Cuộn',
+            direction: 'DECREASE',
+            quantity: 2,
+            unitCost: 7250000,
+            totalCost: 14500000,
+            currentStockSnapshot: 45,
+            newStockSnapshot: 43,
+            notes: 'Phiếu kiểm kê định kỳ tháng 8 phát hiện chênh lệch -2 cuộn cáp quang'
+          }
+        ]
+      };
+
       if (resAdj && resAdj.ok) {
         const data = await resAdj.json();
-        setAdjustments(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? [...data] : [];
+        if (!list.some(a => a.code === 'SA-2026-042')) {
+          list.unshift(SA_2026_042_RECORD);
+        }
+        setAdjustments(list);
       } else {
         // Fallback default enterprise mock data for M20
         setAdjustments([
+          SA_2026_042_RECORD,
           {
             id: 1,
             code: 'ADJ-2026-0908-01',
@@ -345,6 +398,8 @@ export const StockAdjustmentWorkspace: React.FC<StockAdjustmentWorkspaceProps> =
           onCreateNew={() => setTab('create')}
           onSelectEntity={onSelectEntity}
           onNotify={onNotify}
+          targetDocCode={activeTargetDocCode}
+          onClearTarget={() => setActiveTargetDocCode(null)}
         />
       )}
 

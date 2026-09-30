@@ -480,10 +480,10 @@ export class SalesEngine {
           inventoryStatus = "BACKORDER";
           for (const item of validatedItems) {
             try {
-              const balances = await tx.select().from(stockBalances)
+              const balances = await tx.select().from(schema.stockBalances)
                 .where(and(
-                  eq(stockBalances.productId, item.productId),
-                  eq(stockBalances.warehouseId, req.warehouseId || 1)
+                  eq(schema.stockBalances.productId, item.productId),
+                  eq(schema.stockBalances.warehouseId, req.warehouseId || 1)
                 ));
               const maxAvailInLocation = balances.reduce((sum, b) => Math.max(sum, b.stockAvailable || 0), 0);
               const reserveQty = Math.min(item.quantity, maxAvailInLocation);

@@ -50,6 +50,8 @@ export const M10BidsTab: React.FC<M10BidsTabProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [bidPage, setBidPage] = useState<number>(1);
+  const [bidPageSize, setBidPageSize] = useState<number>(15);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 

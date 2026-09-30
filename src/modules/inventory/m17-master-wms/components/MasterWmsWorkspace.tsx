@@ -12,6 +12,7 @@ import { SelectedEntityContext, ConfirmDialogState } from '../../../../types';
 import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import { PaginationControl } from '../../../../components/common/PaginationControl';
 import { WarehouseProductsTab } from '../../m18-warehouse/components/WarehouseProductsTab';
+import { applyTargetDocumentHighlight } from '../../../../utils/documentTargeting';
 import { MasterWmsWorkspaceProps } from './types';
 
 export const MasterWmsWorkspace: React.FC<MasterWmsWorkspaceProps> = ({
@@ -25,8 +26,24 @@ export const MasterWmsWorkspace: React.FC<MasterWmsWorkspaceProps> = ({
   const [activeMainTab, setActiveMainTab] = useState<'FACILITIES' | 'PRODUCTS' | 'INSPECTION' | 'TIMELINE'>('PRODUCTS');
   const [timelineSearch, setTimelineSearch] = useState('');
   const [timelineActionFilter, setTimelineActionFilter] = useState('ALL');
+  const [activeTargetDoc, setActiveTargetDoc] = useState<{ code: string; label?: string; note?: string } | null>(null);
 
   const [timelineEvents, setTimelineEvents] = useState([
+    {
+      id: 'EVT-SA-042',
+      sku: 'SKU-FIBER-092',
+      productName: 'Cuộn Cáp Quang Single-mode 24FO HQ Chuẩn Công Nghiệp',
+      timestamp: '28/09/2026 15:30:00',
+      actionType: 'DISCREPANCY_STOCKTAKE',
+      actionLabel: 'Kiểm Kê Phát Hiện Lệch Kho (M17)',
+      warehouseName: 'Kho Tổng Hà Nội (Miền Bắc)',
+      binLocation: 'BIN-HQ-Z02',
+      operator: 'Thủ Kho Trưởng Nguyễn Văn An',
+      previousState: 'Sổ sách: 45 Cuộn',
+      newState: 'Kiểm đếm thực tế: 43 Cuộn (-2 Cuộn chênh lệch)',
+      referenceNo: 'SA-2026-042',
+      notes: 'Phiếu kiểm kê định kỳ tháng 8 phát hiện chênh lệch -2 cuộn cáp quang. Cần rà soát và xác nhận bù trừ.'
+    },
     {
       id: 'EVT-1001',
       sku: 'SKU-MED-004',
@@ -702,6 +719,31 @@ export const MasterWmsWorkspace: React.FC<MasterWmsWorkspaceProps> = ({
     }
   };
 
+  // Synchronize targeted document from Notification Drawer, WorkQueue or selectedEntity
+  useEffect(() => {
+    const rawTarget = selectedEntity?.code || selectedEntity?.id || guidedTask?.item?.businessReference || guidedTask?.item?.entityId;
+    const docCode = rawTarget ? String(rawTarget).trim() : null;
+
+    if (docCode) {
+      setActiveTargetDoc({
+        code: docCode,
+        label: selectedEntity?.name || guidedTask?.item?.title || 'Chứng từ được chỉ trỏ từ thông báo',
+        note: guidedTask?.item?.description || ''
+      });
+
+      // Auto-switch to appropriate tab and filter
+      if (docCode.startsWith('SA-') || docCode.startsWith('EVT-') || docCode.startsWith('STK-') || docCode.startsWith('KCS-')) {
+        setActiveMainTab('TIMELINE');
+        setTimelineSearch(docCode);
+      } else if (docCode.startsWith('SKU-') || docCode.startsWith('PRD-')) {
+        setActiveMainTab('PRODUCTS');
+      }
+
+      // Auto-focus and attach highlight-active-row with pulse animation
+      applyTargetDocumentHighlight(docCode);
+    }
+  }, [selectedEntity, guidedTask]);
+
   // Handler for Updating Warehouse Status with automatic Toast notification
   const handleUpdateWarehouseStatus = (
     warehouseId: string, 
@@ -1247,6 +1289,60 @@ export const MasterWmsWorkspace: React.FC<MasterWmsWorkspaceProps> = ({
         </div>
       </div>
 
+      {/* ACTIVE TARGET DOCUMENT FOCUS BANNER (Chỉ trỏ & định vị chính xác vị trí chứng từ từ Thông Báo / Task Center) */}
+      {activeTargetDoc && (
+        <div 
+          id="m17-target-doc-banner"
+          className="bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 dark:from-blue-950/80 dark:via-indigo-950/70 dark:to-blue-950/80 border-2 border-blue-400/80 dark:border-blue-600 p-3 sm:p-4 rounded-2xl shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs shrink-0 animate-bounce">
+              <Zap className="w-5 h-5 text-amber-300" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2 py-0.5 rounded-md bg-blue-600 text-white text-[10px] font-mono font-bold tracking-wider uppercase shadow-2xs">
+                  ĐANG ĐỊNH VỊ CHỨNG TỪ
+                </span>
+                <span className="font-mono font-bold text-sm text-blue-950 dark:text-blue-100 bg-white dark:bg-slate-900 px-2.5 py-0.5 rounded-md border border-blue-200 dark:border-blue-800">
+                  {activeTargetDoc.code}
+                </span>
+              </div>
+              <p className="text-xs text-blue-900 dark:text-blue-200 font-medium mt-1">
+                {activeTargetDoc.label || activeTargetDoc.note || 'Hệ thống đã tự động lọc và trỏ tới đúng vị trí chứng từ trong bảng, sẵn sàng để rà soát và xử lý.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveMainTab('TIMELINE');
+                setTimelineSearch(activeTargetDoc.code);
+                const el = document.querySelector(`[data-doc-ref*="${activeTargetDoc.code}"]`);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>Xem vị trí</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTargetDoc(null);
+                setTimelineSearch('');
+                onNotify('info', 'Đã xóa bộ lọc định vị', 'Quay lại chế độ xem toàn bộ kho.');
+              }}
+              className="px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+            >
+              Xem tất cả
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* TOP WORKSPACE TAB NAVIGATION BAR (Tabs Điều Hướng Nghiệp Vụ Kho M17 - M41 Master Spec) */}
       <div 
         id="m17-main-workspace-tabs"
@@ -1468,15 +1564,33 @@ export const MasterWmsWorkspace: React.FC<MasterWmsWorkspaceProps> = ({
                   dotBg = 'bg-blue-600';
                 }
 
+                const isTargetMatch = Boolean(
+                  activeTargetDoc && (
+                    ev.referenceNo.toUpperCase().includes(activeTargetDoc.code.toUpperCase()) ||
+                    ev.sku.toUpperCase().includes(activeTargetDoc.code.toUpperCase()) ||
+                    ev.id.toUpperCase().includes(activeTargetDoc.code.toUpperCase())
+                  )
+                );
+
                 return (
                   <div key={ev.id} className="relative group">
-                    <div className={`absolute -left-6 top-1.5 w-3.5 h-3.5 rounded-full ${dotBg} ring-4 ring-white dark:ring-slate-900 shadow-xs`} />
+                    <div className={`absolute -left-6 top-1.5 w-3.5 h-3.5 rounded-full ${isTargetMatch ? 'bg-blue-600 animate-ping' : dotBg} ring-4 ring-white dark:ring-slate-900 shadow-xs`} />
                     <div 
-                      id={ev.timestamp.startsWith('08/09/2026') && index === 0 ? 'today-timeline-item' : undefined}
-                      className="bg-slate-50 dark:bg-slate-800/70 p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all shadow-2xs space-y-3"
+                      id={isTargetMatch ? 'target-focused-item' : (ev.timestamp.startsWith('08/09/2026') && index === 0 ? 'today-timeline-item' : undefined)}
+                      data-doc-ref={ev.referenceNo}
+                      className={`p-4 rounded-xl border transition-all space-y-3 ${
+                        isTargetMatch
+                          ? 'highlight-active-row bg-blue-50/90 dark:bg-blue-950/70 border-blue-500 dark:border-blue-400 ring-2 ring-blue-400/50 shadow-lg'
+                          : 'bg-slate-50 dark:bg-slate-800/70 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 shadow-2xs'
+                      }`}
                     >
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div className="flex items-center gap-2 flex-wrap">
+                          {isTargetMatch && (
+                            <span className="px-2 py-0.5 rounded-md bg-blue-600 text-white text-[10px] font-mono font-bold uppercase shadow-2xs flex items-center gap-1 animate-pulse">
+                              <span>🎯 Vị trí chứng từ</span>
+                            </span>
+                          )}
                           <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${badgeBg}`}>
                             {ev.actionLabel}
                           </span>

@@ -1,22 +1,22 @@
 # Master ERP — Authoritative Module Map & Enterprise Domain Architecture
 
 **Document Classification:** OFFICIAL ENTERPRISE ARCHITECTURAL BASELINE  
-**Status:** [PHASE 2 CONSOLIDATION — COMPLETE & CERTIFIED]  
-**Baseline Date:** September 15, 2026  
-**Governance Scope:** Certified Architecture Mapping (Modules M01–M42 & Workspaces WS01–WS31)
+**Status:** [PHASE 2 CONSOLIDATION & GOVERNANCE CERTIFICATION — COMPLETE & CERTIFIED]  
+**Baseline Date:** September 27, 2026  
+**Governance Scope:** Certified Architecture Mapping (Modules M01–M43 & Workspaces WS01–WS32)
 
 ---
 
 ## 1. Executive Architecture Scope & Classification
 
-This document constitutes the authoritative, evidence-grounded catalog and mapping of all **42 enterprise ERP modules (M01–M42)** and **31 functional workspaces (WS01–WS31)** within NexusSync ERP. Every entry is derived directly from source code inspection (`src/App.tsx`, `src/config/moduleRegistry.ts`, `src/components/shell/DomainWorkspaceShell.tsx`, `src/types.ts`, `server.ts`, `server/orchestrationApi.ts`, `src/db/schema.ts`) and certified governance baselines (`/docs/AI/GEMINI_ERP_ARCHITECTURE_DEVELOPMENT_RULES.md`).
+This document constitutes the authoritative, evidence-grounded catalog and mapping of all **43 enterprise ERP modules (M01–M43)** and **32 functional workspaces (WS01–WS32)** within NexusSync ERP. Every entry is derived directly from source code inspection (`src/App.tsx`, `src/config/moduleRegistry.ts`, `src/components/shell/DomainWorkspaceShell.tsx`, `src/types.ts`, `server.ts`, `server/orchestrationApi.ts`, `src/db/schema.ts`) and certified governance baselines (`/docs/AI/GEMINI_ERP_ARCHITECTURE_DEVELOPMENT_RULES.md`).
 
 ### Enterprise Domain Classification Summary (8 Business Groups)
 
 | Group Code | Business Group Description | Module Count | Included Module IDs | Primary Workspaces |
 | :--- | :--- | :---: | :--- | :--- |
 | **00. CORE HUB** | Master Orchestration, Application Shell & SLA WorkQueue | 1 | M01 | WS01_HUB |
-| **01. COMMERCIAL & SALES** | Commercial Core, B2B O2C, Retail POS, Pricing & RMA | 7 | M07, M12, M13, M14, M15, M16, M41 | WS02, WS03, WS22, WS23, WS30 |
+| **01. COMMERCIAL, SALES & MASTER DATA** | Commercial Core, B2B O2C, Retail POS, Pricing, RMA & Industry Profiles | 8 | M07, M12, M13, M14, M15, M16, M41, M43 | WS02, WS03, WS22, WS23, WS30, WS32 |
 | **02. PROCUREMENT & SRM** | Procure-to-Pay (P2P), Sourcing RFQ & Supplier Scorecards | 4 | M08, M09, M10, M11 | WS04_PURCHASE, WS24_SOURCING, WS25_SRM |
 | **03. WAREHOUSE & LOGISTICS** | Master WMS, Stock Ledger, Count, Adjust, Lots, Serials & TMS | 9 | M17, M18, M19, M20, M21, M22, M23, M24, M36 | WS05, WS06, WS07, WS08, WS09, WS10, WS11, WS12, WS17 |
 | **04. MANUFACTURING & OPS** | MES Execution, BOM, MRP Netting, R&D, EAM, HR & Projects | 7 | M06, M25, M26, M27, M28, M35 | WS23_RD, WS13, WS14, WS15, WS16, WS18 |
@@ -41,7 +41,7 @@ This document constitutes the authoritative, evidence-grounded catalog and mappi
 
 ---
 
-## 3. Directory of 31 Certified Workspaces (WS01 – WS31)
+## 3. Directory of 32 Certified Workspaces (WS01 – WS32)
 
 | Workspace ID | Workspace Name | Business Group | Primary Module | Default Route |
 | :--- | :--- | :--- | :---: | :--- |
@@ -76,18 +76,22 @@ This document constitutes the authoritative, evidence-grounded catalog and mappi
 | `WS29_EHS` | An toàn lao động & Môi trường EHS | GOVERNANCE | M40 | `/ehs` |
 | `WS30_PRICING` | Cơ cấu Giá & Chính sách Thương mại | COMMERCIAL | M41 | `/pricing-management` |
 | `WS31_COGS` | Phân bổ Chi phí & Giá vốn COGS | FINANCE | M42 | `/cogs` |
+| `WS32_INDUSTRY` | Hồ Sơ Ngành Hàng (Industry Profiles) | MASTER_DATA | M43 | `/industry-profiles` |
 
 ---
 
-## 4. Master 42-Module Specification (M01 – M42)
+## 4. Master 43-Module Specification (M01 – M43)
 
 ### M01: Workspace Hub & Global Orchestration
 - **Module ID:** `M01`
 - **Group:** 00. Core Hub (Trung Tâm Điều Phối)
 - **Workspace:** `WS01_HUB` | **Route:** `/workspace`
 - **Mounted Component:** `src/modules/admin/m01-workspace-hub/components/WorkspaceHub.tsx`
-- **Domain Authority:** Authoritative for session navigation, WorkQueue SLA orchestration, and cross-module workspace aggregation.
-- **Read API:** `GET /api/workspace/summary`, `GET /api/workspace/work-items`
+- **Domain Authority:** Read-Only Aggregator & Gateway Dispatcher. **NOT** a Single-Writer Domain Authority. M01 does not own business entities; all operational mutations are delegated to authoritative domain services (M08, M20, M38, M16, etc.) with unique `idempotencyKey` and SHA-256 audit logs (M02).
+- **Read API:** `GET /api/workspace/summary`, `GET /api/workspace/work-items`, `GET /api/workspace/entity-preview`, `GET /api/workspace/process-chains`, `GET /api/workspace/observability/health`, `GET /api/workspace/observability/topology`, `GET /api/workspace/observability/spans`, `GET /api/workspace/observability/rca/:id`, `GET /api/workspace/observability/trends`, `GET /api/workspace/observability/forecast`
+- **Write API:** `POST /api/workspace/work-items/:id/action`, `POST /api/workspace/work-items/bulk-action`, `POST /api/workspace/observability/sync`, `POST /api/workspace/observability/remediate/:id`
+- **Cross-Module Integrations:** Aggregates read models from M08 (PO), M20 (Stock Adjustments), M38 (ServiceDesk Tickets), M16 (POS/Sales Orders), M31 (Invoices), M02 (Audit SHA-256 logs), M29 (DMS attachments), M05 (EventBus), and `moduleRegistry.ts`.
+
 
 ### M02: Audit Compliance & SHA-256 Chain
 - **Module ID:** `M02`
@@ -304,21 +308,25 @@ This document constitutes the authoritative, evidence-grounded catalog and mappi
 - **Domain Authority:** Inter-Warehouse Transfer Orders, Shipping Confirmations, and In-Transit Custody.
 - **Read API:** `GET /api/stock-transfers`
 
-### M22: Lots & Batches Management (FEFO/FIFO)
+### M22: Lots & Batches Management (FEFO/FIFO & Traceability 360)
 - **Module ID:** `M22`
 - **Group:** 03. Kho Vận & Hậu Cần
 - **Workspace:** `WS10_LOTS` | **Route:** `/lots`
-- **Mounted Component:** `src/pages/LotsBatches.tsx`
-- **Domain Authority:** Production Lot Lifecycle, Shelf Life Tracking, and Expiry Warnings.
-- **Read API:** `GET /api/lots`
+- **Mounted Component:** `src/modules/inventory/m22-lots/components/M22LotsBatchesWorkspace.tsx`
+- **Domain Authority:** Traceability & Batch Lineage Authority (Production Lot Lifecycle, FEFO Expiry Routing, Bi-directional Multi-Level Genealogy).
+- **Database Tables:** `lots`, `lot_balances`, `stock_ledger`
+- **Read APIs:** `GET /api/inventory/lots`, `GET /api/inventory/lots/:id`, `GET /api/inventory/lots/:id/trace`, `GET /api/inventory/lots/:id/trace-upstream`, `GET /api/inventory/lots/:id/trace-downstream`, `GET /api/inventory/lots/:id/ledger`, `GET /api/inventory/lots/:id/recall-dossier`
+- **Cross-Module Read-Only Integrations:** M08/M09 (Supplier & PO), M17 (Stock Ledger Single Writer), M25 (Manufacturing MO/BOM), M39 (Inbound/WIP QC & COA), M13 (Sales Order Allocation), M31/M30 (AR & General Ledger Voucher), M15 (Returns RMA), M42 (Cost Layers COGS), M29 (DMS Quality Certs), M02 (Cryptographic Audit Trail).
 
-### M23: Serials & IMEI Tracking
+### M23: Serials & IMEI Tracking (Traceability 360)
 - **Module ID:** `M23`
 - **Group:** 03. Kho Vận & Hậu Cần
 - **Workspace:** `WS11_SERIALS` | **Route:** `/serials`
-- **Mounted Component:** `src/pages/SerialsIMEI.tsx`
-- **Domain Authority:** Unique Item Identification, Warranty Serial Tracking, and Asset Genealogy.
-- **Read API:** `GET /api/serials`
+- **Mounted Component:** `src/modules/inventory/m23-serials/components/M23SerialsWorkspace.tsx`
+- **Domain Authority:** Unique Item Identification & Electronic Warranty Authority (Unit-Level Genealogy, GS1 Barcoding, Tamper Protection).
+- **Database Tables:** `serial_profiles`, `serial_numbers`, `serial_history`, `serial_transactions`
+- **Read APIs:** `GET /api/serials`, `GET /api/serials/:id/history`, `GET /api/serial-profiles`
+- **Cross-Module Read-Only Integrations:** M08 (PO Receipt), M17 (WMS Storage Location), M13 (Customer SO Delivery), M15 (RMA Warranty Verification), M27 (EAM Asset Linkage), M02 (Audit Trail).
 
 ### M24: Advanced WMS Extended (Wave, Putaway & LPN)
 - **Module ID:** `M24`
@@ -372,75 +380,208 @@ This document constitutes the authoritative, evidence-grounded catalog and mappi
 
 ### M27: Enterprise Asset Management (EAM / CMMS)
 - **Module ID:** `M27`
-- **Group:** 04. Sản Xuất & Vận Hành
-- **Workspace:** `WS15_EAM` | **Route:** `/eam`
-- **Mounted Component:** `src/pages/EAM.tsx`
-- **Domain Authority:** Plant Equipment Health, Maintenance Work Orders, and Spare Parts Management.
-- **Read API:** `GET /api/eam/assets`
+- **Group:** 04. Sản Xuất & Vận Hành (Manufacturing & Operations)
+- **Workspace:** `WS15_EAM` | **Route:** `/eam` (Canonical) | **Route Alias:** `/assets`
+- **Mounted Component:** `src/modules/assets/m27-eam/components/AssetMaintenanceWorkspace.tsx`
+- **Domain Authority:** Plant Machinery & Equipment Register, Asset Hierarchy & Criticality Classification (Tier A/B/C), Multi-Trigger Preventive Maintenance (Calendar, Meter Run Hours, IoT Condition), Work Order Lifecycle Execution & State Machine (OPEN, IN_PROGRESS, WAITING_PART, COMPLETED, CLOSED), and Equipment Reliability & OEE Analytics (MTBF, MTTR, Availability %, Downtime).
+- **Single-Writer Authority Boundaries (Strict Non-Authority & Delegation):**
+  - *Inventory Authority:* M27 is NOT an inventory single writer. Spare parts consumption is strictly delegated to M17 `InventoryService.postTransaction()` (`movementType: 'MAINTENANCE_ISSUE'`). Zero direct mutations to `stock_balances` or `stock_ledger`.
+  - *Purchasing Authority:* When spare parts are out of stock or low in inventory, M27 delegates purchase requisitions directly to M08 `PurchaseEngine` (`POST /api/purchase-orders` or `/api/eam/spare-parts/purchase-order`). Zero direct inserts into PO tables.
+  - *Accounting Authority:* Asset depreciation and MRO repair expense vouchers are posted strictly via M30 `AccountingEngine` (VAS accounts 211, 214, 627, 642).
+  - *Incident & RMA Routing:* Accepts automated work order triggers from M38 Service Desk (`sourceModule: 'M38'`, `INC-xxxx`) and customer returns repair routing from M15 RMA (`sourceModule: 'M15'`, `RMA-xxxx`).
+  - *Audit & Compliance:* All state transitions, parts issues, and sign-offs are logged into M02 `AuditService.recordAuditLog()` and maintenance sign-off certificates are sealed into M29 DMS vault (`dms_documents`).
+- **Read APIs:** `GET /api/eam/assets`, `GET /api/eam/assets/:id`, `GET /api/eam/maintenance-schedules`, `GET /api/eam/work-orders`, `GET /api/eam/work-orders/:id`, `GET /api/eam/analytics/reliability`
+- **Write APIs:**
+  - `POST /api/eam/assets` (Register asset with criticality Tier A/B/C and parent hierarchy)
+  - `POST /api/eam/assets/depreciation` (Delegate monthly depreciation to M30 GL)
+  - `POST /api/eam/maintenance-schedules` (Create PM plans with Calendar/Meter/Condition triggers)
+  - `POST /api/eam/work-orders` (Create work order with M38/M15/Manual source tracking)
+  - `PUT /api/eam/work-orders/:id/status` (State machine transition: OPEN -> IN_PROGRESS -> WAITING_PART -> COMPLETED)
+  - `POST /api/eam/work-orders/:id/issue-parts` (Delegate spare parts issue to M17 Single Writer)
+  - `POST /api/eam/spare-parts/purchase-order` (Delegate shortage procurement to M08 Single Writer)
+  - `POST /api/eam/work-orders/:id/complete` (Final WO completion, M30 GL cost allocation, M02 audit, M29 DMS archival)
+- **Cross-Module Integrations:** M17 (Inventory Core Single-Writer), M08 (Purchasing PO Single-Writer), M30 (General Ledger Accounting), M38 (IT & Facility Service Desk Incidents), M15 (Customer RMA Repair Routing), M28 (Technician & Operator Roster), M40 (EHS Safety Permits & Isolation Tagging), M02 (Cryptographic Audit Trail), M29 (DMS Maintenance Dossier Vaulting).
+- **Status:** **ACCEPTANCE SEAL: SIGNED & VERIFIED** (13/13 Integration Test Cases M27-F01 ➔ M27-F13 Certified).
+- **Dependent Modules:** M02, M08, M15, M17, M28, M29, M30, M38, M40.
 
 ### M28: HR, Personnel & Automated Payroll
 - **Module ID:** `M28`
-- **Group:** 04. Sản Xuất & Vận Hành
-- **Workspace:** `WS18_FINANCE` | **Route:** `/hr`
-- **Mounted Component:** `src/pages/HRManagement.tsx`
-- **Domain Authority:** Employee Master Records, Departmental Hierarchies, Attendance, and Payroll.
-- **Read API:** `GET /api/hr/employees`
+- **Group:** 05. Quản Trị Nhân Sự & Tiền Lương (HR & Payroll)
+- **Workspace:** `WS26_HR` | **Route:** `/hr`
+- **Mounted Component:** `src/modules/hr/m28-hr-payroll/components/HRWorkspace.tsx`
+- **Domain Authority:** Master Employee Records (`employees`), Department & Position Hierarchies (`departments`, `positions`), Labor Contracts (`employee_contracts`), Work Shifts & Rotas (`work_shifts`), Time Attendance & Multi-multiplier Overtime (`attendance_records`, `overtime_records`), Leave Lifecycle Management (`leave_requests`), Statutory Insurance Contributions (BHXH 8%, BHYT 1.5%, BHTN 1.0%), Progressive PIT Taxation Engine (Circular 111/2013/TT-BTC), and Payroll Runs (`payrolls`, `payslips`).
+- **Single-Writer Authority Boundaries (Strict Non-Authority & Delegation):**
+  - *Accounting Authority:* M28 is NOT an accounting single writer. GL journal entries for gross wages, employee/employer insurance, and PIT tax deductions (VAS accounts 6421, 6221, 6271, 3341, 3383, 3384, 3386, 3335) are strictly delegated to M30 `AccountingEngine.postJournal()`. Zero direct mutations to `accounting_entries`.
+  - *Treasury & Cash Authority:* M28 is NOT a cash/bank single writer. Net salary disbursement is strictly delegated to M32 `TreasuryManagementService` (`POST /api/hr/payroll/:id/disburse` -> Nợ 3341 / Có 1121). Zero direct bank mutations.
+  - *Commission Integration:* Ingests approved sales commission payouts from M14 (`POST /api/commission/payouts/:id/pay-via-payroll`) into employee taxable income and journal voucher (Nợ 3388 / Có 3341).
+  - *Audit & Compliance:* All state transitions (Employee creation, Clock-in, Leave approval, Payroll run, Disburse) are recorded via M02 `AuditService.recordAuditLog()` and payroll dossiers are sealed into M29 DMS vault (`dms_documents`) with SHA-256 digital checksums.
+  - *Immutability Guard:* Payrolls marked `APPROVED`, `POSTED`, or `PAID` are strictly immutable; variances must be handled via adjustments in subsequent periods.
+- **Read APIs:** `GET /api/hr/employees`, `GET /api/hr/employees/:id`, `GET /api/hr/departments`, `GET /api/hr/positions`, `GET /api/hr/shifts`, `GET /api/hr/attendance`, `GET /api/hr/leaves`, `GET /api/hr/contracts`, `GET /api/hr/payrolls`, `GET /api/hr/payrolls/preview`, `GET /api/hr/payrolls/:id/details`, `GET /api/hr/payroll/:id/payslip`, `GET /api/hr/ess/my-payslips`, `GET /api/hr/performance`, `GET /api/hr/training`, `GET /api/hr/audit-logs`
+- **Write APIs:**
+  - `POST /api/hr/employees` (Register/update employee master profile with salary, insurance & dependents)
+  - `POST /api/hr/contracts` (Create & activate labor contracts)
+  - `POST /api/hr/shifts` (Create & configure work shifts with night allowances)
+  - `POST /api/hr/timesheets` & `POST /api/hr/attendance` (Ingest attendance records & calculate overtime)
+  - `POST /api/hr/leave-requests` & `POST /api/hr/leaves` (Submit leave request)
+  - `POST /api/hr/leaves/:id/approve` & `POST /api/hr/leaves/:id/reject` (Approve/reject leave request)
+  - `POST /api/hr/payroll/run` & `POST /api/hr/payrolls/calculate` (Run automated statutory payroll calculation)
+  - `POST /api/hr/payroll/approve` (Approve payroll & delegate balanced GL journal entries to M30)
+  - `POST /api/hr/payroll/:id/disburse` (Disburse net pay via M32 Treasury delegation and lock period)
+  - `POST /api/hr/ess/checkin` (Self-service GPS/Mobile attendance check-in)
+  - `POST /api/hr/seal-dossier` (Seal cryptographic payroll/HR archive into M29 DMS)
+- **Cross-Module Integrations:** M30 (Single-Writer General Ledger Accounting), M32 (Single-Writer Treasury & Banking), M14 (Sales Commission Payout Delegation), M35 (Project Resource & Timesheet Master), M27 (Maintenance Technician Roster), M06 (R&D Resource Allocation), M02 (Cryptographic Audit Trail), M29 (DMS Secure Vault).
+- **Status:** **ACTIVE UPGRADE — PHASES 1 to 3 COMPLETED**
+- **Dependent Modules:** M02, M06, M14, M25, M27, M29, M30, M32, M35.
 
-### M29: Document Management System (DMS)
+### M29: Document Management System (DMS) & Secure Vault
 - **Module ID:** `M29`
-- **Group:** 06. Quản Trị & Hệ Thống
-- **Workspace:** `WS28_DMS` | **Route:** `/dms`
-- **Mounted Component:** `src/pages/DMSPage.tsx`
-- **Domain Authority:** Digital Document Archives, Contract Storage, and Electronic Metadata.
-- **Read API:** `GET /api/dms/documents`
+- **Group:** 08. Hệ Thống & Giám Sát (System & Governance)
+- **Workspace:** `WS28_DMS` | **Route:** `/dms` (Alias: `/digital-dms`)
+- **Mounted Component:** `src/modules/governance/m29-dms/components/DMSWorkspace.tsx` (`src/pages/DMSPage.tsx`)
+- **Domain Authority:** **Exclusive Single-Writer for Digital Document Vault, Cryptographic SHA-256 Hashing, Internal E-Signature Sealing, Retention Policy Schedule & Legal Hold Immutability Shield, Controlled Document Disposal with M02 Permanent Audit Tombstones, and Cross-Module Attachment Linking.**
+- **Single-Writer Authority Boundaries (Strict Non-Authority & Delegation):**
+  - *Zero Foreign Ledger Mutation:* M29 never writes to or alters `accounting_entries`, `stock_ledger`, or `cost_layers`.
+  - *Provenance Linker:* Maintains metadata links to business vouchers in M08 (PO), M13 (SO), M31 (Invoice), M32 (Payment) via `engines/dmsEntityLinker.ts`.
+  - *Audit Authority:* All upload, versioning, seal, access, and download events are logged via M02 `AuditService.recordAuditLog()`.
+- **Read APIs:** `GET /api/dms/documents`, `GET /api/dms/documents/:id`, `GET /api/dms/documents/:id/download`, `GET /api/dms/entity/:entityType/:entityId/attachments`, `GET /api/dms/reports/missing-attachments`, `GET /api/dms/retention-policies`, `GET /api/dms/signatures`
+- **Write APIs:**
+  - `POST /api/dms/vault` (Vault document with server-side SHA-256 calculation, MIME/size validation, and idempotency deduplication)
+  - `POST /api/dms/documents/:id/sign` (Digitally seal document with internal e-signature, set status SEALED, and emit `dms.document.sealed.v1`)
+  - `POST /api/dms/documents/:id/verify` (Verify cryptographic integrity against stored SHA-256 seal)
+  - `POST /api/dms/documents/batch-verify` (Batch verify all documents in vault)
+  - `PUT /api/dms/retention` (Configure standard retention presets)
+  - `PUT /api/dms/documents/:id/retention` (Update individual document retention schedule and toggle Legal Hold)
+  - `POST /api/dms/documents/:id/request-disposal` (Submit disposal request to M28 governance council)
+  - `POST /api/dms/documents/:id/dispose` (Finalize document disposal with tombstone hash and permanent M02 audit log)
+  - `POST /api/dms/archive` (Cold-storage deep glacier packaging and archival)
+- **Cross-Module Integrations:**
+  - **M06 R&D:** Formulas, clinical trial notes, and laboratory dossier vaulting.
+  - **M08 Purchasing:** PO contracts, vendor quotes, and goods receipt notes.
+  - **M10 Strategic Sourcing:** RFQ dossiers and tender evaluation scorecards.
+  - **M13 Sales Orders:** Official VAT invoice PDFs and sales contracts.
+  - **M15 Returns & RMA:** RMA dossiers, inspection photos, and credit note vouchers.
+  - **M17 Inventory:** Warehouse stock receipts and delivery notes.
+  - **M25 Manufacturing:** Production batch travelers and inspection slips.
+  - **M26 Supply Chain:** MRP netting snapshots and production plans.
+  - **M27 EAM:** Maintenance work order completion certs and equipment test records.
+  - **M28 HR & Payroll:** Employee labor contracts and monthly salary registers.
+  - **M31 Invoices:** Official XML/PDF e-invoices and VAT declarations.
+  - **M32 Payments:** Official payment vouchers (01-TT, 02-TT) and bank receipts.
+  - **M34 Consolidation:** Group consolidation financial statement packages.
+  - **M35 Projects:** Project charters, architecture blueprints, and milestone sign-offs.
+  - **M36 Logistics:** Electronic Waybills and e-POD signed delivery receipts.
+  - **M39 Quality:** Certificates of Analysis (COA) and Inspection Reports.
+  - **M02 Audit:** Tamper-evident SHA-256 audit logs and disposal tombstones.
+  - **M05 EventBus:** Emits `dms.document.sealed.v1` outbox event upon document sealing.
+- **M29 Notifications & Event Broadcasting:**
+  - Emits `dms.document.sealed.v1` to transactional outbox upon digital sealing. Verified: Active in Outbox.
+- **Dependent Modules:** M02, M05, M06, M08, M10, M13, M15, M17, M25, M26, M27, M28, M31, M32, M34, M35, M36, M39.
+- **Status:** **ACCEPTANCE SEAL: SIGNED & LIVE QA CERTIFIED (2026-09-24)** (14/14 Invariant Tests PASS)
 
-### M30: Finance & General Ledger (GL Single-Writer)
+### M30: Finance & General Ledger (GL Single-Writer & VAS Accounting Engine)
 - **Module ID:** `M30`
 - **Group:** 05. Tài Chính & Kế Toán
 - **Workspace:** `WS18_FINANCE` | **Route:** `/finance`
-- **Mounted Component:** `src/pages/FinanceGL.tsx`
-- **Domain Authority:** **Exclusive Single-Writer for General Ledger, Double-Entry Postings (VAS), and Balance Sheets.**
-- **Read API:** `GET /api/finance/accounts`
+- **Mounted Component:** `src/modules/finance/m30-gl/components/M30GeneralLedgerWorkspace.tsx` (`src/pages/FinanceGL.tsx`)
+- **Domain Authority:** **Exclusive Single-Writer for General Ledger, Double-Entry Postings (VAS TT200/133), Storno Reversals, Financial Statements (B01-DN, B02-DN, B03-DN, B05-DN), TK 911 Period Closing, Cost Center Allocation, and Cross-Reconciliation.**
+- **Read APIs:** `GET /api/finance/accounts`, `GET /api/finance/gl/entries`, `GET /api/finance/trial-balance`, `GET /api/finance/financial-statements`, `GET /api/finance/reports/cost-center-summary`, `GET /api/finance/reports/cross-reconciliation`
+- **Write APIs:** `POST /api/finance/gl/entries` (`POST /api/finance/gl/post`), `POST /api/finance/gl/reversal`, `POST /api/finance/period-close` (`POST /api/finance/gl/vas911-closing`), `POST /api/finance/verify-balance`
+- **Status:** **ACCEPTANCE SEAL: SIGNED & VERIFIED** (Live QA Certified: 2026-09-23)
+- **Cross-Module Integrations:**
+  - **M31 Invoices:** Single-Writer GL posting for AR/AP debt & VAT entries.
+  - **M32 Treasury:** Single-Writer GL posting for cash/bank vouchers and internal transfers.
+  - **M17 Inventory:** Single-Writer GL posting for stock valuation & COGS journal entries.
+  - **M28 Payroll:** Single-Writer GL posting for labor salary & statutory insurance expenses.
+  - **M27 EAM:** Single-Writer GL posting for asset depreciation & maintenance costs.
+  - **M35 Projects:** Single-Writer GL posting for WIP project costing (TK 621, 622, 623, 627 -> 154).
+  - **M02 Audit:** SHA-256 tamper-evident audit logging for financial mutation transactions.
 
 ### M31: Finance & Accounting (Invoices AR/AP/VAT)
 - **Module ID:** `M31`
 - **Group:** 05. Tài Chính & Kế Toán
 - **Workspace:** `WS19_INVOICES` | **Route:** `/invoices`
-- **Mounted Component:** `src/pages/Invoices.tsx`
+- **Mounted Component:** `src/modules/finance/m31-invoices/components/M31InvoicesArApWorkspace.tsx`
 - **Domain Authority:** **Central Tax Engine Authority**, Customer AR Invoices, Vendor AP Invoices, VAT Reporting.
-- **Read API:** `GET /api/invoices`
+- **Read API:** `GET /api/invoices`, `GET /api/invoices/ar`, `GET /api/invoices/aging`, `GET /api/invoices/tax-declaration`, `GET /api/invoices/tax-declaration/xml`, `GET /api/invoices/vat-summary`, `GET /api/invoices/:id`, `GET /api/invoices/:id/dms-vault`, `GET /api/invoices/:id/xml`
+- **Write APIs:** `POST /api/invoices/ap`, `POST /api/invoices/:id/issue`, `POST /api/invoices/:id/post-gl`, `POST /api/invoices/:id/cancel`, `POST /api/invoices/:id/offset-credit-note`, `POST /api/invoices/:id/payments`, `POST /api/invoices/:id/3way-match`, `POST /api/invoices/:id/dunning`, `POST /api/invoices/:id/archive-dms`, `POST /api/invoices/batch-archive-dms`, `POST /api/invoices/tax-declaration/submit-etax`
+- **Cross-Module Integrations:**
+  - **M30 Finance/GL:** Sole GL posting authority (`accountingEngine.postJournal()`).
+  - **M13 Sales Orders:** Receives SO invoice requests via `invoiceService.createInvoice()`.
+  - **M08 Purchase Orders:** 3-way matching AP invoices with POs and Goods Receipts.
+  - **M32 Treasury:** Partial payments and installment collections.
+  - **M15 RMA:** Credit note debt offsetting.
+  - **M29 DMS:** Legal XML/PDF invoice archiving.
+  - **M02 Audit:** Immutable state transition logs.
 
 ### M32: Payments & Treasury Cash Management
 - **Module ID:** `M32`
 - **Group:** 05. Tài Chính & Kế Toán
-- **Workspace:** `WS20_PAYMENTS` | **Route:** `/payments`
-- **Mounted Component:** `src/pages/Payments.tsx`
-- **Domain Authority:** Cash Vouchers, Bank Disbursements, Customer Collections, and Cash Flow Forecasts.
-- **Read API:** `GET /api/payments`
+- **Workspace:** `WS20_PAYMENTS` (Alias: `WS07_PAYMENTS`) | **Route:** `/payments`
+- **Mounted Component:** `src/modules/finance/m32-payments/components/M32PaymentsTreasuryWorkspace.tsx` (`src/pages/Payments.tsx`)
+- **Domain Authority:** **Exclusive Authority for Treasury Management**, Cash Funds & Bank Accounts (GL 1111/1121), Official Regulatory Vouchers (Mẫu 01-TT Phiếu Thu & Mẫu 02-TT Phiếu Chi theo TT200/2014/TT-BTC & TT133/2016/TT-BTC), Cash Balance Overdraft Guard, Internal Fund Transfers, Central Treasury Authorization Gateway (M32-F06), Dynamic VietQR (NAPAS 247), Automated Bank Reconciliation Matching, and 7/30/90 Days Cash Flow Forecasting.
+- **Single-Writer Authority Boundaries (Strict Non-Authority & Delegation):**
+  - *Accounting Single-Writer:* M32 is NOT an authority for General Ledger. All double-entry postings are delegated strictly to M30 `AccountingEngine.postTreasuryVoucherJournal()` and `postTreasuryTransferJournal()`. Zero direct writes to `accounting_entries`.
+  - *Central Gateway Delegation:* M32-F06 acts as the sole authorized gateway for cash disbursements and collections for external modules (M13 Bán hàng, M14 Hoa hồng, M15 RMA, M16 POS, M28 Nhân sự & Lương, M08 Mua hàng). External modules are prohibited from posting GL cash/bank entries directly.
+  - *Audit Authority:* All voucher lifecycle events (Create, Approve, Cancel, Transfer) are cryptographically signed and logged via M02 `AuditService.recordAuditLog()`.
+- **Read APIs:** `GET /api/treasury/bank-accounts`, `GET /api/treasury/vouchers`, `GET /api/treasury/vouchers/:id`, `GET /api/treasury/vouchers/:id/printable-form`, `GET /api/treasury/vouchers/:id/vietqr`, `GET /api/treasury/transfers`, `GET /api/treasury/bank-statements`, `GET /api/treasury/cashflow-forecast`, `GET /api/treasury/stats`, `GET /api/payments` (Canonical compatibility)
+- **Write APIs:**
+  - `POST /api/treasury/vouchers` (Create Receipt / Payment Voucher)
+  - `POST /api/treasury/vouchers/:id/approve` (CFO Maker-Checker Approval with M30 Single-Writer GL Post)
+  - `POST /api/treasury/vouchers/:id/cancel` (Cancel Voucher with Balance Rollback & M02 Audit Log)
+  - `POST /api/treasury/transfers` (Internal Fund Transfer with GL Balanced Post)
+  - `POST /api/treasury/reconcile` (Match Bank Statement Transaction)
+  - `POST /api/treasury/vietqr-payload` (Generate NAPAS 247 Dynamic QR)
+  - `POST /api/treasury/gateway/disburse` (Central Gateway Disbursement for M14, M15, M28, M08)
+  - `POST /api/treasury/gateway/collect` (Central Gateway Collection for M13, M16, M31)
+- **Cross-Module Integrations:** M30 (Single-Writer GL), M02 (Cryptographic Audit), M13 (Sales Collections), M14 (Commission Payouts), M15 (RMA Refunds), M16 (POS Shift Cash Clearance), M28 (Payroll Disbursements), M08/M31 (Vendor AP Settlements), M33 (Bank Reconciliation).
+- **Status:** **ACCEPTANCE SEAL: SIGNED & LIVE QA CERTIFIED (2026-09-23)**
 
 ### M33: Bank Reconciliation & VietQR
 - **Module ID:** `M33`
 - **Group:** 05. Tài Chính & Kế Toán
 - **Workspace:** `WS21_BANK` | **Route:** `/bank-reconciliation`
-- **Mounted Component:** `src/pages/BankReconciliation.tsx`
-- **Domain Authority:** Bank Statement Clearing, Algorithmic Matching, and VietQR Payment Validation.
-- **Read API:** `GET /api/bank/statements`
+- **Mounted Component:** `src/modules/finance/m33-bank-reconciliation/components/M33BankReconciliationWorkspace.tsx`
+- **Domain Authority:** **Bank Statement Clearing, Algorithmic Reconciliation, Discrepancy Ledger (Form 08-TT), and Dynamic VietQR Ingestion.**
+- **Single-Writer Authority Boundaries (Strict Non-Authority & Delegation):**
+  - *GL Authority Delegation:* M33 is strictly a Non-Authority for General Ledger and Cash accounts. Zero direct writes to `accounting_entries`. All double-entry postings are executed through M32 `TreasuryService` or M30 `AccountingEngine`.
+  - *Receipt/Payment Creation Delegation:* When unmatched bank statement transactions require voucher creation, M33 delegates creation to M32 Central Treasury Gateway (`POST /api/treasury/gateway/collect` or `/api/treasury/vouchers`).
+  - *Audit Authority:* All automated reconciliations, manual overrides, unmatches, and statement imports are logged to M02 `AuditService.recordAuditLog()`.
+- **Read APIs:** `GET /api/bank/accounts`, `GET /api/bank/statements`, `GET /api/bank/unmatched`, `GET /api/bank/reconciliation-report`, `GET /api/bank/reconciled-history`, `GET /api/bank/vietqr/generate`
+- **Write APIs:**
+  - `POST /api/bank/accounts` (Register or Update Bank Account)
+  - `POST /api/bank/statements/import` (Idempotent Statement Import with SHA256 Checksum & deduplication)
+  - `POST /api/bank/statements/auto-reconcile` (Multi-Criteria 4-Tier Automated Matching)
+  - `POST /api/bank/statements/manual-match` (Manual 1-to-1 / 1-to-N Override with M02 Audit Log)
+  - `POST /api/bank/statements/unmatch` (Rollback Match with M02 Audit Log)
+  - `POST /api/bank/webhook/vietqr` (Webhook for VietQR Collections with M32 Auto-Receipt)
+- **Cross-Module Integrations:**
+  - **M32 Treasury:** Central Treasury Gateway for auto-receipt voucher generation and cash journal clearance.
+  - **M30 Finance/GL:** GL Account 1121 balance reconciliation and voucher journal validation.
+  - **M31 Invoices:** Automated AR customer debt clearing and AP supplier payment matching.
+  - **M13 Sales Orders:** Order payment status propagation upon bank clearing.
+  - **M02 Audit:** Tamper-evident audit logging for all match, unmatch, and override operations.
+- **Status:** **ACCEPTANCE SEAL: SIGNED & LIVE QA CERTIFIED (2026-09-23)**
 
 ### M34: Financial Consolidation (BCTC Hợp Nhất)
 - **Module ID:** `M34`
 - **Group:** 05. Tài Chính & Kế Toán
-- **Workspace:** `WS18_FINANCE` | **Route:** `/financial-consolidation`
-- **Mounted Component:** `src/pages/FinancialConsolidation.tsx`
-- **Domain Authority:** Multi-Branch Consolidated Statements, Intercompany Eliminations, and Currency Translation.
-- **Read API:** `GET /api/finance/consolidation`
+- **Workspace:** `WS09_CONSOLIDATION` | **Route:** `/consolidation`
+- **Mounted Component:** `src/modules/finance/m34-consolidation/components/M34FinancialConsolidationWorkspace.tsx`
+- **Domain Authority:** Multi-Branch Consolidated Statements, Intercompany Eliminations, Currency Translation Adjustments, and DMS Financial Report Vaulting.
+- **Read APIs:** `GET /api/finance/consolidation/scope`, `GET /api/finance/consolidation/entities`, `GET /api/finance/consolidation/runs/:id`, `GET /api/finance/consolidation/reports`, `GET /api/finance/consolidation/eliminations`, `GET /api/finance/consolidation/reconciliations`, `GET /api/finance/consolidation/runs/:id/drill-down`
+- **Write APIs:** `POST /api/finance/consolidation/runs`, `POST /api/finance/consolidation/runs/:id/approve`, `POST /api/finance/consolidation/runs/:id/lock`, `POST /api/finance/consolidation/runs/:id/seal-dms`, `POST /api/finance/consolidation/fx-rates`
+- **Cross-Module Integrations:** M30 (Read-Only Trial Balance & GL Single-Writer Guard), M03 (Multi-Currency Rates), M02 (Cryptographic Audit Log via `AuditService`), M29 (DMS Vaulting with SHA-256 Signature), M05 (Transactional Outbox Event `finance.consolidation.run.completed.v1`), M37 (BI Analytics Consumption).
+- **Status:** **ACCEPTANCE SEAL: SIGNED & LIVE QA CERTIFIED (2026-09-24)**
+- **Dependent Modules:** M30 (GL Accounting), M03 (FX Rates), M02 (Audit Trail), M29 (DMS Vault), M05 (Outbox/EventBus), M37 (BI Reports).
 
 ### M35: Projects & Work Breakdown Structure (WBS)
 - **Module ID:** `M35`
 - **Group:** 04. Sản Xuất & Vận Hành
 - **Workspace:** `WS16_PROJECTS` | **Route:** `/projects`
 - **Mounted Component:** `src/pages/Projects.tsx`
-- **Domain Authority:** Project WBS Trees, Task Milestones, Timesheets, and Job Costing.
-- **Read API:** `GET /api/projects`
+- **Domain Authority:** Project WBS Trees, Task Milestones, Capacity & Resources (M28), Timesheets & Labor Rates, Job Costing (5 Components: Labor M28, Material M17/M42, Equipment M27, Subcontract M10, Overhead M30), Portfolio EVM ISO 21508, Billing Delegation (M31 Invoicing & M30 GL), and POC Margin Engine (VAS 15 / IFRS 15).
+- **APIs:** `GET/POST /api/projects`, `POST /api/projects/:id/wbs`, `PUT /api/projects/:id/progress`, `POST /api/projects/resources`, `POST /api/projects/:id/timesheets`, `POST /api/projects/:id/material-issue`, `GET /api/projects/:id/job-cost`, `GET /api/projects/evm`, `POST /api/projects/:id/billing`, `GET /api/projects/:id/margin`
+- **Status:** **CERTIFIED & ACTIVE**
 
 ### M36: Logistics & Transportation Fleet (TMS)
 - **Module ID:** `M36`
@@ -455,18 +596,51 @@ This document constitutes the authoritative, evidence-grounded catalog and mappi
 ### M37: BI & Executive Analytics Reports
 - **Module ID:** `M37`
 - **Group:** 06. Quản Trị & Hệ Thống
-- **Workspace:** `WS18_FINANCE` | **Route:** `/reports`
-- **Mounted Component:** `src/pages/BIAnalyticsPage.tsx`
-- **Domain Authority:** Executive Dashboards, P&L Waterfall, Statutory Financial Reports, and Export Engines.
-- **Read API:** `GET /api/reports/summary`
+- **Workspace:** `M37 - BI & Executive Analytics` | **Route:** `/analytics` (Alias: `/reports`)
+- **Mounted Component:** `src/modules/governance/m37-analytics/components/M37BiAnalyticsWorkspace.tsx`
+- **Domain Authority:** Executive Dashboards, VAS Income Statement (P&L), Direct Cash Flow Statement, Inventory Turnover & Ratios, 90-day Cashflow Forecast, and Idempotent Report Export. Thuần READ-ONLY — Tái sử dụng Trial Balance & Financial Statements của M30 General Ledger (`accountingEngine.generateFinancialStatements()`), tuyệt đối không tự tính lại Nợ/Có GL.
+- **Read APIs:** `GET /api/analytics/pnl`, `GET /api/analytics/cashflow`, `GET /api/analytics/turnover-ratios`, `GET /api/analytics/forecast`, `GET /api/analytics/kpis`, `GET /api/analytics/pnl-monthly`, `GET /api/reports/summary`, `GET /api/analytics/category-drilldown`, `GET /api/analytics/channel-distribution`, `GET /api/analytics/branch-performance`
+- **Write APIs:** `POST /api/analytics/export` (Khởi tạo/Truy xuất Export Job idempotent + M29 Vault Doc link)
+- **Cross-Module Integrations:** M30 (Single-Writer General Ledger for P&L Statements), M32/M33 (Treasury & Bank balances for Cash Flow validation), M17/M42 (Inventory & Costing for turnover ratio calculation), M34 (Group Consolidated Financial Reports when locked run exists), M02 (Cryptographic Audit Logging via `AuditService.recordAuditLog()`), M29 (DMS Cryptographic Vault for exported reports), M05 (Outbox Event Emission `analytics.report.exported.v1`).
+- **Status:** **ACCEPTANCE SEAL: SIGNED & LIVE QA CERTIFIED (2026-09-25)**
+- **Dependent Modules:** M30 (GL Accounting), M32 (Payments), M33 (Bank Recon), M17 (Inventory), M42 (Costing), M34 (Consolidation), M02 (Audit Trail), M29 (DMS Vault), M05 (Outbox/EventBus).
 
 ### M38: IT Service Desk & Support Ticketing
 - **Module ID:** `M38`
 - **Group:** 06. Quản Trị & Hệ Thống
-- **Workspace:** `WS26_SERVICEDESK` | **Route:** `/issue`
-- **Mounted Component:** `src/pages/Issue.tsx`
-- **Domain Authority:** Incident Ticketing, SLA Tracking, Equipment Defect Logging, and Support Escalation.
-- **Read API:** `GET /api/issues`
+- **Workspace:** `WS26_SERVICEDESK` | **Route:** `/issue` (Alias: `/service-desk`)
+- **Mounted Component:** `src/modules/governance/m38-service-desk/components/ServiceDeskWorkspace.tsx` (`src/pages/Issue.tsx`)
+- **Domain Authority:** **Exclusive Single-Writer Authority for IT Incident & Service Tickets (`tickets`), SLA Policies (`sla_policies`), Ticket History (`ticket_status_history`), Access Requests Lifecycle (`ticket_access_requests`), and CSAT Surveys (`ticket_surveys`).**
+- **Single-Writer Authority Boundaries (Strict Non-Authority & Delegation):**
+  - *RBAC Authority Delegation:* M38 manages the lifecycle, multi-tier approvals, and Segregation of Duties (SoD) for access requests. M38 is strictly prohibited from executing direct SQL mutations to `users`, `roles`, `role_permissions`, or `user_permissions`. Real permission activation is delegated strictly to M04 SuperAdmin official APIs (`POST /api/rbac/users/:id/permissions` or role delegations).
+  - *Maintenance Authority Delegation:* Hardware maintenance work orders are delegated to M27 EAM (`POST /api/eam/work-orders` with `sourceModule: 'M38'`).
+  - *Audit Authority:* All ticket mutations, SLA updates, access approvals, and CSAT submissions are logged via M02 `AuditService.recordAuditLog()`.
+- **Read APIs:** `GET /api/service-desk/tickets`, `GET /api/service-desk/tickets/:id`, `GET /api/service-desk/sla`, `GET /api/service-desk/sla-policies`, `GET /api/service-desk/access-requests`, `GET /api/service-desk/kpi`, `GET /api/issues` (Canonical compatibility)
+- **Write APIs:**
+  - `POST /api/service-desk/tickets` (Create Ticket with M03 sequence code and idempotency key)
+  - `POST /api/service-desk/tickets/:id/assign` (Assign technician)
+  - `POST /api/service-desk/tickets/:id/accept` (Accept ticket -> IN_PROGRESS)
+  - `POST /api/service-desk/tickets/:id/pause` & `POST /api/service-desk/tickets/:id/resume` (SLA Pause/Resume)
+  - `POST /api/service-desk/tickets/:id/resolve` (Mandatory Root Cause & Resolution Note)
+  - `POST /api/service-desk/tickets/:id/close` (Close Ticket & CSAT Survey, Lock Read-Only)
+  - `POST /api/service-desk/tickets/:id/comment` (Add internal communication message)
+  - `POST /api/service-desk/tickets/:id/create-work-order` (Create M27 EAM Work Order)
+  - `POST /api/service-desk/access-requests` (Create access request with SoD guard)
+  - `POST /api/service-desk/access-requests/:id/approve-manager` (Manager approval)
+  - `POST /api/service-desk/access-requests/:id/approve-security` (Security officer approval for high risk)
+  - `POST /api/service-desk/access-requests/:id/fulfill` (Fulfill via M04 official path)
+- **Cross-Module Integrations:**
+  - **M01 Workspace Hub:** WorkQueue operational tasks and unresolved ticket aggregation.
+  - **M02 Audit Trail:** Tamper-evident SHA-256 audit logging for all ticket lifecycle operations.
+  - **M03 System Settings:** Document sequence number generation (`IT-TKT-YYYY-NNNN`).
+  - **M04 SuperAdmin RBAC:** Permission catalog lookup and delegation fulfillment.
+  - **M05 EventBus:** Transactional outbox event emission (`servicedesk.ticket.*.v1`).
+  - **M27 EAM Asset Maintenance:** Hardware asset linkage and corrective work order synchronization.
+  - **M28 HR Management:** Direct manager resolution and leave calendar filtering for auto-assignment.
+  - **M29 DMS Vault:** Issue attachment linking with SHA-256 integrity verification.
+  - **M37 BI Analytics:** MTTR and SLA on-time compliance reporting.
+- **Status:** **ACCEPTANCE SEAL: SIGNED & LIVE QA CERTIFIED (2026-09-24)**
+- **Dependent Modules:** M01 (Hub), M02 (Audit), M03 (Settings), M04 (RBAC), M05 (EventBus), M27 (EAM), M28 (HRM), M29 (DMS), M37 (BI).
 
 ### M39: Quality Control & Inspection (QMS)
 - **Module ID:** `M39`
@@ -478,11 +652,29 @@ This document constitutes the authoritative, evidence-grounded catalog and mappi
 
 ### M40: Environment, Health & Safety (EHS)
 - **Module ID:** `M40`
-- **Group:** 06. Quản Trị & Hệ Thống
+- **Group:** 06. Quản Trị & Hệ Thống (Governance & Compliance)
 - **Workspace:** `WS29_EHS` | **Route:** `/ehs`
-- **Mounted Component:** `src/pages/EHSPage.tsx`
-- **Domain Authority:** Occupational Safety Incidents, Environmental Compliance, PPE Audits, and Fire Safety.
-- **Read API:** `GET /api/ehs/records`
+- **Mounted Component:** `src/modules/governance/m40-ehs/components/EHSWorkspace.tsx`
+- **Domain Authority:** Occupational Safety Incidents, Job Safety Analysis (JSA 5×5 Risk Matrix), Safety CAPA Enforcement, Field Audit Checklists, Fire Safety (PCCC) Equipment & Periodic Inspection, Environmental Monitoring (QCVN thresholds), and Work Permits / Lockout-Tagout (LOTO) Energy Isolation.
+- **Single-Writer Authority:** `EhsService` (Sole writer for safety incidents, JSA risk scores, EHS CAPA, fire equipment inspection logs, and work permits).
+- **Read APIs:** `GET /api/ehs/incidents`, `GET /api/ehs/risk-assessments`, `GET /api/ehs/capas`, `GET /api/ehs/audits`, `GET /api/ehs/fire-safety/equipment`, `GET /api/ehs/environmental/records`, `GET /api/ehs/permits`, `GET /api/ehs/permits/asset/:assetId/active`, `GET /api/ehs/kpi`
+- **Write APIs:**
+  - `POST /api/ehs/incidents` (Create safety incident log with sequence `INC-YYYY-NNNN`)
+  - `POST /api/ehs/incidents/:id/close` (Close incident & lock with M02 audit trail)
+  - `POST /api/ehs/risk-assessments` (Create JSA risk assessment, auto-calculate 5x5 score & level)
+  - `POST /api/ehs/capas` / `:id/verify` / `:id/close` (Manage CAPA lifecycle)
+  - `POST /api/ehs/audits` (Execute audit checklist; auto-trigger CAPA on mandatory item fail)
+  - `POST /api/ehs/fire-safety/equipment` / `:id/inspect` (Register & renew PCCC inspection)
+  - `POST /api/ehs/environmental/records` (Log effluent/air quality vs QCVN thresholds)
+  - `POST /api/ehs/permits` / `:id/close` (Issue permit to work & LOTO isolation tags)
+- **Cross-Module Integrations:**
+  - **M18 Warehouse Master:** Site location resolution and warehouse scope validation.
+  - **M27 EAM Asset Maintenance:** Read-only LOTO active permit check API (`GET /api/ehs/permits/asset/:assetId/active`) gating Work Orders for high-risk equipment maintenance without modifying M27 code.
+  - **M28 HRM Personnel:** Employee validation for victims and EHS safety officers.
+  - **M02 Audit Trail:** SHA-256 tamper-evident log for closed incidents & permits.
+  - **M05 EventBus:** Outbox event emission (`ehs.incident.logged.v1`, `ehs.incident.closed.v1`).
+- **Status:** **ACCEPTANCE SEAL: SIGNED & LIVE QA CERTIFIED (2026-09-25)**
+- **Dependent Modules:** M02 (Audit), M05 (EventBus), M18 (Warehouse), M27 (EAM), M28 (HRM).
 
 ### M41: Product Pricing & Commercial Authority
 - **Module ID:** `M41`
@@ -499,6 +691,18 @@ This document constitutes the authoritative, evidence-grounded catalog and mappi
 - **Mounted Component:** `src/components/workspaces/M42CogsAllocationWorkspace.tsx`
 - **Domain Authority:** **Exclusive Costing Authority for Cost Pools, Activity-Based Costing (ABC), Landed Cost Allocations, and COGS Determination.**
 - **Read API:** `GET /api/cogs/allocation`
+
+### M43: Industry Profiles & Master Configuration (Hồ Sơ Ngành Hàng)
+- **Module ID:** `M43`
+- **Group:** 01. Dữ liệu Chủ & Thiết lập (Master Data & Setup)
+- **Workspace:** `WS32_INDUSTRY` | **Route:** `/industry-profiles`
+- **Mounted Component:** `src/modules/master-data/industry-profiles/components/IndustryProfileWorkspace.tsx`
+- **Domain Authority:** **Authoritative Configuration for Industry Operating Parameters, Compliance Standards (ISO/GMP/FDA), Default Tax Rates, and Industry-Specific Valuation Rules.**
+- **Database Table:** `industry_profiles`
+- **Read APIs:** `GET /api/industry-profiles`, `GET /api/industry-profiles/:id`
+- **Write APIs:** `POST /api/industry-profiles`, `PUT /api/industry-profiles/:id`, `DELETE /api/industry-profiles/:id`
+- **Cross-Module Integrations:** M07 (Master Data binding), M17/M42 (Valuation method parameter defaults), M02 (Audit Trail for profile updates).
+- **Status:** **ACTIVE & GOVERNANCE CERTIFIED (2026-09-27)**
 
 ---
 
@@ -536,18 +740,19 @@ This document constitutes the authoritative, evidence-grounded catalog and mappi
 | **M28** | HR & Payroll | `/hr` | `WS18_FINANCE` | `<HRManagement />` | `/api/hr/employees` | **CERTIFIED** |
 | **M29** | DMS Documents | `/dms` | `WS28_DMS` | `<DMSPage />` | `/api/dms/documents` | **CERTIFIED** |
 | **M30** | Finance & GL | `/finance` | `WS18_FINANCE` | `<FinanceGL />` | `/api/finance/accounts` | **CERTIFIED** |
-| **M31** | Finance & Invoices (AR/AP)| `/invoices` | `WS19_INVOICES` | `<Invoices />` | `/api/invoices` | **CERTIFIED** |
+| **M31** | Finance & Invoices (AR/AP)| `/invoices` | `WS19_INVOICES` | `<M31InvoicesArApWorkspace />` | `/api/invoices` | **CERTIFIED** |
 | **M32** | Payments & Cash | `/payments` | `WS20_PAYMENTS` | `<Payments />` | `/api/payments` | **CERTIFIED** |
 | **M33** | Bank Reconciliation | `/bank-reconciliation`| `WS21_BANK` | `<BankReconciliation />` | `/api/bank/statements` | **CERTIFIED** |
-| **M34** | Financial Consolidation | `/financial-consolidation`| `WS18_FINANCE` | `<FinancialConsolidation />`| `/api/finance/consolidation` | **CERTIFIED** |
+| **M34** | Financial Consolidation | `/consolidation` | `WS09_CONSOLIDATION` | `<M34FinancialConsolidationWorkspace />` | `/api/finance/consolidation/runs` | **CERTIFIED** |
 | **M35** | Projects & WBS | `/projects` | `WS16_PROJECTS` | `<Projects />` | `/api/projects` | **CERTIFIED** |
 | **M36** | Logistics & Fleet | `/logistics` | `WS17_LOGISTICS`| `<Logistics />` | `/api/logistics/deliveries` | **CERTIFIED** |
-| **M37** | BI & Analytics Reports | `/reports` | `WS18_FINANCE` | `<BIAnalyticsPage />` | `/api/reports/summary` | **CERTIFIED** |
-| **M38** | Service Desk / Sự cố IT | `/issue` | `WS26_SERVICEDESK`| `<Issue />` | `/api/issues` | **CERTIFIED** |
+| **M37** | BI & Analytics Reports | `/analytics` | `M37 - BI & Executive Analytics` | `<M37BiAnalyticsWorkspace />` | `/api/analytics/pnl` | **CERTIFIED** |
+| **M38** | Service Desk / Sự cố IT | `/issue` | `WS26_SERVICEDESK`| `<ServiceDeskWorkspace />` | `/api/service-desk/tickets` | **CERTIFIED** |
 | **M39** | Quality Control QMS | `/quality` | `WS27_QUALITY` | `<QualityManagement />` | `/api/quality/plans` | **CERTIFIED** |
-| **M40** | EHS Safety & Environment | `/ehs` | `WS29_EHS` | `<EHSPage />` | `/api/ehs/records` | **CERTIFIED** |
+| **M40** | EHS Safety & Environment | `/ehs` | `WS29_EHS` | `<EHSWorkspace />` | `/api/ehs/incidents` | **CERTIFIED** |
 | **M41** | Pricing & Price Management | `/pricing-management`| `WS30_PRICING` | `<M41PricingManagementWorkspace />` | `/api/pricing/items` | **CERTIFIED** |
 | **M42** | Cost Allocation & COGS | `/cogs` | `WS31_COGS` | `<M42CogsAllocationWorkspace />` | `/api/cogs/allocation` | **CERTIFIED** |
+| **M43** | Hồ Sơ Ngành Hàng (Industry Profiles) | `/industry-profiles` | `WS32_INDUSTRY` | `<IndustryProfileWorkspace />` | `/api/industry-profiles` | **CERTIFIED** |
 
 ---
-**END OF MODULE_MAP.md — ALL 42 MODULES (M01–M42) VERIFIED & CERTIFIED**
+**END OF MODULE_MAP.md — ALL 43 MODULES (M01–M43) & 32 WORKSPACES (WS01–WS32) VERIFIED & RECORDED**

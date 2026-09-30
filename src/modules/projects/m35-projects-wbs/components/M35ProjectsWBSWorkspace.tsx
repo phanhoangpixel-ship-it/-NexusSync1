@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { SelectedEntityContext } from '../../../../types';
 import { useWorkspaceSessionTab } from '../../../../hooks/useWorkspaceSessionTab';
 import { useWorkspaceAction } from '../../../../components/shell/DomainWorkspaceShell';
@@ -48,6 +48,9 @@ import {
   Target,
   FileSpreadsheet,
   Check,
+  ShieldCheck,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 import { ProjectPortfolioTab } from './ProjectPortfolioTab';
@@ -104,6 +107,50 @@ export const M35ProjectsWBSWorkspace: React.FC<M35Props> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+
+  // Tabs scrolling container ref & state
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState<boolean>(false);
+  const [canScrollRight, setCanScrollRight] = useState<boolean>(false);
+
+  const checkScroll = useCallback(() => {
+    const el = tabsContainerRef.current;
+    if (el) {
+      const { scrollLeft, scrollWidth, clientWidth } = el;
+      setCanScrollLeft(scrollLeft > 6);
+      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 6);
+    }
+  }, []);
+
+  useEffect(() => {
+    const el = tabsContainerRef.current;
+    if (el) {
+      checkScroll();
+      el.addEventListener('scroll', checkScroll, { passive: true });
+      window.addEventListener('resize', checkScroll);
+      return () => {
+        el.removeEventListener('scroll', checkScroll);
+        window.removeEventListener('resize', checkScroll);
+      };
+    }
+  }, [checkScroll, projects.length]);
+
+  const handleScrollTabs = (direction: 'left' | 'right') => {
+    if (tabsContainerRef.current) {
+      const offset = direction === 'left' ? -260 : 260;
+      tabsContainerRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+    }
+  };
+
+  useEffect(() => {
+    if (tabsContainerRef.current) {
+      const activeEl = tabsContainerRef.current.querySelector('[data-active="true"]') as HTMLElement;
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+      checkScroll();
+    }
+  }, [activeTab, checkScroll]);
 
   // Modals state
   const [showCreateProjectModal, setShowCreateProjectModal] = useState<boolean>(false);
@@ -530,8 +577,8 @@ export const M35ProjectsWBSWorkspace: React.FC<M35Props> = ({
     { id: 'JOB_COSTING', label: 'Job Costing Chi Phí', icon: DollarSign },
     { id: 'TIMESHEETS', label: 'Chấm Công Tác Vụ', icon: Clock, badge: timesheets.length },
     { id: 'EVM_ENGINE', label: 'Động Cơ EVM (ISO 21508)', icon: Activity },
-    { id: 'DOCUMENTS', label: 'Hồ Sơ & DMS', icon: FileText, badge: documents.length },
-    { id: 'REPORTS', label: 'Báo Cáo Hiệu Quả', icon: PieChart },
+    { id: 'DOCUMENTS', label: 'Hồ Sơ DMS & Audit M02', icon: ShieldCheck, badge: documents.length },
+    { id: 'REPORTS', label: 'Báo Cáo Dự Án', icon: PieChart },
   ];
 
   // Top Metrics Calculation
@@ -675,38 +722,80 @@ export const M35ProjectsWBSWorkspace: React.FC<M35Props> = ({
         </div>
       </div>
 
-      {/* 3. 10 Navigation Tabs */}
-      <div className="flex items-center gap-1.5 overflow-x-auto border-b border-slate-200 dark:border-slate-800 pb-2 scrollbar-none">
-        {TABS.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer select-none ${
-                isActive
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-800'
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5 shrink-0" />
-              <span>{tab.label}</span>
-              {tab.badge !== undefined && (
-                <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
-                    isActive
-                      ? 'bg-white/20 text-white'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  {tab.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      {/* 3. 10 Navigation Tabs with Scroll Controls */}
+      <div className="relative flex items-center border-b border-slate-200 dark:border-slate-800 pb-2 group">
+        {/* Scroll Left Button */}
+        {canScrollLeft && (
+          <button
+            type="button"
+            onClick={() => handleScrollTabs('left')}
+            className="absolute left-0 z-20 p-1.5 rounded-lg bg-white/95 dark:bg-slate-800/95 shadow-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-blue-600 transition flex items-center justify-center cursor-pointer -translate-y-0.5"
+            title="Cuộn sang trái"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+        )}
+
+        {/* Left Gradient Fade */}
+        {canScrollLeft && (
+          <div className="absolute left-0 top-0 bottom-2 w-8 bg-gradient-to-r from-slate-100 dark:from-slate-950 to-transparent z-10 pointer-events-none" />
+        )}
+
+        {/* Scrollable Tabs Track */}
+        <div
+          ref={tabsContainerRef}
+          className="flex items-center gap-1.5 overflow-x-auto scroll-smooth w-full px-1 scrollbar-none"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                data-active={isActive ? 'true' : 'false'}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer select-none shrink-0 ${
+                  isActive
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5 shrink-0" />
+                <span>{tab.label}</span>
+                {tab.badge !== undefined && (
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                      isActive
+                        ? 'bg-white/20 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Right Gradient Fade */}
+        {canScrollRight && (
+          <div className="absolute right-0 top-0 bottom-2 w-8 bg-gradient-to-l from-slate-100 dark:from-slate-950 to-transparent z-10 pointer-events-none" />
+        )}
+
+        {/* Scroll Right Button */}
+        {canScrollRight && (
+          <button
+            type="button"
+            onClick={() => handleScrollTabs('right')}
+            className="absolute right-0 z-20 p-1.5 rounded-lg bg-white/95 dark:bg-slate-800/95 shadow-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-blue-600 transition flex items-center justify-center cursor-pointer -translate-y-0.5"
+            title="Cuộn sang phải"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* 4. Active Tab Content Rendering */}
@@ -757,7 +846,7 @@ export const M35ProjectsWBSWorkspace: React.FC<M35Props> = ({
         )}
 
         {activeTab === 'RESOURCES' && (
-          <ProjectResourcesTab resources={resources} />
+          <ProjectResourcesTab resources={resources} onResourceAdded={fetchAllData} />
         )}
 
         {activeTab === 'SCHEDULE_GANTT' && (
@@ -765,7 +854,11 @@ export const M35ProjectsWBSWorkspace: React.FC<M35Props> = ({
         )}
 
         {activeTab === 'JOB_COSTING' && (
-          <ProjectJobCostingTab currentProject={currentProject} onSyncToM30={handleSyncToM30} />
+          <ProjectJobCostingTab
+            currentProject={currentProject}
+            onSyncToM30={handleSyncToM30}
+            onProjectUpdated={fetchAllData}
+          />
         )}
 
         {activeTab === 'TIMESHEETS' && (
@@ -785,10 +878,11 @@ export const M35ProjectsWBSWorkspace: React.FC<M35Props> = ({
 
         {activeTab === 'DOCUMENTS' && (
           <ProjectDocumentsTab
-            documents={documents}
+            currentProject={currentProject}
             onOpenAddModal={() => setShowDocumentModal(true)}
             onPreviewDoc={handlePreviewDoc}
             onDownloadDoc={handleDownloadDoc}
+            onProjectUpdated={fetchAllData}
           />
         )}
 

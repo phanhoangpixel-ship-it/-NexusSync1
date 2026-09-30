@@ -1,4 +1,8 @@
+import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import React, { useState, useMemo } from 'react';
+import { TablePagination } from '../../../../components/common/TablePagination';
+import { StatusBadge } from '../../../../components/common/StatusBadge';
+import { BulkActionBar } from '../../../../components/common/BulkActionBar';
 import { RbacUser, RbacRole, SuperAdminDetailItem } from './types';
 import { ConfirmDialogState } from '../../../../types';
 import {
@@ -50,6 +54,9 @@ export const RbacUsersTab: React.FC<RbacUsersTabProps> = ({
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
   const [branchFilter, setBranchFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [userPage, setUserPage] = useState<number>(1);
+  const [userPageSize, setUserPageSize] = useState<number>(15);
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
 
   // Change Role Modal inside row
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
@@ -83,6 +90,11 @@ export const RbacUsersTab: React.FC<RbacUsersTabProps> = ({
       return matchSearch && matchRole && matchBranch && matchStatus;
     });
   }, [users, searchTerm, roleFilter, branchFilter, statusFilter]);
+
+  const paginatedUsers = useMemo(() => {
+    const start = (userPage - 1) * userPageSize;
+    return filteredUsers.slice(start, start + userPageSize);
+  }, [filteredUsers, userPage, userPageSize]);
 
   // Handle Toggle Status with Rule #19 ConfirmDialog
   const handleToggleStatusClick = (user: RbacUser) => {
@@ -423,7 +435,7 @@ export const RbacUsersTab: React.FC<RbacUsersTabProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-              {filteredUsers.map((user) => {
+              {paginatedUsers.map((user) => {
                 const isEditing = editingUserId === user.id;
 
                 return (
@@ -583,6 +595,15 @@ export const RbacUsersTab: React.FC<RbacUsersTabProps> = ({
             </tbody>
           </table>
         </div>
+
+        <TablePagination
+          currentPage={userPage}
+          pageSize={userPageSize}
+          totalItems={filteredUsers.length}
+          onPageChange={setUserPage}
+          onPageSizeChange={setUserPageSize}
+          pageSizeOptions={[10, 15, 25, 50, 100]}
+        />
       </div>
 
       {/* CREATE USER MODAL */}

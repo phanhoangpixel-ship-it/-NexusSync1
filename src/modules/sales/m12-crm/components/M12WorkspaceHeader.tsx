@@ -17,43 +17,39 @@ export const M12WorkspaceHeader: React.FC<M12WorkspaceHeaderProps> = ({
   onExportCSV,
 }) => {
   return (
-    <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 to-[#1e293b] text-white shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-      <div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-            M12 • CRM & LEADS PIPELINE
-          </span>
-          <span className="text-xs text-slate-400">Sales, CRM & O2C Suite • Quản lý Khách hàng Tiềm năng, Báo giá & Phễu Bán hàng</span>
-        </div>
-        <h2 className="text-lg font-bold tracking-tight mt-1">CRM & Quản Trị Khách Hàng Tiềm Năng (Leads & Quotations)</h2>
-        <p className="text-xs text-slate-300 mt-0.5">
-          Theo dõi vòng đời khách hàng từ Tiếp nhận Lead, Nuôi dưỡng Deals, Báo giá thương mại (BPA) đến Chuyển đổi Khách hàng B2B (M03) & Đơn bán hàng (M13).
-        </p>
+    <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+          M12 • CRM & LEADS PIPELINE
+        </span>
+        <span className="text-xs text-slate-500 dark:text-slate-400 hidden lg:inline">
+          Quản lý Khách hàng Tiềm năng, Báo giá & Phễu Bán hàng
+        </span>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
         <button
           type="button"
           onClick={onRefresh}
-          className="flex items-center gap-2 px-3.5 py-2 bg-white/10 hover:bg-white/15 text-white rounded-xl text-xs font-semibold transition-all border border-white/10 cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold transition-all border border-slate-200 dark:border-slate-700 cursor-pointer"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : 'text-slate-500 dark:text-slate-400'}`} />
           <span>Làm mới</span>
         </button>
 
         <button
           type="button"
           onClick={onExportCSV}
-          className="flex items-center gap-2 px-3.5 py-2 bg-white/10 hover:bg-white/15 text-white rounded-xl text-xs font-semibold transition-all border border-white/10 cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold transition-all border border-slate-200 dark:border-slate-700 cursor-pointer"
         >
-          <Download className="w-3.5 h-3.5" />
+          <Download className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
           <span>Xuất CSV</span>
         </button>
 
         <button
           type="button"
           onClick={onOpenNewQuotation}
-          className="flex items-center gap-2 px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
         >
           <FileText className="w-3.5 h-3.5" />
           <span>Lập Báo Giá</span>
@@ -62,7 +58,7 @@ export const M12WorkspaceHeader: React.FC<M12WorkspaceHeaderProps> = ({
         <button
           type="button"
           onClick={onOpenNewLead}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>Thêm Lead Mới</span>

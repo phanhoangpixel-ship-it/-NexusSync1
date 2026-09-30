@@ -7,7 +7,11 @@ import {
 import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import { ConfirmDialogState, SelectedEntityContext } from '../../../../types';
 import { usePagination } from '../../../../hooks/usePagination';
+import { TablePagination } from '../../../../components/common/TablePagination';
 import { PaginationControl } from '../../../../components/common/PaginationControl';
+import { StatusBadge } from '../../../../components/common/StatusBadge';
+import { MoneyCell } from '../../../../components/common/MoneyCell';
+import { QtyCell } from '../../../../components/common/QtyCell';
 import { L3ContentState } from '../../../../components/common/L3ContentState';
 import { StockAdjustmentRecord } from './StockAdjustmentMasterTab';
 

@@ -305,6 +305,7 @@ export const StockAdjustmentService = {
     await db.update(schema.stockAdjustments)
       .set({
         status: "REJECTED",
+        approvalStatus: "REJECTED",
         rejectedBy: userId,
         rejectedAt: new Date(),
         rejectionReason: reason || "Từ chối kiểm kê",

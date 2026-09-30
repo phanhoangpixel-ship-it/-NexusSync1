@@ -17,27 +17,38 @@
 | **01. Commercial & Sales** | M07, M12, M13, M14, M15, M16, M41 | 7 | M07, M12, M13, M15, M16, M41 | M14 |
 | **02. Procurement & Sourcing** | M08, M09, M10, M11 | 4 | M08, M10, M11 | M09 |
 | **03. Inventory & Logistics** | M17, M18, M19, M20, M21, M22, M23, M24, M36 | 9 | M17, M20, M24, M36 | M18, M19, M21, M22, M23 |
-| **04. Manufacturing & Projects**| M06, M25, M26, M27, M35 | 5 | M06, M25 | M26, M27, M35 |
-| **05. Finance & Accounting** | M30, M31, M32, M33, M34, M42 | 6 | M30, M42 | M31, M32, M33, M34 |
+| **04. Manufacturing & Projects**| M06, M25, M26, M27, M35 | 5 | M06, M25, M26, M27, M35 | — |
+| **05. Finance & Accounting** | M30, M31, M32, M33, M34, M42 | 6 | M30, M31, M32, M33, M34, M42 | — |
 | **06. HR & Payroll** | M28 | 1 | — | M28 |
-| **07. Governance, QA & Platform**| M01, M02, M03, M04, M05, M29, M37, M38, M39, M40 | 10 | M02, M39 | M01, M03, M04, M05, M29, M37, M38, M40 |
+| **07. Governance, QA & Platform**| M01, M02, M03, M04, M05, M29, M37, M38, M39, M40 | 10 | M02, M29, M37, M38, M39, M40 | M01, M03, M04, M05 |
 | **CORE Services & IAM** | CORE-IAM, CORE-PLATFORM | 2 | CORE-IAM, CORE-PLATFORM | — |
-| **TOTAL** | **M01 – M42 + CORE** | **42 Modules + 2 Core** | **21 Certified** | **23 Pending Live QA Run** |
+| **TOTAL** | **M01 – M42 + CORE** | **42 Modules + 2 Core** | **32 Certified** | **12 Pending Live QA Run** |
 
 ---
 
 ## 2. Master Test Specifications by Module (M01 – M42)
 
 ### M01 — Workspace Hub & Executive Command Center
-*Workspace: `WS01_WORKSPACE_HUB` | Route: `/` | Component: `WorkspaceHub.tsx` | Authority: WorkspaceAggregationService*
+*Workspace: `WS01_HUB` | Route: `/workspace` | Component: `WorkspaceHub.tsx` (Sub-components: `OperationalActivityTaskCenter.tsx`, `M01ObservabilityPanel.tsx`, `ControlTowerTab.tsx`) | Authority: WorkspaceAggregationBackendService (Read-Only Aggregator)*
 
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M01-F01 | Executive KPI Overview | `/` | `WorkspaceHub.tsx` | Load Workspace | `/api/workspace/summary` | GET | WorkspaceAggregationService | Read-only aggregation | High-level metrics across all 42 modules | PENDING | Workspace Hub | BUSINESS-CRITICAL |
-| M01-F02 | Unified Work Queue | `/` | `WorkspaceHub.tsx` | View Pending Tasks | `/api/workspace/work-items` | GET | TaskManager | `workflow_tasks` | Consolidated action items across domains | PENDING | Task & Approval | CORE-CRITICAL |
-| M01-F03 | Recent Activities Stream | `/` | `WorkspaceHub.tsx` | Stream Activities | `/api/workspace/recent-activities` | GET | AuditService | Read-only audit slice | Chronological activity log feed | PENDING | Audit Trail | BUSINESS |
-| M01-F04 | Workspace Quick Export | `/` | `WorkspaceHub.tsx` | Export Summary | `/api/workspace/export` | GET | WorkspaceAggregationService | Report Generation | Multi-format summary export (PDF/Excel) | PENDING | Workspace Hub | SUPPORTING |
-
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| M01-F01 | Executive KPI Overview | `/workspace` (Tab 1: Control Tower) | `WorkspaceHub.tsx` / `ControlTowerTab.tsx` | Load Workspace Hub | `/api/workspace/summary` | GET | WorkspaceAggregationBackendService | Read-only aggregation | High-level metrics across all modules (Active Workspaces, Pending Tasks, Alerts, System Health) | PASS (2026-09-29) | Workspace Hub | BUSINESS-CRITICAL |
+| M01-F02 | Unified Work Queue | `/workspace` (Tab 2: Activity & Tasks) | `OperationalActivityTaskCenter.tsx` | View Pending Tasks & Action | `/api/workspace/work-items` | GET | WorkspaceAggregationBackendService | Dynamic cross-module aggregation | Consolidated action items across domains (M08, M20, M38, M16...) with priority filters | PASS (2026-09-29) | Task & Approval | CORE-CRITICAL |
+| M01-F03 | Recent Activities Stream | `/workspace` (Tab 2: Activity & Tasks) | `OperationalActivityTaskCenter.tsx` | Stream Activities | `/api/workspace/observability/spans` | GET | AuditService / ObservabilityProjector | Read-only audit slice with SHA-256 masking | Chronological activity log feed with sanitized payloads | PASS (2026-09-29) | Audit Trail | BUSINESS |
+| M01-F04 | Client-side Work Items CSV Export | `/workspace` (Tab 2: Activity & Tasks) | `OperationalActivityTaskCenter.tsx` | Export Data | Client Action | — | Client Export Engine | Read-only memory export | UTF-8 CSV download of active filtered work items | PASS (2026-09-29) | Workspace Hub | SUPPORTING |
+| M01-F05 | NexusFlow Observability Health Score | `/workspace` (Tab 3: Observability) | `M01ObservabilityPanel.tsx` | Xem điểm sức khoẻ hệ thống | `/api/workspace/observability/health` | GET | ObservabilityProjectorService | Read-only projection từ `audit_logs` (chính) + `outbox_events` (phụ) — không mutate | `systemScore`, `status`, phân bố green/yellow/red theo 43 modules | PASS (2026-09-29) | M01 Observability, M02 Audit, M05 EventBus | BUSINESS-CRITICAL |
+| M01-F06 | Module Topology & Registry Drift Detection | `/workspace` (Tab 3: Observability) | `M01ObservabilityPanel.tsx` | Xem bản đồ 43 module | `/api/workspace/observability/topology` | GET | ObservabilityProjectorService | Read-only, đọc `moduleRegistry.ts` | Tự động gắn cờ `registryOnly=true` cho module ngoài dải M01–M42 đã CERTIFIED (hiện tại: M43) | PASS (2026-09-29) | M01 Observability | BUSINESS |
+| M01-F07 | Manual Observability Sync Trigger | `/workspace` (Tab 3: Observability) | `M01ObservabilityPanel.tsx` | Bấm "Đồng bộ ngay" | `/api/workspace/observability/sync` | POST | ObservabilityProjectorService | Ghi `flow_spans` + `module_kpi_snapshots` — bảng dẫn xuất riêng của M01 | Idempotent (unique index `sourceType+sourceRefId`), an toàn khi gọi lặp lại | PASS (2026-09-29) | M01 Observability | CORE-CRITICAL |
+| M01-F08 | Document Preview & DMS File Attachment Count | `/workspace` (Tab 2: Activity & Tasks) | `OperationalActivityTaskCenter.tsx` | Preview Document | `/api/workspace/entity-preview` | GET | WorkspaceAggregationBackendService | Read-only DMS check (`/api/dms/entity/:type/:id/attachments`) | Trả về thông tin thực thể kèm số lượng tài liệu đính kèm | PASS (2026-09-29) | DMS & Document Preview | BUSINESS |
+| M01-F09 | Process Traceability Graph | `/workspace` (Tab 2: Activity & Tasks) | `OperationalActivityTaskCenter.tsx` | View Process Chain | `/api/workspace/process-chains` | GET | UnifiedPipelineEngine | Read-only cross-module lineage | Trực quan hóa tiến trình nghiệp vụ chuỗi P2P & O2C | PASS (2026-09-29) | Traceability | BUSINESS |
+| M01-F12 | Real SLA Calculation & Task Age | `/workspace` (Tab 2: Activity & Tasks) | `OperationalActivityTaskCenter.tsx` | View Task SLA | `/api/workspace/work-items` | GET | WorkspaceAggregationBackendService | Read-only SLA policies (M38) | SLA chính xác từ `sla_policies`, nguồn khác hiển thị 'Chưa có SLA' + tuổi việc | PASS (2026-09-29) | Task Center | BUSINESS-CRITICAL |
+| M01-F13 | Server-side Permission Filtering | `/workspace` (Tab 2: Activity & Tasks) | `OperationalActivityTaskCenter.tsx` | Filter by Role | `/api/workspace/work-items?role=...` | GET | WorkspaceAggregationBackendService | RBAC Permission Evaluation | Phân định `canAction` (chỉ user có quyền mới duyệt) và `isReadOnly` (chỉ xem) | PASS (2026-09-29) | RBAC & Security | CORE-CRITICAL |
+| M01-F14 | Sequential Bulk Action Execution | `/workspace` (Tab 2: Activity & Tasks) | `OperationalActivityTaskCenter.tsx` | Bulk Approve/Reject | `/api/workspace/work-items/bulk-action` | POST | WorkspaceAggregationBackendService | Official Domain Delegation | Xử lý tuần tự từng dòng, idempotencyKey độc lập, 1 dòng lỗi không dừng cả lô | PASS (2026-09-29) | Task & Approval | BUSINESS-CRITICAL |
+| M01-F15 | Multi-View Count Reconciliation | `/workspace` (Tab 2: Activity & Tasks) | `OperationalActivityTaskCenter.tsx` | Reconcile Counts | `/api/workspace/summary` | GET | WorkspaceAggregationBackendService | Unified Calculation Engine | Số đếm badge tab = KPI summary = total items trong danh sách | PASS (2026-09-29) | Task Center | BUSINESS |
+| M01-F16 | Whitelisted Fast Actions Guard | `/workspace` (Tab 2: Activity & Tasks) | `OperationalActivityTaskCenter.tsx` | Quick Action | `/api/workspace/work-items/:id/action` | POST | Domain Services (M08, M20, M38) | Single-Writer Official Delegation | Chỉ thực thi các action được cấp phép, ghi audit log M02, 0 ghi lén sổ lõi | PASS (2026-09-29) | Governance & Security | CORE-CRITICAL |
+| M01-F17 | Server-side Filter, Search & Table Pagination | `/workspace` (Tab 2: Activity & Tasks) | `OperationalActivityTaskCenter.tsx` | Filter & Paginate | `/api/workspace/work-items` | GET | WorkspaceAggregationBackendService | Dynamic Query Filtering | Lọc theo module, trạng thái, SLA, tìm kiếm text, phân trang chuẩn 10/15/25/50 | PASS (2026-09-29) | UI/UX & Navigation | BUSINESS |
+| M01-F18 | Auto-Refresh & Manual Refresh Trigger | `/workspace` (Tab 2: Activity & Tasks) | `OperationalActivityTaskCenter.tsx` | Refresh Data | `/api/workspace/work-items` | GET | WorkspaceAggregationBackendService | Periodic Polling | Tự động làm mới chu kỳ 60s khi tab hiển thị kèm nút kích hoạt tức thì | PASS (2026-09-29) | Task Center | SUPPORTING |
 ---
 
 ### M02 — Centralized Audit & Compliance Trail
@@ -331,26 +342,35 @@
 ---
 
 ### M22 — Lot & Batch Expiry Tracking (FEFO/FIFO)
-*Workspace: `WS11_INVENTORY` | Route: `/lots` | Component: `M22LotsBatchesWorkspace.tsx` | Authority: SerialEngine / InventoryService*
+*Workspace: `WS10_LOTS` | Route: `/lots` | Component: `M22LotsBatchesWorkspace.tsx` | Authority: SerialEngine / InventoryService*
 
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M22-F01 | Lot & Expiry Registration | `/lots` | `M22LotsBatchesWorkspace.tsx` | Register Lot | `/api/lots` | POST | SerialEngine | `lots` | Lot created with Mfg and Expiry dates | PENDING | Lot Tracking | CORE-CRITICAL |
-| M22-F02 | FEFO Picking Recommendation | `/lots` | `M22LotsBatchesWorkspace.tsx` | Get FEFO Order | `/api/lots/fefo-recommendations`| GET | SerialEngine | `lots` sorting | Earliest expiry lots suggested for picking | PENDING | Picking Optimization | CORE-CRITICAL |
-| M22-F03 | Expiry Quarantine Guard | `/lots` | `M22LotsBatchesWorkspace.tsx` | Quarantine Expired | `/api/lots/quarantine` | POST | SerialEngine | `lots.status` | Expired batches locked from sales allocation | PENDING | Quality & Compliance | CORE-CRITICAL |
-| M22-F04 | Backward Lot Traceability | `/lots` | `M22LotsBatchesWorkspace.tsx` | Trace Lot | `/api/lots/:id/trace` | GET | SerialEngine | Lot Genealogy | Full supplier PO to customer SO trace tree | PENDING | Traceability & Recall | CORE-CRITICAL |
+| M22-F01 | Lot & Expiry Registration | `/lots` | `M22LotsBatchesWorkspace.tsx` | Register Lot | `/api/inventory/lots` | POST | SerialEngine | `lots` | Lot created with Mfg and Expiry dates | PASS | Lot Tracking | CORE-CRITICAL |
+| M22-F02 | FEFO Picking Recommendation | `/lots` | `M22LotsBatchesWorkspace.tsx` | Get FEFO Order | `/api/inventory/lots/fefo-simulate`| POST | SerialEngine | `lots` sorting | Earliest expiry lots suggested for picking | PASS | Picking Optimization | CORE-CRITICAL |
+| M22-F03 | Expiry Quarantine Guard | `/lots` | `M22LotsBatchesWorkspace.tsx` | Quarantine Expired | `/api/inventory/lots/:id/status` | PATCH | SerialEngine | `lots.status` | Expired batches locked from sales allocation | PASS | Quality & Compliance | CORE-CRITICAL |
+| M22-F04 | Backward Lot Traceability | `/lots` | `M22LotsBatchesWorkspace.tsx` | Trace Lot | `/api/inventory/lots/:id/trace` | GET | TraceabilityAggregationService | Lot Genealogy | Full supplier PO to customer SO trace tree (2026-09-29) | PASS | Traceability & Recall | CORE-CRITICAL |
+| M22-F05 | Upstream Origin Lineage Tree (F360-02) | `/lots` | `LotsBatchesTraceabilityTab.tsx` | View Origin | `/api/inventory/lots/:id/trace-upstream` | GET | TraceabilityAggregationService | Graph Read-Only | Supplier -> PO -> GRN -> Inbound QC verified (2026-09-29) | PASS | Upstream Lineage | CORE-CRITICAL |
+| M22-F06 | Downstream Consumption Tree (F360-03) | `/lots` | `LotsBatchesTraceabilityTab.tsx` | View Downstream | `/api/inventory/lots/:id/trace-downstream` | GET | TraceabilityAggregationService | Graph Read-Only | MO -> BOM -> FG Lot -> SO -> Customer verified (2026-09-29) | PASS | Downstream Lineage | CORE-CRITICAL |
+| M22-F07 | Unified Chronological Timeline (F360-04) | `/lots` | `LotsBatchesTraceabilityTab.tsx` | View Timeline | `/api/inventory/lots/:id/ledger` | GET | TraceabilityAggregationService | Timeline Read-Only | Stock ledger + KCS + Delivery merged (2026-09-29) | PASS | Event Timeline | BUSINESS |
+| M22-F08 | Quality Dossier & COA M29/M39 (F360-05) | `/lots` | `LotsBatchesTraceabilityTab.tsx` | View Quality | `/api/inventory/lots/:id/trace` | GET | TraceabilityAggregationService | QC Read-Only | Inbound QC parameters & COA specs verified (2026-09-29) | PASS | Quality Compliance | CORE-CRITICAL |
+| M22-F09 | Finance & COGS GL Linkage (F360-06) | `/lots` | `LotsBatchesTraceabilityTab.tsx` | View Finance | `/api/inventory/lots/:id/trace` | GET | TraceabilityAggregationService | GL Read-Only | COGS unit cost & M30 GL vouchers matched (2026-09-29) | PASS | Financial Linkage | CORE-CRITICAL |
+| M22-F10 | Post-Sales RMA Dossier (F360-07) | `/lots` | `LotsBatchesTraceabilityTab.tsx` | View Returns | `/api/returns` | GET | TraceabilityAggregationService | RMA Read-Only | M15 RMA returns queried strictly read-only (2026-09-29) | PASS | After-Sales & RMA | BUSINESS |
+| M22-F11 | Integrity & Conservation Check (F360-08) | `/lots` | `LotsBatchesTraceabilityTab.tsx` | Verify Integrity | `/api/inventory/lots/:id/ledger` | GET | TraceabilityAggregationService | Integrity Read-Only | Zero variance between ledger & physical lot (2026-09-29) | PASS | System Integrity | CORE-CRITICAL |
+| M22-F12 | Exposure Simulation (F360-09) | `/lots` | `LotsBatchesTraceabilityTab.tsx` | Simulate Exposure | `/api/inventory/lots/:id/trace` | GET | TraceabilityAggregationService | Simulation Read-Only | Warehouse + Customer exposure calculated (2026-09-29) | PASS | Risk & Exposure | BUSINESS |
 
 ---
 
 ### M23 — Serial Number & IMEI Lifecycle Tracking
-*Workspace: `WS11_INVENTORY` | Route: `/serials` | Component: `M23SerialsWorkspace.tsx` | Authority: SerialEngine*
+*Workspace: `WS11_SERIALS` | Route: `/serials` | Component: `M23SerialsWorkspace.tsx` | Authority: SerialEngine*
 
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M23-F01 | Serial Number Registration | `/serials` | `M23SerialsWorkspace.tsx` | Register Serials | `/api/serials` | POST | SerialEngine | `serial_numbers` | Unit-level serial numbers generated | PENDING | Serial Tracking | CORE-CRITICAL |
-| M23-F02 | Serial Movement Traceability | `/serials` | `M23SerialsWorkspace.tsx` | Trace Serial | `/api/serials/traceability` | GET | SerialEngine | `serial_movements` | Complete lifecycle (PO ➔ Bin ➔ SO ➔ Warranty) | PENDING | Traceability | CORE-CRITICAL |
-| M23-F03 | Warranty Status Verification | `/serials` | `M23SerialsWorkspace.tsx` | Check Warranty | `/api/serials/warranty-status` | GET | SerialEngine | `serial_numbers` | Active warranty period and repair history | PENDING | After-Sales & RMA | BUSINESS-CRITICAL |
-| M23-F04 | Duplicate Serial Guard | `/serials` | `M23SerialsWorkspace.tsx` | Probe Duplicate | `/api/serials` | POST | SerialEngine | Unique Constraint | Duplicate serial numbers rejected | PENDING | Serial Integrity | CORE-CRITICAL |
+| M23-F01 | Serial Number Registration | `/serials` | `M23SerialsWorkspace.tsx` | Register Serials | `/api/serials` | POST | SerialEngine | `serial_numbers` | Unit-level serial numbers generated | PASS | Serial Tracking | CORE-CRITICAL |
+| M23-F02 | Serial Movement Traceability | `/serials` | `M23SerialsWorkspace.tsx` | Trace Serial | `/api/serials/:id/history` | GET | SerialEngine | `serial_history` | Complete lifecycle (PO ➔ Bin ➔ SO ➔ Warranty) (2026-09-29) | PASS | Traceability | CORE-CRITICAL |
+| M23-F03 | Warranty Status Verification | `/serials` | `M23SerialsWorkspace.tsx` | Check Warranty | `/api/serials/:id/history` | GET | SerialEngine | `serial_numbers` | Active warranty period and repair history | PASS | After-Sales & RMA | BUSINESS-CRITICAL |
+| M23-F04 | Duplicate Serial Guard | `/serials` | `M23SerialsWorkspace.tsx` | Probe Duplicate | `/api/serials` | POST | SerialEngine | Unique Constraint | Duplicate serial numbers rejected | PASS | Serial Integrity | CORE-CRITICAL |
+| M23-F05 | Serial Unit Barcode & Dossier (F360-01) | `/serials` | `M23SerialsWorkspace.tsx` | Inspect Dossier | `/api/serials/:id/history` | GET | SerialEngine | `serial_history` | GS1-128 barcode + PDF export + full audit history (2026-09-29) | PASS | Serial Dossier | BUSINESS |
 
 ---
 
@@ -412,14 +432,23 @@
 ---
 
 ### M27 — Enterprise Asset Maintenance (EAM)
-*Workspace: `WS15_EAM` | Route: `/assets` | Component: `AssetMaintenanceWorkspace.tsx` | Authority: EamService / QualityService*
+*Workspace: `WS15_EAM` | Route: `/assets` (Alias: `/eam`) | Component: `AssetMaintenanceWorkspace.tsx` | Authority: EamService / QualityService | Live QA Certified: 2026-09-22 (13/13 Invariant Tests PASS)*
 
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M27-F01 | Fixed Asset Register | `/assets` | `AssetMaintenanceWorkspace.tsx` | Register Asset | `/api/eam/assets` | POST | EamService | `fixed_assets` | Machinery/Asset recorded with specs | PENDING | EAM & Assets | CORE-CRITICAL |
-| M27-F02 | Preventive Maintenance Schedule | `/assets` | `AssetMaintenanceWorkspace.tsx` | Schedule PM | `/api/eam/maintenance-schedules`| POST | EamService | `maintenance_schedules`| Recurring maintenance calendar active | PENDING | Preventive Maint | BUSINESS-CRITICAL |
-| M27-F03 | Maintenance Work Order & Spare Parts| `/assets` | `AssetMaintenanceWorkspace.tsx` | Issue Maint WO | `/api/eam/work-orders` | POST | InventoryService (M17) | `stock_balances` | Spare parts deducted strictly via M17 | PENDING | EAM & Inventory M17 | CORE-CRITICAL |
-| M27-F04 | Asset Depreciation Sync to GL | `/assets` | `AssetMaintenanceWorkspace.tsx` | Run Depreciation | `/api/eam/assets/depreciation` | POST | AccountingEngine (M30) | `accounting_entries` | Monthly depreciation posted to VAS 214/642 | PENDING | Assets & Finance M30 | CORE-CRITICAL |
+| M27-F01 | Fixed Asset Register | `/assets` | `AssetMaintenanceWorkspace.tsx` | Register Asset | `/api/eam/assets` | POST | EamService | `fixed_assets` | Machinery/Asset recorded with specs | PASS | EAM & Assets | CORE-CRITICAL |
+| M27-F02 | Preventive Maintenance Schedule | `/assets` | `AssetMaintenanceWorkspace.tsx` | Schedule PM | `/api/eam/maintenance-schedules`| POST | EamService | `maintenance_schedules`| Recurring maintenance calendar active | PASS | Preventive Maint | BUSINESS-CRITICAL |
+| M27-F03 | Maintenance Work Order & Spare Parts| `/assets` | `AssetMaintenanceWorkspace.tsx` | Issue Maint WO | `/api/eam/work-orders` | POST | InventoryService (M17) | `stock_balances` | Spare parts deducted strictly via M17 | PASS | EAM & Inventory M17 | CORE-CRITICAL |
+| M27-F04 | Asset Depreciation Sync to GL | `/assets` | `AssetMaintenanceWorkspace.tsx` | Run Depreciation | `/api/eam/assets/depreciation` | POST | AccountingEngine (M30) | `accounting_entries` | Monthly depreciation posted to VAS 214/642 | PASS | Assets & Finance M30 | CORE-CRITICAL |
+| M27-F05 | Asset Criticality Matrix (Tier A/B/C) & Hierarchy | `/assets` | `AssetMaintenanceWorkspace.tsx` | Classify Criticality | `/api/eam/assets` | POST | EamService | `fixed_assets.criticality` | Assets categorized Tier A/B/C for downtime risk prevention | PASS | Asset Master & Risk | CORE-CRITICAL |
+| M27-F06 | Multi-Trigger PM Schedules (Calendar/Meter/Condition) | `/assets` | `AssetMaintenanceWorkspace.tsx` | Create Trigger Plan | `/api/eam/maintenance-schedules` | POST | EamService | `maintenance_schedules.triggerType` | Supports time intervals, meter run hours, and sensor thresholds | PASS | PM Engine | CORE-CRITICAL |
+| M27-F07 | Strict Work Order State Machine Guard | `/assets` | `AssetMaintenanceWorkspace.tsx` | Transition Status | `/api/eam/work-orders/:id/status` | PUT | EamService | `maintenance_work_orders.status` | OPEN -> IN_PROGRESS -> WAITING_PART -> COMPLETED terminal guard | PASS | EAM WO Governance | CORE-CRITICAL |
+| M27-F08 | Incident WO Auto-Trigger from M38 Service Desk | `/assets` | `AssetMaintenanceWorkspace.tsx` | Log Incident WO | `/api/eam/work-orders` | POST | EamService / TaskManager | `maintenance_work_orders` | WO created with sourceModule M38 and INC reference code | PASS | Cross-Module M38/M27 | CORE-CRITICAL |
+| M27-F09 | RMA Repair Routing Work Order from M15 | `/assets` | `AssetMaintenanceWorkspace.tsx` | Route RMA Repair | `/api/eam/work-orders` | POST | EamService / RmaService | `maintenance_work_orders` | WO created with sourceModule M15 and RMA reference code | PASS | Cross-Module M15/M27 | CORE-CRITICAL |
+| M27-F10 | Single-Writer Spare Part Issue via M17 Inventory | `/assets` | `AssetMaintenanceWorkspace.tsx` | Issue Part to WO | `/api/eam/work-orders/:id/issue-parts` | POST | InventoryService (M17) | `stock_transactions`, `stock_ledger` | Deducts stock strictly via M17 InventoryService single writer | PASS | Inventory M17 & EAM | CORE-CRITICAL |
+| M27-F11 | Shortage Spare Part Delegation to M08 Purchase Order | `/assets` | `AssetMaintenanceWorkspace.tsx` | Delegate to PO | `/api/eam/spare-parts/purchase-order` | POST | PurchaseEngine (M08) | `purchase_orders`, `purchase_order_items` | PO auto-created for missing spare parts via M08 Single-Writer | PASS | Procurement M08 & EAM | CORE-CRITICAL |
+| M27-F12 | Reliability RAMS Analytics (MTBF / MTTR / OEE) | `/assets` | `AssetMaintenanceWorkspace.tsx` | Compute Reliability | `/api/eam/analytics/reliability` | GET | EamService | Reliability metrics | Calculates MTBF, MTTR, Availability %, and Tier breakdown | PASS | Reliability Analytics | BUSINESS-CRITICAL |
+| M27-F13 | Audit Logging M02 & Maintenance Dossier Archival M29 | `/assets` | `AssetMaintenanceWorkspace.tsx` | Vault Dossier | `/api/eam/work-orders/:id/complete` | POST | ComplianceService (M02/M29) | `audit_logs`, `dms_documents` | Work order sign-off logged in M02 and archived to M29 DMS vault | PASS | Governance M02/M29 | CORE-CRITICAL |
 
 ---
 
@@ -436,63 +465,99 @@
 ---
 
 ### M29 — Digital Document Management (DMS) & Secure Vault
-*Workspace: `WS28_DMS` | Route: `/digital-dms` | Component: `DMSWorkspace.tsx` | Authority: DmsService / SecurityService*
+*Workspace: `WS28_DMS` | Route: `/dms` (Alias: `/digital-dms`) | Component: `DMSWorkspace.tsx` | Authority: DmsService / SecurityService | Live QA Certified: 2026-09-24 (14/14 Invariant Tests PASS)*
 
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M29-F01 | Cryptographic Document Vault | `/digital-dms` | `DMSWorkspace.tsx` | Upload Document | `/api/dms/vault` | POST | DmsService | `dms_documents` | Document stored with SHA-256 hash | PENDING | DMS Vault | CORE-CRITICAL |
-| M29-F02 | Document Retention Policy Guard | `/digital-dms` | `DMSWorkspace.tsx` | Set Retention | `/api/dms/retention` | PUT | DmsService | `retention_policies` | Legal retention locked against deletion | PENDING | Compliance & DMS | BUSINESS-CRITICAL |
-| M29-F03 | E-Signature & Certificate Sealing | `/digital-dms` | `DMSWorkspace.tsx` | Sign Document | `/api/dms/sign` | POST | DmsService | `e_signatures` | Digitally signed and cryptographically sealed | PENDING | Digital Signatures | CORE-CRITICAL |
-| M29-F04 | Cross-Module Document Archiving | `/digital-dms` | `DMSWorkspace.tsx` | Archive Dossier | `/api/dms/archive` | POST | DmsService | `dms_archives` | Invoices/COAs archived with full provenance | PENDING | DMS Integration | BUSINESS |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| M29-F01 | Cryptographic Document Vault | `/dms` | `DMSWorkspace.tsx` | Upload Document | `/api/dms/vault` | POST | DmsService | `dms_documents` | Document stored with SHA-256 hash | PASS | DMS Vault | CORE-CRITICAL |
+| M29-F02 | Document Retention Policy Guard | `/dms` | `DMSWorkspace.tsx` | Set Retention | `/api/dms/retention` | PUT | DmsService | `retention_policies` | Legal retention locked against deletion | PASS | Compliance & DMS | BUSINESS-CRITICAL |
+| M29-F03 | E-Signature & Certificate Sealing | `/dms` | `DMSWorkspace.tsx` | Sign Document | `/api/dms/documents/:id/sign` | POST | DmsService | `e_signatures` | Digitally signed and cryptographically sealed | PASS | Digital Signatures | CORE-CRITICAL |
+| M29-F04 | Cross-Module Document Archiving | `/dms` | `DMSWorkspace.tsx` | Archive Dossier | `/api/dms/archive` | POST | DmsService | `dms_archives` | Invoices/COAs archived with full provenance | PASS | DMS Integration | BUSINESS |
+| M29-F05 | Entity Linker & Provenance Guard | `/dms` | `DMSWorkspace.tsx` | Link to Entity | `/api/dms/vault` | POST | DmsEntityLinker | `dms_documents` | Validates entity existence across M08, M31, M32 | PASS | DMS Entity Linking | CORE-CRITICAL |
+| M29-F06 | Legal Hold Immutability Shield | `/dms` | `DMSWorkspace.tsx` | Toggle Legal Hold | `/api/dms/retention` | PUT | DmsService | `dms_documents` | Rejects disposal requests while locked | PASS | Legal Compliance | CORE-CRITICAL |
+| M29-F07 | Zero-Overwrite Versioning | `/dms` | `DMSWorkspace.tsx` | Supersede Version | `/api/dms/vault` | POST | DmsService | `dms_documents` | Increments version (v1.0 -> v2.0) and marks old SUPERSEDED | PASS | DMS Versioning | BUSINESS-CRITICAL |
+| M29-F08 | Cryptographic Integrity Audit | `/dms` | `DMSWorkspace.tsx` | Batch Verify | `/api/dms/documents/batch-verify` | POST | DmsService | Audit Verification | 100% hash verification against stored SHA-256 | PASS | Security & Audit | CORE-CRITICAL |
+| M29-F09 | Outbox Event Emission (M05) | `/dms` | `DMSWorkspace.tsx` | Seal Document | `/api/dms/documents/:id/sign` | POST | EventBus | `outbox_events` | Emits dms.document.sealed.v1 idempotently | PASS | Event Driven M05 | CORE-CRITICAL |
+| M29-F10 | Security Classification RBAC | `/dms` | `DMSWorkspace.tsx` | Filter by Level | `/api/dms/documents` | GET | DmsService | RBAC Guard | Redacts RESTRICTED documents for non-admins | PASS | Security RBAC | CORE-CRITICAL |
+| M29-F11 | Missing Attachments Audit Scanner | `/dms` | `DMSWorkspace.tsx` | Scan Reports | `/api/dms/reports/missing-attachments` | GET | DmsService | Advisory Report | Identifies unattached invoices/POs without blocking ops | PASS | Audit Advisory | BUSINESS-CRITICAL |
+| M29-F12 | Controlled Disposal with Tombstone | `/dms` | `DMSWorkspace.tsx` | Request Disposal | `/api/dms/documents/:id/request-disposal` | POST | DmsService (M28 link) | `dms_documents` | Preserves audit tombstone in M02 after disposal | PASS | Governance & Audit | CORE-CRITICAL |
+| M29-F13 | Consumer Attachment Read Gateway | `/dms` | `DMSWorkspace.tsx` | Fetch Attachments | `/api/dms/entity/:type/:id/attachments` | GET | DmsService | Read query | Returns verified attachments for M06, M13, M31 consumers | PASS | Cross-Module Read | BUSINESS-CRITICAL |
 
 ---
 
-### M30 — General Ledger & Financial Accounting (VAS Authority)
-*Workspace: `WS05_FINANCE` | Route: `/finance` | Component: `M30GeneralLedgerWorkspace.tsx` | Authority: AccountingEngine (Sole Authority for General Ledger & VAS Double-Entry)*
+### M30 — General Ledger & Financial Accounting (VAS Authority & Single-Writer)
+*Workspace: `WS18_FINANCE` | Route: `/finance` | Component: `M30GeneralLedgerWorkspace.tsx` | Authority: AccountingEngine (Sole Authority for General Ledger & VAS Double-Entry) | Live QA Certified: 2026-09-23 (10/10 Invariant Tests PASS)*
 
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M30-F01 | Chart of Accounts (COA) Master | `/finance` | `M30GeneralLedgerWorkspace.tsx` | View COA | `/api/finance/chart-of-accounts`| GET | AccountingEngine | `chart_of_accounts` | Standard Vietnamese Accounting System (VAS) | PASS | Finance Master | CORE-CRITICAL |
-| M30-F02 | Double-Entry Journal Voucher | `/finance` | `M30GeneralLedgerWorkspace.tsx` | Post Voucher | `/api/finance/gl/post` | POST | AccountingEngine | `accounting_entries` | Strict Dr = Cr double-entry validation | PASS | General Ledger | CORE-CRITICAL |
-| M30-F03 | Trial Balance & Statement Engine | `/finance` | `M30GeneralLedgerWorkspace.tsx` | Generate TB | `/api/finance/trial-balance` | GET | AccountingEngine | Read-only calculation | Balanced Trial Balance, P&L, Balance Sheet | PASS | Financial Reporting | CORE-CRITICAL |
-| M30-F04 | Fiscal Period Close & Lock Guard | `/finance` | `M30GeneralLedgerWorkspace.tsx` | Close Period | `/api/finance/periods/close` | POST | AccountingEngine | `fiscal_periods` | Period closed; retroactive writes prohibited | PASS | Finance Governance | CORE-CRITICAL |
-| M30-X01 | Single-Writer Invariant Guard | `/finance` | `M30GeneralLedgerWorkspace.tsx` | Direct GL Probe | `/api/finance/gl/post` | POST | AccountingEngine | Boundary Lock | All external writes rejected; M30 is sole GL writer| PASS | Financial Integrity | CORE-CRITICAL |
+| M30-F01 | Chart of Accounts (COA) Master | `/finance` | `M30GeneralLedgerWorkspace.tsx` | View COA | `/api/finance/accounts` | GET | AccountingEngine | `chart_of_accounts` | Standard Vietnamese Accounting System (VAS) COA 1xx-9xx | PASS | Finance Master | CORE-CRITICAL |
+| M30-F02 | Single-Writer GL Journal Post | `/finance` | `M30GeneralLedgerWorkspace.tsx` | Post Voucher | `/api/finance/gl/entries` | POST | AccountingEngine | `accounting_entries` | Strict Dr = Cr double-entry validation & Dr != Cr check | PASS | General Ledger | CORE-CRITICAL |
+| M30-F03 | Trial Balance (TT200) Engine | `/finance` | `M30GeneralLedgerWorkspace.tsx` | Generate TB | `/api/finance/accounts` | GET | AccountingEngine | Read-only calculation | Balanced Trial Balance with category breakdown | PASS | Financial Reporting | CORE-CRITICAL |
+| M30-F04 | Fiscal Period Close & Lock Guard | `/finance` | `M30GeneralLedgerWorkspace.tsx` | Close Period | `/api/finance/period-close` | POST | AccountingEngine | `period_closing_runs` | Period locked; retroactive writes prohibited | PASS | Finance Governance | CORE-CRITICAL |
+| M30-F05 | VAS 911 Period Closing Engine | `/finance` | `M30GeneralLedgerWorkspace.tsx` | Execute 911 Run | `/api/finance/period-close` | POST | AccountingEngine | `accounting_entries`, `period_closing_runs` | Zeroes 5xx/6xx/7xx/8xx accounts to TK 911 & updates 421 | PASS | Period Closing M30 | CORE-CRITICAL |
+| M30-F06 | BCTC VAS Package (B01, B02, B03, B05) | `/finance` | `M30GeneralLedgerWorkspace.tsx` | Generate BCTC | `/api/finance/financial-statements` | GET | AccountingEngine | BCTC Report Engine | Computes B01-DN, B02-DN, B03-DN, B05-DN per TT200/2014 | PASS | BCTC Reporting | CORE-CRITICAL |
+| M30-F07 | Cost Center & Department Summary | `/finance` | `M30GeneralLedgerWorkspace.tsx` | View Cost Center Report | `/api/finance/reports/cost-center-summary` | GET | AccountingEngine | Multi-dimensional aggregation | Enterprise expense distribution across cost centers & deps | PASS | Cost Accounting | BUSINESS-CRITICAL |
+| M30-F08 | Storno Reversal Journaling | `/finance` | `M30GeneralLedgerWorkspace.tsx` | Reverse Journal | `/api/finance/gl/reversal` | POST | AccountingEngine | `accounting_entries` | Generates opposing Storno journal, preserves immutability | PASS | GL Audit & Storno | CORE-CRITICAL |
+| M30-F09 | Real-Time All-Module Cross-Recon | `/finance` | `M30GeneralLedgerWorkspace.tsx` | Run Cross-Recon | `/api/finance/reports/cross-reconciliation` | GET | AccountingEngine | Cross-Subledger Audit | Reconciles GL 131, 331, 156, 1111/1121 vs Sub-Ledgers | PASS | Financial Audit | CORE-CRITICAL |
+| M30-X01 | Single-Writer Invariant Guard | `/finance` | `M30GeneralLedgerWorkspace.tsx` | Direct GL Probe | `/api/finance/gl/entries` | POST | AccountingEngine | Boundary Lock | All external writes rejected; M30 is sole GL writer | PASS | Financial Integrity | CORE-CRITICAL |
+| M30-X02 | Closed-Period Guard | `/finance` | `M30GeneralLedgerWorkspace.tsx` | Post to Closed Period | `/api/finance/gl/entries` | POST | AccountingEngine | Closed Period Guard | Rejects writes into closed fiscal periods with HTTP 403 FORBIDDEN | PASS | Financial Integrity | CORE-CRITICAL |
 
 ---
 
 ### M31 — Invoices AR / AP Management
-*Workspace: `WS06_INVOICES` | Route: `/invoices` | Component: `M31InvoicesArApWorkspace.tsx` | Authority: InvoiceEngine / AccountingEngine (M30)*
+*Workspace: `WS19_INVOICES` | Route: `/invoices` | Component: `M31InvoicesArApWorkspace.tsx` | Authority: InvoiceService / AccountingEngine (M30)*
 
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M31-F01 | Accounts Receivable (AR) Invoices | `/invoices` | `M31InvoicesArApWorkspace.tsx` | View AR Invoices | `/api/invoices/ar` | GET | InvoiceEngine | `invoices` (AR) | Customer e-invoices with payment status | PENDING | AR Management | CORE-CRITICAL |
-| M31-F02 | Accounts Payable (AP) Invoices | `/invoices` | `M31InvoicesArApWorkspace.tsx` | Register AP Bill | `/api/invoices/ap` | POST | InvoiceEngine | `invoices` (AP) | Vendor bills registered for 3-way match | PENDING | AP Management | CORE-CRITICAL |
-| M31-F03 | Invoice GL Posting Delegation | `/invoices` | `M31InvoicesArApWorkspace.tsx` | Post to GL | `/api/invoices/:id/post-gl` | POST | AccountingEngine (M30) | `accounting_entries` | AR/AP posted to GL (131/331) via M30 | PENDING | Invoices & Finance M30 | CORE-CRITICAL |
-| M31-F04 | AR/AP Aging Schedule Analysis | `/invoices` | `M31InvoicesArApWorkspace.tsx` | View Aging Report | `/api/invoices/aging` | GET | InvoiceEngine | Aging Metrics | 0-30, 31-60, 61-90, 90+ days aging breakdown | PENDING | Cash Flow & Credit | BUSINESS-CRITICAL |
+| M31-F01 | Accounts Receivable (AR) Invoices | `/invoices` | `M31InvoicesArApWorkspace.tsx` | View AR Invoices | `/api/invoices/ar` | GET | InvoiceEngine | `invoices` (AR) | Customer e-invoices with payment status | PASS | AR Management | CORE-CRITICAL |
+| M31-F02 | Accounts Payable (AP) Invoices | `/invoices` | `M31InvoicesArApWorkspace.tsx` | Register AP Bill | `/api/invoices/ap` | POST | InvoiceEngine | `invoices` (AP) | Vendor bills registered for 3-way match | PASS | AP Management | CORE-CRITICAL |
+| M31-F03 | Invoice GL Posting Delegation | `/invoices` | `M31InvoicesArApWorkspace.tsx` | Post to GL | `/api/invoices/:id/post-gl` | POST | AccountingEngine (M30) | `accounting_entries` | AR/AP posted to GL (131/331) via M30 | PASS | Invoices & Finance M30 | CORE-CRITICAL |
+| M31-F04 | AR/AP Aging Schedule Analysis | `/invoices` | `M31InvoicesArApWorkspace.tsx` | View Aging Report | `/api/invoices/aging` | GET | InvoiceService | Aging Metrics | 0-30, 31-60, 61-90, 90+ days aging breakdown | PASS | Cash Flow & Credit | BUSINESS-CRITICAL |
+| M31-F05 | E-Invoice Regulatory Issuance & Decree 123 | `/invoices` | `M31InvoicesArApWorkspace.tsx` | Issue E-Invoice HSM | `/api/invoices/:id/issue` | POST | InvoiceService | `invoices` (ISSUED) | Cloud HSM signature, CQT code generated, becomes legally immutable | PASS | E-Invoicing & Legal | CORE-CRITICAL |
+| M31-F06 | 3-Way Match AP Invoices ↔ PO/GR | `/invoices` | `M31InvoicesArApWorkspace.tsx` | Perform 3-Way Match | `/api/invoices/:id/3way-match` | POST | InvoiceService / M08 | 3-Way Match Audit | Reconciles invoice qty/price vs PO and Warehouse GRN within tolerance | PASS | AP & Procurement M08 | CORE-CRITICAL |
+| M31-F07 | Partial Payment Tracking & Allocation | `/invoices` | `M31InvoicesArApWorkspace.tsx` | Record Partial Payment | `/api/invoices/:id/payments` | POST | InvoiceService / M32 | `payments`, `invoices` | Multi-installment tracking, updates status to PARTIAL/PAID, GL post via M30 | PASS | Treasury & Cash M32 | BUSINESS-CRITICAL |
+| M31-F08 | Credit Note AR Debt Offset | `/invoices` | `M31InvoicesArApWorkspace.tsx` | Offset Credit Note | `/api/invoices/:id/offset-credit-note` | POST | InvoiceService / M15 | `payments`, `credit_notes` | Deducts AR debt using RMA Credit Note, posts VAS 521/131 via M30 | PASS | Sales RMA & Debt M15 | BUSINESS-CRITICAL |
+| M31-F09 | Immutable Cancellation & Reversal Posting | `/invoices` | `M31InvoicesArApWorkspace.tsx` | Cancel & Reverse | `/api/invoices/:id/cancel` | POST | InvoiceService / M30 | `invoices`, `accounting_entries` | Cancels invoice safely with automated GL reversal entry in M30 | PASS | GL Audit & Legal | CORE-CRITICAL |
+| M31-F10 | VAT Tax Declaration Mẫu 01/GTGT | `/invoices` | `M31InvoicesArApWorkspace.tsx` | Generate VAT Report | `/api/invoices/tax-declaration` | GET | InvoiceService | VAT Summary Report | Input/output VAT net reconciliation and TT80 Mẫu 01/GTGT data | PASS | Tax Engine Authority | CORE-CRITICAL |
+| M31-F11 | Automated Dunning Reminders & VietQR | `/invoices` | `M31InvoicesArApWorkspace.tsx` | Generate Dunning Notice | `/api/invoices/:id/dunning` | POST | InvoiceService | Dunning notice & QR | Generates official overdue dunning notice with dynamic NAPAS 247 VietQR | PASS | AR Debt Collection | BUSINESS-CRITICAL |
+| M31-F12 | E-Invoice DMS Archiving & Audit Logs | `/invoices` | `M31InvoicesArApWorkspace.tsx` | Archive to DMS | `/api/invoices/:id/archive-dms` | POST | M02 / M29 DMS | DMS Documents & Audit | Archives legal XML/PDF to DMS repository and logs audit trail via M02 | PASS | DMS M29 & Audit M02 | BUSINESS-CRITICAL |
 
 ---
 
 ### M32 — Payments & Treasury Management
-*Workspace: `WS07_PAYMENTS` | Route: `/payments` | Component: `M32PaymentsTreasuryWorkspace.tsx` | Authority: TreasuryEngine / AccountingEngine (M30)*
+*Workspace: `WS20_PAYMENTS` (Alias: `WS07_PAYMENTS`) | Route: `/payments` | Component: `M32PaymentsTreasuryWorkspace.tsx` | Authority: TreasuryService / AccountingEngine (M30 Single-Writer) | Live QA Certified: 2026-09-23 (23/23 Invariant Tests PASS)*
 
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M32-F01 | Cash Book & Treasury Balances | `/payments` | `M32PaymentsTreasuryWorkspace.tsx` | View Cash Book | `/api/treasury/cash-books` | GET | TreasuryEngine | `cash_books` | Real-time cash and bank account balances | PENDING | Treasury Core | CORE-CRITICAL |
-| M32-F02 | Payment Voucher Issuance (AP) | `/payments` | `M32PaymentsTreasuryWorkspace.tsx` | Create Payment | `/api/treasury/payment-vouchers` | POST | AccountingEngine (M30) | `payment_vouchers`, `accounting_entries` | Vendor payment posted to GL 331/112 | PENDING | AP & Treasury | CORE-CRITICAL |
-| M32-F03 | Receipt Voucher Issuance (AR) | `/payments` | `M32PaymentsTreasuryWorkspace.tsx` | Create Receipt | `/api/treasury/receipt-vouchers` | POST | AccountingEngine (M30) | `receipt_vouchers`, `accounting_entries` | Customer collection posted to GL 111/131 | PENDING | AR & Treasury | CORE-CRITICAL |
-| M32-F04 | Cash Flow Forecast | `/payments` | `M32PaymentsTreasuryWorkspace.tsx` | Forecast Cash | `/api/treasury/cash-flow` | GET | TreasuryEngine | Forecast Metrics | Projected 30-day liquidity and inflows | PENDING | Liquidity Management | BUSINESS-CRITICAL |
+| M32-F01 | Cash & Bank Account Register | `/payments` | `M32PaymentsTreasuryWorkspace.tsx` | View Account List | `/api/treasury/bank-accounts` | GET | TreasuryService | `bank_accounts` | Real-time cash and bank account balances & GL codes | PASS | Treasury Core | CORE-CRITICAL |
+| M32-F02 | Receipt Voucher (01-TT) Creation | `/payments` | `M32PaymentsTreasuryWorkspace.tsx` | Create Receipt Voucher | `/api/treasury/vouchers` | POST | TreasuryService | `cash_vouchers` | PT-2026-xxxx voucher created in PENDING_APPROVAL status | PASS | AR & Treasury | CORE-CRITICAL |
+| M32-F03 | Payment Voucher (02-TT) & Overdraft | `/payments` | `M32PaymentsTreasuryWorkspace.tsx` | Create Payment Voucher | `/api/treasury/vouchers` | POST | TreasuryService | `cash_vouchers`, `bank_accounts` | Overdraft guard blocks negative balance transactions | PASS | AP & Treasury | CORE-CRITICAL |
+| M32-F04 | CFO Approval & Single-Writer GL Post | `/payments` | `M32PaymentsTreasuryWorkspace.tsx` | Approve Voucher | `/api/treasury/vouchers/:id/approve` | POST | TreasuryService / M30 | `cash_vouchers`, `accounting_entries` | Balance updated & double-entry GL posted via M30 Single-Writer | PASS | GL & Governance M30 | CORE-CRITICAL |
+| M32-F05 | Internal Fund Transfer (Cash/Bank) | `/payments` | `M32PaymentsTreasuryWorkspace.tsx` | Execute Transfer | `/api/treasury/transfers` | POST | TreasuryService / M30 | `treasury_transfers`, `bank_accounts` | Source/dest balances updated & balanced GL transfer posted | PASS | Liquidity Operations | CORE-CRITICAL |
+| M32-F06 | Central Treasury Gateway (Disburse) | `/payments` | `M32PaymentsTreasuryWorkspace.tsx` | External Disbursement | `/api/treasury/gateway/disburse` | POST | TreasuryService | `cash_vouchers` | Single-point payout for M14, M15, M28, M08 with origin tracking | PASS | Central Gateway M32 | CORE-CRITICAL |
+| M32-F07 | Central Treasury Gateway (Collect) | `/payments` | `M32PaymentsTreasuryWorkspace.tsx` | External Collection | `/api/treasury/gateway/collect` | POST | TreasuryService | `cash_vouchers` | Single-point collection for M13, M16, M31 with origin tracking | PASS | Central Gateway M32 | CORE-CRITICAL |
+| M32-F08 | BTC Regulatory Forms (01-TT & 02-TT) | `/payments` | `M32PaymentsTreasuryWorkspace.tsx` | Print BTC Form | `/api/treasury/vouchers/:id/printable-form` | GET | TreasuryService | Regulatory Print Engine | Official Circular 200/133 layout with 5 signatures & words | PASS | Regulatory Compliance | CORE-CRITICAL |
+| M32-F09 | Dynamic VietQR Payment Integration | `/payments` | `M32PaymentsTreasuryWorkspace.tsx` | Generate VietQR | `/api/treasury/vouchers/:id/vietqr` | GET | TreasuryService | VietQR NAPAS 247 | Standardized VietQR payload & image for rapid collection | PASS | Digital Payments | BUSINESS-CRITICAL |
+| M32-F10 | Voucher Cancellation & Audit Rollback | `/payments` | `M32PaymentsTreasuryWorkspace.tsx` | Cancel Voucher | `/api/treasury/vouchers/:id/cancel` | POST | TreasuryService / M02 | `cash_vouchers`, `bank_accounts`, `audit_logs` | Status CANCELLED, balances restored & M02 SHA-256 audit logged | PASS | Audit & Rollback M02 | CORE-CRITICAL |
+| M32-X01 | Single-Writer Invariant Guard | `/payments` | `M32PaymentsTreasuryWorkspace.tsx` | Direct GL Post Probe | `/api/treasury/vouchers/:id/approve` | POST | AccountingEngine (M30) | Boundary Lock | All cash GL mutations route strictly via M30 single writer | PASS | GL & Governance M30 | CORE-CRITICAL |
 
 ---
 
-### M33 — Bank Reconciliation & Electronic Feeds
-*Workspace: `WS08_BANK` | Route: `/bank-reconciliation` | Component: `M33BankReconciliationWorkspace.tsx` | Authority: BankReconciliationEngine*
+### M33 — Bank Reconciliation & VietQR Electronic Feeds
+*Workspace: `WS21_BANK` | Route: `/bank-reconciliation` | Component: `M33BankReconciliationWorkspace.tsx` | Authority: BankReconciliationEngine (Delegates to M32 Treasury & M30 GL)*
 
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M33-F01 | Bank Account Register | `/bank-reconciliation` | `M33BankReconciliationWorkspace.tsx` | Register Bank | `/api/bank/accounts` | POST | BankReconciliationEngine | `bank_accounts` | Bank account and currency details saved | PENDING | Banking Master | CORE-CRITICAL |
-| M33-F02 | MT940 / CAMT Statement Import | `/bank-reconciliation` | `M33BankReconciliationWorkspace.tsx` | Import Statement | `/api/bank/statements` | POST | BankReconciliationEngine | `bank_statements` | Electronic statement lines ingested | PENDING | Bank Ingestion | CORE-CRITICAL |
-| M33-F03 | Automated Reconciliation Engine | `/bank-reconciliation` | `M33BankReconciliationWorkspace.tsx` | Run Auto-Match | `/api/bank/reconcile` | POST | BankReconciliationEngine | `reconciliation_matches`| Reference/Amount auto-matching executed | PENDING | Reconciliation | CORE-CRITICAL |
-| M33-F04 | Discrepancy Ledger & Unmatched | `/bank-reconciliation` | `M33BankReconciliationWorkspace.tsx` | View Unmatched | `/api/bank/unmatched` | GET | BankReconciliationEngine | `unmatched_items` | Outstanding checks and in-transit items | PENDING | Cash Audit | BUSINESS-CRITICAL |
+| M33-F01 | Bank Account Register | `/bank-reconciliation` | `M33BankReconciliationWorkspace.tsx` | Register Bank Account | `/api/bank/accounts` | GET / POST | BankReconciliationEngine | `bank_accounts` | Bank master record and GL account 1121 linked | PASS | Banking Master | CORE-CRITICAL |
+| M33-F02 | MT940 / CSV Idempotent Statement Import | `/bank-reconciliation` | `M33BankReconciliationWorkspace.tsx` | Import Statement | `/api/bank/statements/import` | POST | BankReconciliationEngine | `bank_transactions` | Electronic statement ingested; duplicate imports skipped via checksum | PASS | Bank Ingestion | CORE-CRITICAL |
+| M33-F03 | Multi-Criteria Automated Reconciliation | `/bank-reconciliation` | `M33BankReconciliationWorkspace.tsx` | Run Auto-Reconcile | `/api/bank/statements/auto-reconcile` | POST | BankReconciliationEngine | `bank_transactions.status` | Auto-matches transactions with Invoices/Vouchers by Ref/Memo/Amount | PASS | Reconciliation | CORE-CRITICAL |
+| M33-F04 | Discrepancy Ledger & Unmatched Items | `/bank-reconciliation` | `M33BankReconciliationWorkspace.tsx` | View Discrepancies | `/api/bank/unmatched` | GET | BankReconciliationEngine | `bank_transactions` | Displays in-transit deposits, unrecorded charges, and bank variances | PASS | Cash Audit | BUSINESS-CRITICAL |
+| M33-F05 | Dynamic VietQR NAPAS 247 Generator | `/bank-reconciliation` | `M33BankReconciliationWorkspace.tsx` | Generate VietQR | `/api/bank/vietqr/generate` | POST | BankReconciliationEngine | EMVCo Payload | Generates standard VietQR code with transaction memo & CRC16 checksum | PASS | Digital Payments | BUSINESS-CRITICAL |
+| M33-F06 | VietQR Webhook & M32 Auto-Receipt Post | `/bank-reconciliation` | `M33BankReconciliationWorkspace.tsx` | Webhook Trigger | `/api/bank/webhook/vietqr` | POST | TreasuryService (M32) / M30 | `cash_vouchers`, `invoices` | Webhook creates official 01-TT Receipt Voucher via M32 & posts M30 GL | PASS | Central Gateway M32 | CORE-CRITICAL |
+| M33-F07 | Invoice & Voucher Auto-Match (AR/AP) | `/bank-reconciliation` | `M33BankReconciliationWorkspace.tsx` | Auto-Match Invoices | `/api/bank/statements/auto-reconcile` | POST | BankReconciliationEngine | `invoices.paymentStatus` | Invoices marked PAID and payment links established atomically | PASS | AR/AP Clearing | CORE-CRITICAL |
+| M33-F08 | Manual Match, Override & Unmatch | `/bank-reconciliation` | `M33BankReconciliationWorkspace.tsx` | Manual Match / Unmatch | `/api/bank/statements/manual-match` | POST | BankReconciliationEngine / M02 | `bank_transactions`, `audit_logs` | Manual override executed and full tamper-evident audit logged to M02 | PASS | Audit & Override | CORE-CRITICAL |
+| M33-F09 | Form 08-TT Reconciliation Statement | `/bank-reconciliation` | `M33BankReconciliationWorkspace.tsx` | Generate Form 08-TT | `/api/bank/reconciliation-report` | GET | BankReconciliationEngine | Regulatory Report | Produces official Circular 200/2014/TT-BTC Form 08-TT balanced statement | PASS | Regulatory Compliance | CORE-CRITICAL |
+| M33-X01 | Single-Writer Invariant & Boundary Guard | `/bank-reconciliation` | `M33BankReconciliationWorkspace.tsx` | Direct GL Post Probe | `/api/bank/statements/manual-match` | POST | AccountingEngine (M30) | Boundary Lock | Prohibits direct `accounting_entries` write; routes solely via M32/M30 | PASS | GL & Governance M30 | CORE-CRITICAL |
 
 ---
 
@@ -501,22 +566,41 @@
 
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M34-F01 | Multi-Entity Consolidation Run | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | Run Consolidation | `/api/finance/consolidation/runs` | POST | ConsolidationEngine | `consolidation_runs` | Financials aggregated across branches/entities | PENDING | Group Finance | CORE-CRITICAL |
-| M34-F02 | Intercompany Elimination Vouchers | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | Post Elimination | `/api/finance/consolidation/eliminations`| POST | ConsolidationEngine | `elimination_entries` | Internal trade/debt balances netted out | PENDING | Intercompany Accounting| CORE-CRITICAL |
-| M34-F03 | Consolidated Financial Statements | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | View Report | `/api/finance/consolidation/reports` | GET | ConsolidationEngine | Consolidated reports | Group Balance Sheet, P&L, and Cash Flow | PENDING | Group Executive | CORE-CRITICAL |
-| M34-F04 | Currency Translation Adjustment | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | Run FX Translation | `/api/finance/consolidation/fx-rates` | POST | ConsolidationEngine | `fx_adjustments` | Multi-currency translation to VND | PENDING | FX Accounting | BUSINESS-CRITICAL |
+| M34-F01 | Multi-Entity Consolidation Scope | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | Fetch Scope | `/api/finance/consolidation/scope` | GET | ConsolidationEngine | `intercompany_scope` | Entity hierarchy & ownership % read-only check | PASS (2026-09-24) | Group Structure | CORE-CRITICAL |
+| M34-F02 | Automated Consolidation Run | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | Run Consolidation | `/api/finance/consolidation/runs` | POST | ConsolidationEngine | `consolidation_runs` | Branch trial balances aggregated & balanced | PASS (2026-09-24) | Group Finance | CORE-CRITICAL |
+| M34-F03 | Intercompany Trade/Debt Elimination | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | Auto-Eliminate | `/api/finance/consolidation/eliminations` | GET | ConsolidationEngine | `elimination_entries` | Internal trade/debt balances automatically netted out | PASS (2026-09-24) | Intercompany Accounting | CORE-CRITICAL |
+| M34-F04 | Intercompany Debt Reconciliation | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | Reconcile Debt | `/api/finance/consolidation/reconciliations` | GET | ConsolidationEngine | AR/AP Match Engine | AR/AP 131 vs 331 matched & mismatches alerted | PASS (2026-09-24) | Intercompany Debt | CORE-CRITICAL |
+| M34-F05 | Balance Sheet & PnL Balance Check | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | Check Balance | `/api/finance/consolidation/reports` | GET | ConsolidationEngine | Consolidated Financials | Assets = Liabilities + Equity & Profit equality validated | PASS (2026-09-24) | Group Financials | CORE-CRITICAL |
+| M34-F06 | Multi-Currency FX Translation | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | Translate FX | `/api/finance/consolidation/fx-rates` | POST | ConsolidationEngine | `fx_adjustments` | Multi-currency translation using M03 rates | PASS (2026-09-24) | FX Accounting | BUSINESS-CRITICAL |
+| M34-F07 | Idempotent Run Guard | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | Retry Run | `/api/finance/consolidation/runs` | POST | ConsolidationEngine | `consolidation_runs.idempotencyKey` | Identical key returns existing run with 0 duplicate | PASS (2026-09-24) | Execution Safety | CORE-CRITICAL |
+| M34-F08 | Atomic Concurrent Approval Guard | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | Approve Run | `/api/finance/consolidation/runs/:id/approve` | POST | ConsolidationEngine | `consolidation_runs.status` | Optimistic lock: 1 SUCCESS + 1 ALREADY_PROCESSED | PASS (2026-09-24) | Concurrency Guard | CORE-CRITICAL |
+| M34-F09 | Terminal State Immutability Guard | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | Lock Run | `/api/finance/consolidation/runs/:id/lock` | POST | ConsolidationEngine | `consolidation_runs.status` | Immutability check blocks edits to APPROVED/LOCKED run | PASS (2026-09-24) | Data Integrity | CORE-CRITICAL |
+| M34-F10 | Multi-Level Report Drill-Down | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | Drill-down Item | `/api/finance/consolidation/runs/:id/drill-down` | GET | ConsolidationEngine | Line Item Audit | Full trace from consolidated line → branch → M30 GL | PASS (2026-09-24) | Financial Auditability | CORE-CRITICAL |
+| M34-F11 | RBAC Role Authorization Guard | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | Executive Action | `/api/finance/consolidation/runs/:id/approve` | POST | ConsolidationEngine | Role Permission Guard | CFO/ADMIN authorization enforced for approvals | PASS (2026-09-24) | RBAC Governance | CORE-CRITICAL |
+| M34-F12 | Immutable Audit & DMS Vaulting | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | Seal DMS | `/api/finance/consolidation/runs/:id/seal-dms` | POST | ConsolidationEngine / DMS | `audit_logs`, `dms_documents` | M02 audit log + SHA-256 sealed document in M29 DMS | PASS (2026-09-24) | Audit & Compliance | CORE-CRITICAL |
+| M34-F13 | Cross-Module Outbox Event Emission | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | Complete Run | `/api/finance/consolidation/reports` | GET | ConsolidationEngine | `outbox_events` | Emits `finance.consolidation.run.completed.v1` for M37 BI | PASS (2026-09-24) | Cross-Module Sync | CORE-CRITICAL |
+| M34-F14 | Single-Writer Invariant & Regression Guard | `/consolidation` | `M34FinancialConsolidationWorkspace.tsx` | Run Pipeline | `/api/finance/consolidation/runs` | POST | ConsolidationEngine | Single-Writer Guard | Read-only check: Zero mutation to M30/M17/M42 ledgers | PASS (2026-09-24) | System Invariants | CORE-CRITICAL |
 
 ---
 
 ### M35 — Projects & Work Breakdown Structure (WBS)
-*Workspace: `WS10_PROJECTS` | Route: `/projects` | Component: `M35ProjectsWBSWorkspace.tsx` | Authority: ProjectService*
+*Workspace: `WS16_PROJECTS` | Route: `/projects` | Component: `M35ProjectsWBSWorkspace.tsx` | Authority: ProjectService*
 
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M35-F01 | Project Initiation & WBS Setup | `/projects` | `M35ProjectsWBSWorkspace.tsx` | Create WBS | `/api/projects/:id/wbs` | POST | ProjectService | `projects`, `wbs_nodes` | Hierarchical project tasks and milestones | PENDING | Project Core | CORE-CRITICAL |
-| M35-F02 | Milestone Progress Tracking | `/projects` | `M35ProjectsWBSWorkspace.tsx` | Update Progress | `/api/projects/:id/progress` | PUT | ProjectService | `project_milestones` | Task completion and milestone achievement | PENDING | Project Tracking | BUSINESS-CRITICAL |
-| M35-F03 | Earned Value Management (EVM) | `/projects` | `M35ProjectsWBSWorkspace.tsx` | Compute EVM | `/api/projects/evm` | GET | CostingEngine (M42) | EVM Metrics | Schedule Variance (SV) and Cost Variance (CV) | PENDING | Project Costing M42 | CORE-CRITICAL |
-| M35-F04 | Project Resource Allocation | `/projects` | `M35ProjectsWBSWorkspace.tsx` | Allocate Resource | `/api/projects/resources` | POST | ProjectService | `project_resources` | Staff and equipment assigned to tasks | PENDING | Resource Management | BUSINESS |
+| M35-F01 | Project Charter & Initiation | `/projects` | `M35ProjectsWBSWorkspace.tsx` | Create Project | `/api/projects` | POST | ProjectService | `projects` | Master project charter, budget baseline & PM created | PASS | Project Core | CORE-CRITICAL |
+| M35-F02 | Multi-tier WBS Hierarchy & Tasks | `/projects` | `M35ProjectsWBSWorkspace.tsx` | Add WBS Node | `/api/projects/:id/wbs` | POST | ProjectService | `wbs_nodes` | Multi-level WBS tree with budget, assignee & dates | PASS | WBS Scheduling | CORE-CRITICAL |
+| M35-F03 | Task Predecessors & Critical Path | `/projects` | `M35ProjectsWBSWorkspace.tsx` | Link Dependency | `/api/projects/:id/wbs` | POST | ProjectService | `wbs_nodes.dependencyCode` | Dependency linking and critical path computation | PASS | Schedule Network | BUSINESS-CRITICAL |
+| M35-F04 | Project Progress & ISO 21508 EVM | `/projects` | `M35ProjectsWBSWorkspace.tsx` | Update Progress | `/api/projects/:id/progress` | PUT | ProjectService | `projects.progressPct` | Progress updated with auto recalculation of CPI & SPI | PASS | EVM Analytics | CORE-CRITICAL |
+| M35-F05 | Resource Roster & Capacity (M28) | `/projects` | `M35ProjectsWBSWorkspace.tsx` | Register Resource | `/api/projects/resources` | POST | ProjectService | `project_resources` | Labor/equipment/subcontractor capacity & rate registered | PASS | Resource Pool | BUSINESS-CRITICAL |
+| M35-F06 | Timesheet & Labor Costing (M28/M30)| `/projects` | `M35ProjectsWBSWorkspace.tsx` | Log Timesheet | `/api/projects/:id/timesheets` | POST | ProjectService | `project_timesheets`, `project_cost_ledger` | Time logged, labor cost computed & posted to TK 622 | PASS | Labor Costing M28 | CORE-CRITICAL |
+| M35-F07 | Material Issue Delegation (M17/M42)| `/projects` | `M35ProjectsWBSWorkspace.tsx` | Issue Material | `/api/projects/:id/material-issue` | POST | InventoryService (M17) | `stock_ledger`, `project_costs` | Stock deducted via M17 single writer & unit cost from M42 | PASS | Inventory M17 & M42 | CORE-CRITICAL |
+| M35-F08 | Aggregated 5-Component Job Costing | `/projects` | `M35ProjectsWBSWorkspace.tsx` | View Job Cost | `/api/projects/:id/job-cost` | GET | ProjectService | Unified Cost Ledger | 5-component breakdown (Labor, Material, Equip, Sub, OH) | PASS | Job Costing | CORE-CRITICAL |
+| M35-F09 | Milestone & Progress Invoicing (M31)| `/projects` | `M35ProjectsWBSWorkspace.tsx` | Create Invoice | `/api/projects/:id/billing` | POST | InvoiceService (M31) | `invoices`, `accounting_entries` | VAT invoice generated via M31 & posted to M30 GL | PASS | Billing M31 & GL M30 | CORE-CRITICAL |
+| M35-F10 | POC Revenue Recognition (VAS 15) | `/projects` | `M35ProjectsWBSWorkspace.tsx` | Analyze Margin | `/api/projects/:id/margin` | GET | ProjectService | Financial Health | Percentage of Completion revenue & gross margin % | PASS | Financial Analytics | CORE-CRITICAL |
+| M35-F11 | Change Order & Budget Baseline Rev | `/projects` | `M35ProjectsWBSWorkspace.tsx` | Submit Change Order | `/api/projects/:id/budget-revisions` | POST | ProjectService | `project_budget_versions` | Approved change order updates budget baseline & audit | PASS | Scope & Budget | CORE-CRITICAL |
+| M35-F12 | Project Terminal State Immutability | `/projects` | `M35ProjectsWBSWorkspace.tsx` | Close Project | `/api/projects/:id/status` | PUT | ProjectService | `projects.status` | State guard blocks modifications to CLOSED/COMPLETED projects | PASS | Governance & Integrity | CORE-CRITICAL |
+| M35-F13 | Audit Log (M02) & DMS Storage (M29)| `/projects` | `M35ProjectsWBSWorkspace.tsx` | Audit & Archive | `/api/projects/:id` | GET / POST | AuditService (M02) / DMS (M29) | `audit_logs`, `dms_documents` | Immutable SHA-256 audit log and document vaulting | PASS | Audit M02 & DMS M29 | CORE-CRITICAL |
 
 ---
 
@@ -545,26 +629,48 @@
 ---
 
 ### M37 — Business Intelligence & Executive Analytics
-*Workspace: `WS19_ANALYTICS` | Route: `/analytics` | Component: `M37BiAnalyticsWorkspace.tsx` | Authority: WorkspaceAggregationService*
+*Workspace: `M37 - BI & Executive Analytics` | Route: `/analytics` (Alias: `/reports`) | Component: `M37BiAnalyticsWorkspace.tsx` | Authority: AnalyticsService (Read-Only; M30 GL Single-Writer)*
 
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M37-F01 | Executive KPI Aggregation | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | Load Analytics | `/api/analytics/kpis` | GET | WorkspaceAggregationService | Read-only aggregation | Cross-domain revenue, COGS, inventory KPIs | PENDING | Executive Analytics | BUSINESS-CRITICAL |
-| M37-F02 | Real-time Dashboard Visuals | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | Switch Dashboard | `/api/analytics/dashboards` | GET | WorkspaceAggregationService | Analytical Visuals | Recharts visual graphs across business units | PENDING | BI Dashboards | BUSINESS |
-| M37-F03 | Ad-hoc Report Export Engine | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | Export Report | `/api/analytics/reports/export` | GET | WorkspaceAggregationService | Report Generation | Excel/PDF export of complex multi-entity data | PENDING | Reporting Engine | BUSINESS-CRITICAL |
-| M37-F04 | Predictive Trends Forecast | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | View Trends | `/api/analytics/forecast` | GET | WorkspaceAggregationService | Statistical Forecast | 90-day moving average and trend prediction | PENDING | Predictive Analytics | BUSINESS |
+| M37-F01 | Executive KPI Aggregation | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | Load Analytics | `/api/analytics/kpis` | GET | AnalyticsService | Read-Only Aggregation | Cross-domain revenue, COGS, inventory KPIs | PASS (2026-09-25) | Executive Analytics | BUSINESS-CRITICAL |
+| M37-F02 | Real-time Dashboard Visuals | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | Switch View | `/api/analytics/pnl-monthly` | GET | AnalyticsService | Analytical Visuals | Recharts visual graphs across business units | PASS (2026-09-25) | BI Dashboards | BUSINESS |
+| M37-F03 | Ad-hoc Report Export Engine | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | Export Report | `/api/analytics/export` | POST | AnalyticsService / DMS | `export_jobs` | Excel/PDF idempotent export with M29 Doc ID | PASS (2026-09-25) | Reporting Engine | BUSINESS-CRITICAL |
+| M37-F04 | Predictive Trends Forecast | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | View Trends | `/api/analytics/forecast` | GET | AnalyticsService | Statistical Forecast | 90-day cashflow and trend prediction | PASS (2026-09-25) | Predictive Analytics | BUSINESS |
+| M37-F05 | VAS P&L Income Statement | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | Load P&L | `/api/analytics/pnl` | GET | AnalyticsService / M30 | Read-Only GL | Income statement matches M30 Trial Balance | PASS (2026-09-25) | Financial Reporting | CORE-CRITICAL |
+| M37-F06 | Direct Cash Flow Statement | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | Load Cashflow | `/api/analytics/cashflow` | GET | AnalyticsService / M32/M33 | Read-Only Treasury | Cash balance matches M32/M33 balances | PASS (2026-09-25) | Treasury Analytics | CORE-CRITICAL |
+| M37-F07 | Inventory Turnover & Ratios | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | Load Ratios | `/api/analytics/turnover-ratios` | GET | AnalyticsService / M17/M42 | Read-Only Inventory/Costing | Turnover ratio = COGS / Avg Inventory | PASS (2026-09-25) | Working Capital | BUSINESS-CRITICAL |
+| M37-F08 | Source Document Drill-Down | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | Drilldown Category | `/api/analytics/category-drilldown` | GET | AnalyticsService | Drilldown Navigation | Category drilldown to source transactions | PASS (2026-09-25) | Data Traceability | BUSINESS |
+| M37-F09 | Branch & Group Scope | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | Toggle Scope | `/api/analytics/pnl` | GET | AnalyticsService / M34 | Scope Filter | Branch or Consolidated scope fallback | PASS (2026-09-25) | Multi-Entity | BUSINESS-CRITICAL |
+| M37-F10 | Idempotent Export Engine | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | Re-export | `/api/analytics/export` | POST | AnalyticsService | `export_jobs` | Concurrent request returns same jobId | PASS (2026-09-25) | Export Governance | CORE-CRITICAL |
+| M37-F11 | Sales Channel Distribution | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | Load Channels | `/api/analytics/channel-distribution` | GET | AnalyticsService | Sales Share | Revenue distribution across channels | PASS (2026-09-25) | Commercial Analytics | BUSINESS |
+| M37-F12 | Branch Performance Matrix | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | Load Branches | `/api/analytics/branch-performance` | GET | AnalyticsService | Branch Comparison | Revenue/Margin breakdown per branch | PASS (2026-09-25) | Operational Analytics | BUSINESS |
+| M37-F14 | Executive RBAC Enforcement | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | Access Report | `/api/analytics/pnl` | GET | AnalyticsService / M04 | Role Guard | Requires `analytics.executive.view` | PASS (2026-09-25) | RBAC Security | CORE-CRITICAL |
+| M37-F15 | Audit Log & Verification | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | View Statement | `/api/analytics/pnl` | GET | AuditService (M02) | `audit_logs` | Audit trail recorded for C-level views | PASS (2026-09-25) | Audit Trail | CORE-CRITICAL |
+| M37-F16 | M05 EventBus Outbox Emission | `/analytics` | `M37BiAnalyticsWorkspace.tsx` | Export Report | `/api/analytics/export` | POST | EventBus (M05) | `outbox_events` | Emits `analytics.report.exported.v1` | PASS (2026-09-25) | EDA Sync | BUSINESS-CRITICAL |
 
 ---
 
 ### M38 — IT Service Desk & Incident SLA Management
-*Workspace: `WS20_SERVICEDESK` | Route: `/service-desk` | Component: `ServiceDeskWorkspace.tsx` | Authority: TaskManager / QualityService*
+*Workspace: `WS26_SERVICEDESK` | Route: `/issue` (Alias: `/service-desk`) | Component: `ServiceDeskWorkspace.tsx` | Authority: ServiceDeskService (ITIL v4 & ITSM Single-Writer)*
 
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M38-F01 | Service Ticket Creation | `/service-desk` | `ServiceDeskWorkspace.tsx` | Create Ticket | `/api/service-desk/tickets` | POST | TaskManager | `service_tickets` | Ticket logged with priority and category | PENDING | IT Service Desk | BUSINESS-CRITICAL |
-| M38-F02 | SLA Deadline & Escalation Engine | `/service-desk` | `ServiceDeskWorkspace.tsx` | Monitor SLA | `/api/service-desk/sla` | GET | TaskManager | `sla_timers` | Real-time SLA breach countdown active | PENDING | SLA Governance | CORE-CRITICAL |
-| M38-F03 | Incident Investigation & Resolution | `/service-desk` | `ServiceDeskWorkspace.tsx` | Resolve Ticket | `/api/service-desk/tickets/:id/resolve` | POST | TaskManager | `service_tickets` | Root cause documented and resolved | PENDING | Incident Management | BUSINESS-CRITICAL |
-| M38-F04 | Resolution Sign-off & Ticket Close | `/service-desk` | `ServiceDeskWorkspace.tsx` | Close Ticket | `/api/service-desk/:id/close` | POST | TaskManager | `service_tickets.status` | Ticket officially closed with feedback | PENDING | Service Sign-off | CORE-CRITICAL |
+| M38-F01 | Service Ticket Creation (M03 Seq) | `/issue` | `ServiceDeskWorkspace.tsx` | Create Ticket | `/api/service-desk/tickets` | POST | ServiceDeskService | `tickets`, `ticket_status_history` | Ticket logged with sequence `IT-TKT-YYYY-NNNN` | PASS | IT Service Desk | BUSINESS-CRITICAL |
+| M38-F02 | SLA Deadline & Real-time Warning | `/issue` | `ServiceDeskWorkspace.tsx` | Monitor SLA | `/api/service-desk/sla` | GET | ServiceDeskService | `tickets` SLA flags | Real-time 75%/90% warnings & breach tracking | PASS | SLA Governance | CORE-CRITICAL |
+| M38-F03 | Mandatory Root Cause Resolution | `/issue` | `ServiceDeskWorkspace.tsx` | Resolve Ticket | `/api/service-desk/tickets/:id/resolve` | POST | ServiceDeskService | `tickets.status`, `ticket_status_history` | Root cause & resolution notes documented | PASS | Incident Management | BUSINESS-CRITICAL |
+| M38-F04 | Resolution Sign-off & Terminal Lock| `/issue` | `ServiceDeskWorkspace.tsx` | Close Ticket | `/api/service-desk/tickets/:id/close` | POST | ServiceDeskService | `tickets.status`, `ticket_surveys` | Ticket closed with CSAT and locked Read-Only | PASS | Service Sign-off | CORE-CRITICAL |
+| M38-F05 | Priority Impact Matrix (P1–P4) | `/issue` | `ServiceDeskWorkspace.tsx` | Select Matrix | `/api/service-desk/tickets` | POST | ServiceDeskService | `tickets.priority` | Impact x Urgency automatically computes P1–P4 | PASS | Classification | BUSINESS-CRITICAL |
+| M38-F06 | SLA Policy Engine & Pause Clock | `/issue` | `ServiceDeskWorkspace.tsx` | Pause/Resume | `/api/service-desk/tickets/:id/pause` | POST | ServiceDeskService | `tickets.sla_paused_at` | SLA timer paused on PENDING/WAITING states | PASS | SLA Engine | CORE-CRITICAL |
+| M38-F07 | Auto-Assignment & HRM Leave Filter | `/issue` | `ServiceDeskWorkspace.tsx` | Auto-assign | `/api/service-desk/tickets` | POST | ServiceDeskService | `tickets.assigned_agent_id` | Assigns available agent excluding M28 leaves | PASS | Resource Dispatch | BUSINESS |
+| M38-F09 | Access Request SoD & M04 Execution | `/issue` | `ServiceDeskWorkspace.tsx` | Request Access | `/api/service-desk/access-requests` | POST | ServiceDeskService | `ticket_access_requests` | SoD enforced; High-risk 2-tier; M04 fulfillment | PASS | RBAC & Security | CORE-CRITICAL |
+| M38-F10 | Equipment & Asset Linkage | `/issue` | `ServiceDeskWorkspace.tsx` | Link Hardware | `/api/service-desk/tickets` | POST | ServiceDeskService | `tickets.asset_id` | Hardware linked to M27 asset / M23 serial | PASS | Hardware Support | BUSINESS |
+| M38-F11 | M27 EAM Work Order Creation & Sync| `/issue` | `ServiceDeskWorkspace.tsx` | Create WO | `/api/service-desk/tickets/:id/create-work-order`| POST| EamService (M27) | `maintenance_work_orders` | WO created with sourceModule 'M38' | PASS | Maintenance M27 | CORE-CRITICAL |
+| M38-F12 | DMS Document Vault Attachments | `/issue` | `ServiceDeskWorkspace.tsx` | Attach Log | `/api/dms/documents` | GET | DmsService (M29) | `dms_documents` | Attachments verified via M29 vault SHA-256 | PASS | DMS M29 | BUSINESS |
+| M38-F15 | Append-Only Status History | `/issue` | `ServiceDeskWorkspace.tsx` | View History | `/api/service-desk/tickets/:id` | GET | ServiceDeskService | `ticket_status_history` | Complete chronological audit log of states | PASS | Traceability | CORE-CRITICAL |
+| M38-F17 | Idempotency Key Guard | `/issue` | `ServiceDeskWorkspace.tsx` | Re-submit | `/api/service-desk/tickets` | POST | ServiceDeskService | `tickets.idempotency_key` | Idempotent submission prevents duplicate tickets | PASS | Concurrency Guard | CORE-CRITICAL |
+| M38-F18 | Outbox Event Emission (M05) | `/issue` | `ServiceDeskWorkspace.tsx` | State Change | `/api/service-desk/tickets` | POST | EventBus (M05) | `outbox_events` | `servicedesk.ticket.*.v1` events broadcast | PASS | EDA & Platform | BUSINESS-CRITICAL |
+| M38-F19 | KPI Analytics & MTTR Aggregation | `/issue` | `ServiceDeskWorkspace.tsx` | View KPI | `/api/service-desk/kpi` | GET | ServiceDeskService | Analytical Aggregation | MTTR, on-time SLA rate, CSAT, Backlog | PASS | Executive Reports | BUSINESS-CRITICAL |
 
 ---
 
@@ -581,14 +687,20 @@
 ---
 
 ### M40 — Environmental Health & Safety (EHS)
-*Workspace: `WS29_EHS` | Route: `/ehs` | Component: `EHSWorkspace.tsx` | Authority: QualityService / EamService*
+*Workspace: `WS29_EHS` | Route: `/ehs` | Component: `EHSWorkspace.tsx` | Authority: EhsService (Standalone Single-Writer Domain Authority for EHS Safety & Environment) | Certified: 2026-09-24 (F01–F10 PASS)*
 
 | Feature ID | Feature Name | UI Route | UI Component | User Action | API Endpoint | Method | Business Service | Domain Effect | Expected Result | Status | Regression Scope | Criticality |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| M40-F01 | Workplace Incident Reporting | `/ehs` | `EHSWorkspace.tsx` | Log Incident | `/api/ehs/incidents` | POST | QualityService | `ehs_incidents` | Workplace safety incident recorded | PENDING | EHS Core | CORE-CRITICAL |
-| M40-F02 | Job Safety Risk Analysis (JSA) | `/ehs` | `EHSWorkspace.tsx` | Assess Risk | `/api/ehs/risk-assessments` | POST | QualityService | `ehs_risk_assessments` | Risk matrix score calculated | PENDING | Safety Risk | BUSINESS-CRITICAL |
-| M40-F03 | Safety CAPA Enforcement | `/ehs` | `EHSWorkspace.tsx` | Assign CAPA | `/api/ehs/capas` | POST | QualityService | `ehs_capas` | Corrective action assigned and tracked | PENDING | EHS Compliance | CORE-CRITICAL |
-| M40-F04 | Safety Audit Checklist | `/ehs` | `EHSWorkspace.tsx` | Conduct Audit | `/api/ehs/audits` | POST | QualityService | `ehs_audits` | Safety compliance inspection signed off | PENDING | EHS Audit | BUSINESS |
+| M40-F01 | Workplace Incident Reporting & Investigation | `/ehs` | `EHSWorkspace.tsx` | Log Incident | `/api/ehs/incidents` | POST | EhsService | `ehs_incidents` | Workplace safety incident recorded with sequence ID & investigative actions | PASS | EHS Core | CORE-CRITICAL |
+| M40-F02 | Job Safety Analysis (JSA) 5x5 Risk Matrix | `/ehs` | `EHSWorkspace.tsx` | Assess Risk | `/api/ehs/risk-assessments` | POST | EhsService | `ehs_risk_assessments` | Risk score calculated (Severity x Probability) & controls logged | PASS | Safety Risk | BUSINESS-CRITICAL |
+| M40-F03 | Safety CAPA Lifecycle Enforcement | `/ehs` | `EHSWorkspace.tsx` | Assign/Verify CAPA | `/api/ehs/capas` | POST | EhsService | `ehs_capas` | Corrective action assigned, verified and closed | PASS | EHS Compliance | CORE-CRITICAL |
+| M40-F04 | Safety Audit Checklist & Auto-CAPA Trigger | `/ehs` | `EHSWorkspace.tsx` | Conduct Audit | `/api/ehs/audits` | POST | EhsService | `ehs_safety_audits`, `ehs_audit_checklist_items` | Audit scored; failed mandatory item auto-triggers CAPA | PASS | EHS Audit | BUSINESS |
+| M40-F05 | Fire Safety Equipment Inspection & Expiry Tracking | `/ehs` | `EHSWorkspace.tsx` | Register/Inspect Equipment | `/api/ehs/fire-safety/equipment` | POST | EhsService | `ehs_fire_equipment` | PCCC equipment registered & inspection renewed | PASS | Fire Safety | CORE-CRITICAL |
+| M40-F06 | Environmental Monitoring & Threshold Guard | `/ehs` | `EHSWorkspace.tsx` | Log Environmental Record | `/api/ehs/environmental/records` | POST | EhsService | `ehs_environmental_records` | Effluent/Air quality logged; threshold exceedance flagged | PASS | Environment QCVN | BUSINESS-CRITICAL |
+| M40-F07 | Permit to Work & LOTO Isolation Guard | `/ehs` | `EHSWorkspace.tsx` | Issue/Close Permit | `/api/ehs/permits` | POST | EhsService | `ehs_safety_permits` | Lockout/Tagout permit issued & linked to asset; closed on completion | PASS | LOTO Isolation | CORE-CRITICAL |
+| M40-F08 | Active Permit Check API for M27 EAM | `/ehs` | `EHSWorkspace.tsx` | Probe Permit Status | `/api/ehs/permits/asset/:assetId/active` | GET | EhsService | Read-only check | Returns active LOTO permits to gate M27 Work Orders | PASS | Cross-Module M27 | CORE-CRITICAL |
+| M40-F09 | EHS KPI Dashboard & Safety Scorecard | `/ehs` | `EHSWorkspace.tsx` | Load KPI | `/api/ehs/kpi` | GET | EhsService | Read-only aggregation | Safe days, expired PCCC, open CAPAs & LOTO counts computed | PASS | EHS Executive | BUSINESS |
+| M40-F10 | Idempotency & Audit Trail Guard | `/ehs` | `EHSWorkspace.tsx` | Re-submit Action | `/api/ehs/incidents` | POST | EhsService | `audit_logs` | Idempotent submission prevented duplicate record & audit logged | PASS | Platform Security | CORE-CRITICAL |
 
 ---
 

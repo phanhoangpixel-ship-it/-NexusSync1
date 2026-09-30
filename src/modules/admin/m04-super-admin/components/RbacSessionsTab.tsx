@@ -1,3 +1,4 @@
+import { ConfirmDialog } from '../../../../components/common/ConfirmDialog';
 import React, { useState } from 'react';
 import { RbacSession, PasswordPolicyConfig } from './types';
 import { INITIAL_SESSIONS, INITIAL_PASSWORD_POLICY } from './mockData';
